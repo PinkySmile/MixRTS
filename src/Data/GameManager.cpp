@@ -160,7 +160,6 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 		if (nbTiles != nbConcreteTiles)
 			b.damage(b.getHealth() * (nbTiles - nbConcreteTiles) / (nbTiles * 2));
 		player.state.buildingsByName[b.getGroup()].push_back(&b);
-		puts(b.getGroup().c_str());
 
 		auto p = b.getPower();
 		auto &storage = b.getStorage();

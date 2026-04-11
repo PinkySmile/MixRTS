@@ -18,10 +18,12 @@ D2KCameo::D2KCameo(const std::filesystem::path &base, const char *typeName, bool
 		setRenderer(tgui::Theme::getDefault()->getRendererNoThrow(this->m_type));
 	}
 
-	this->_spriteReady.load(base / "ui/common/ready.png", nullptr, false, true);
+	// TODO: Hardcoded locale
+	this->_spriteReady.load(base / "ui/en/ready.png", nullptr, false, true);
 	this->_spriteReady.setPosition({1, 1});
 
-	this->_spriteHold.load(base / "ui/common/hold.png", nullptr, false, true);
+	// TODO: Hardcoded locale
+	this->_spriteHold.load(base / "ui/en/hold.png", nullptr, false, true);
 }
 
 void D2KCameo::Renderer::setTexture(const tgui::Texture &texture)

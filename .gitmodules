@@ -1,0 +1,3 @@
+[submodule "mods/dune2000"]
+	path = mods/dune2000
+	url = https://github.com/PinkySmile/MixRTS-Dune2000.git
