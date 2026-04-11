@@ -1,0 +1,159 @@
+//
+// Created by PinkySmile on 06/04/2026.
+//
+
+#include "Player.hpp"
+#include "Faction.hpp"
+#include "GameManager.hpp"
+#include "../Resources/Game.hpp"
+#include "../UI.hpp"
+
+unsigned PlayerState::getCombinedMoney(const std::string &key)
+{
+	return this->systemMoney[key] + this->money[key];
+}
+
+Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &mapState) :
+	_index(index),
+	_parent(parent),
+	_mapState(mapState[index]),
+	_currentUi(index),
+	_color(color),
+	_primaryFaction(factions[index]),
+	_factions(factions)
+{
+	for (size_t i = 0; i < factions.size(); i++) {
+		auto &f = factions[i];
+
+		this->_uis.emplace_back(f.createUI());
+		this->_uis.back()->state = &this->state;
+		this->_uis.back()->map = &mapState[i];
+		game->gui.add(this->_uis.back()->getPanel());
+		if (i == index)
+			continue;
+		for (auto &[key, val] : f.getBuildings())
+			this->_loadedBuildings[key] = &val;
+	}
+	for (auto &[key, val] : this->_primaryFaction.getBuildings())
+		this->_loadedBuildings[key] = &val;
+}
+
+void PlayerState::clean()
+{
+	auto it = this->myBuildings.begin();
+
+	while (it != this->myBuildings.end())
+		if ((*it)->isDisposable())
+			it = this->myBuildings.erase(it);
+		else
+			++it;
+
+	for (auto &list : this->buildingHitboxes | std::ranges::views::values) {
+		it = list.begin();
+		while (it != list.end())
+			if ((*it)->isDisposable())
+				it = list.erase(it);
+			else
+				++it;
+	}
+
+	for (auto &list : this->queueBuildings | std::ranges::views::values) {
+		it = list.begin();
+		while (it != list.end())
+			if ((*it)->isDisposable())
+				it = list.erase(it);
+			else
+				++it;
+	}
+
+	//auto mit = this->primaryBuildings.begin();
+	//while (mit != this->primaryBuildings.end())
+	//	if (mit->second->isDisposable())
+	//		mit = this->primaryBuildings.erase(mit);
+	//	else
+	//		++mit;
+	for (auto &[name, b] : this->primaryBuildings)
+		if (b && b->isDisposable())
+			b = nullptr;
+}
+
+void Player::update()
+{
+	for (auto &ui : this->_uis)
+		ui->update();
+	this->state.clean();
+}
+
+void Player::render()
+{
+	for (auto &ui : this->_uis)
+		ui->render();
+}
+
+void Player::renderAbove()
+{
+	this->_uis[this->_currentUi]->renderAbove();
+}
+
+void Player::setEnabled(bool enabled)
+{
+	this->_enabled = enabled;
+	for (auto &ui : this->_uis)
+		ui->setEnabled(enabled);
+}
+
+const std::map<std::string, const Building *> &Player::getBuildings() const
+{
+	return this->_loadedBuildings;
+}
+
+const Faction &Player::getPrimaryFaction() const
+{
+	return this->_primaryFaction;
+}
+
+HSLColor Player::getColor() const
+{
+	return this->_color;
+}
+
+extern float guiScale;
+
+void Player::consumeEvent(const sf::Event &event)
+{
+	if (auto mouseMove = event.getIf<sf::Event::MouseMoved>()) {
+		for (auto &ui : this->_uis)
+			ui->mouseMovedToTile(ui->map->absToTileCoord({
+				mouseMove->position.x,
+				// TODO: Hardcoded UI offset
+				static_cast<int>(mouseMove->position.y - 20 * guiScale)
+			}));
+	} else if (auto mouseDown = event.getIf<sf::Event::MouseButtonPressed>()) {
+		if (mouseDown->button == sf::Mouse::Button::Left)
+			for (auto &ui : this->_uis)
+				ui->tileClicked(ui->map->absToTileCoord({
+					mouseDown->position.x,
+					// TODO: Hardcoded UI offset
+					static_cast<int>(mouseDown->position.y - 20 * guiScale)
+				}));
+		else if (mouseDown->button == sf::Mouse::Button::Right)
+			for (auto &ui : this->_uis)
+				ui->onCancel();
+	}
+}
+
+void Player::mouseOnUi()
+{
+	for (auto &ui : this->_uis)
+		ui->mouseOnUi();
+}
+
+void Player::handleUiEvents()
+{
+	for (auto &ui : this->_uis)
+		while (auto event = ui->pollEvent()) {
+			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event))
+				this->_parent.spawnBuilding(this->_index, place->position, place->queue, place->id, false);
+		}
+}
+

@@ -1,0 +1,79 @@
+//
+// Created by PinkySmile on 06/04/2026.
+//
+
+#ifndef MIXRTS_PLAYER_HPP
+#define MIXRTS_PLAYER_HPP
+
+
+#include <unordered_map>
+#include <string>
+#include <map>
+#include <list>
+#include <deque>
+#include <memory>
+#include <SFML/Window/Event.hpp>
+#include "../forward.hpp"
+#include "Vector.hpp"
+#include "Color.hpp"
+#include "Utils.hpp"
+
+struct PlayerQueue {
+	std::string tooltip;
+	unsigned buildTime;
+	unsigned buildProgress;
+	bool unlocked;
+	bool buildable;
+	bool paused;
+};
+
+struct PlayerState {
+	size_t team = 0;
+	bool hasRadar = false;
+	unsigned consumedPower = 0;
+	unsigned producedPower = 0;
+	std::unordered_map<std::string, unsigned> money;
+	std::unordered_map<std::string, unsigned> systemMoney;
+	std::unordered_map<std::string, unsigned> totalStorage;
+	std::unordered_map<std::string, std::list<Building *>> buildingsByName;
+	std::unordered_map<std::string, std::list<Building *>> queueBuildings;
+	std::unordered_map<std::string, Building *> primaryBuildings;
+	std::map<Vector2u, std::list<Building *>> buildingHitboxes;
+	std::list<Building *> myBuildings;
+	std::unordered_map<std::string, std::unordered_map<std::string, PlayerQueue>> queues;
+
+	unsigned getCombinedMoney(const std::string &key);
+	void clean();
+};
+
+class Player {
+private:
+	size_t _index;
+	GameManager &_parent;
+	MapState &_mapState;
+	bool _enabled = false;
+	size_t _currentUi;
+	HSLColor _color;
+	const Faction &_primaryFaction;
+	const std::vector<Faction> &_factions;
+	std::vector<std::unique_ptr<UI>> _uis;
+	std::map<std::string, const Building *> _loadedBuildings;
+
+public:
+	PlayerState state;
+
+	Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &state);
+	void update();
+	void render();
+	void renderAbove();
+	void handleUiEvents();
+	void setEnabled(bool enabled);
+	HSLColor getColor() const;
+	void mouseOnUi();
+	void consumeEvent(const sf::Event &event);
+	const Faction &getPrimaryFaction() const;
+	const std::map<std::string, const Building *> &getBuildings() const;
+};
+
+
+#endif //MIXRTS_PLAYER_HPP

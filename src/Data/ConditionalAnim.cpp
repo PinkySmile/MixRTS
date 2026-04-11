@@ -1,0 +1,126 @@
+//
+// Created by PinkySmile on 10/01/2026.
+//
+
+#include "nlohmann/json.hpp"
+#include "Building.hpp"
+#include "Animation.hpp"
+#include "Mod.hpp"
+#include "ConditionalAnim.hpp"
+#include "Player.hpp"
+#include "Resources/Assert.hpp"
+#include "Utils.hpp"
+
+ConditionalAnim::ConditionalAnim(const Building &parent, const ConditionalAnim &other) :
+	_parent(parent),
+	_anim(other._anim),
+	_cond(other._cond),
+	_index(other._index),
+	_delay(other._delay),
+	_totalDelay(other._totalDelay),
+	_layer(other._layer)
+{
+}
+
+ConditionalAnim::ConditionalAnim(const Building &parent, const std::map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j) :
+	_parent(parent)
+{
+	std::function<bool(const ConditionalAnim &This)> cb = [](const ConditionalAnim &){ return true; };
+
+	this->_anim = animList.at(RESOURCE(parent.getBase().getName(), j["anim"]));
+	if (j.contains("delay"))
+		this->_delay = j["delay"];
+	this->_layer = j["layer"];
+	if (j.contains("when_hp_lower"))
+		cb = [cb, hp = j["when_hp_lower"].get<float>()](const ConditionalAnim &This) {
+			if (!cb(This)) return false;
+			return This._parent.animationState.health * 100.f < hp;
+		};
+	if (j.contains("when_hp_bigger"))
+		cb = [cb, hp = j["when_hp_bigger"].get<float>()](const ConditionalAnim &This) {
+			if (!cb(This)) return false;
+			return This._parent.animationState.health * 100.f >= hp;
+		};
+	if (j.contains("when_storage_is_in")) {
+		auto range = j["when_storage_is_in"].get<std::vector<unsigned>>();
+		assert_exp(range.size() == 2);
+		cb = [cb, range](const ConditionalAnim &This) {
+			if (!cb(This)) return false;
+			unsigned total = This._parent.playerState->totalStorage[This._parent.animationState.storageKey];
+			unsigned maxVal = This._parent.playerState->money[This._parent.animationState.storageKey];
+			float percent = maxVal * 100.f / total;
+			return percent >= range[0] && percent < range[1];
+		};
+	}
+	if (j.contains("when_storage_bigger"))
+		cb = [cb, storage = j["when_storage_bigger"].get<float>()](const ConditionalAnim &This) {
+			if (!cb(This)) return false;
+			unsigned total = This._parent.playerState->totalStorage[This._parent.animationState.storageKey];
+			unsigned maxVal = This._parent.playerState->money[This._parent.animationState.storageKey];
+			float percent = maxVal * 100.f / total;
+			return percent >= storage;
+		};
+	this->_cond = cb;
+}
+
+bool ConditionalAnim::operator()() const
+{
+	return this->_cond(*this);
+}
+
+bool ConditionalAnim::update()
+{
+	if (this->_totalDelay < this->_delay) {
+		this->_totalDelay++;
+		return false;
+	}
+	this->_totalDelay = 0;
+	this->_index++;
+	if (this->_index >= this->_anim.size()) {
+		this->_index = 0;
+		return true;
+	}
+	return false;
+}
+
+void ConditionalAnim::reset()
+{
+	this->_index = 0;
+	this->_totalDelay = 0;
+}
+
+Animation &ConditionalAnim::getAnim()
+{
+	return this->_anim[this->_index];
+}
+
+const Animation &ConditionalAnim::getAnim() const
+{
+	return this->_anim[this->_index];
+}
+
+const std::vector<Animation> &ConditionalAnim::getAnims() const
+{
+	return this->_anim;
+}
+
+int ConditionalAnim::getLayer() const
+{
+	return this->_layer;
+}
+
+size_t ConditionalAnim::size() const
+{
+	return this->_anim.size();
+}
+
+unsigned ConditionalAnim::current() const
+{
+	return this->_index;
+}
+
+void ConditionalAnim::setColor(const HSLColor &color)
+{
+	for (auto &anim : this->_anim)
+		anim.setColor(color);
+}
