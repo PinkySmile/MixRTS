@@ -142,6 +142,7 @@ int main()
 	new Game("/usr/share/fonts/noto/NotoSans-Regular.ttf");
 	game->modManager.loadMod("mods/dune2000/");
 	game->screen->setMouseCursorVisible(false);
+	game->locale = "fr";
 	//game->screen->setMouseCursorGrabbed(true);
 
 	Mod &mod = game->modManager.get("d2k");

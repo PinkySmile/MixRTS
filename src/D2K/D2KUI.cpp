@@ -72,7 +72,7 @@ static std::string __unitsOrder[] = {
 D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nlohmann::json &params) :
 	_faction(faction)
 {
-	auto path = base / params["path"].get<std::string>();
+	auto path = base / "ui" / game->locale / "ui.gui";
 	faction.getBase().loadCursors("cursors.json", this->_cursors);
 
 	this->_panel->loadWidgetsFromFile(path.native());

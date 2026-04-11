@@ -26,6 +26,7 @@ struct Game {
 	RandomWrapper battleRandom;
 	Logger logger;
 	sf::Font font;
+	std::string locale = "en";
 	std::string lastIp = "127.0.0.1";
 	unsigned short lastPort = 0;
 	std::unique_ptr<Screen> screen;

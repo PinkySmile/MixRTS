@@ -9,6 +9,7 @@
 #include <TGUI/Backend/Renderer/SFML-Graphics/BackendRenderTargetSFML.hpp>
 #include "D2KCameo.hpp"
 #include "Resources/Assert.hpp"
+#include "Resources/Game.hpp"
 
 D2KCameo::D2KCameo(const std::filesystem::path &base, const char *typeName, bool initRenderer) :
 	ClickableWidget{typeName, false}
@@ -18,12 +19,9 @@ D2KCameo::D2KCameo(const std::filesystem::path &base, const char *typeName, bool
 		setRenderer(tgui::Theme::getDefault()->getRendererNoThrow(this->m_type));
 	}
 
-	// TODO: Hardcoded locale
-	this->_spriteReady.load(base / "ui/en/ready.png", nullptr, false, true);
+	this->_spriteReady.load(base / "ui" / game->locale / "ready.png", nullptr, false, true);
 	this->_spriteReady.setPosition({1, 1});
-
-	// TODO: Hardcoded locale
-	this->_spriteHold.load(base / "ui/en/hold.png", nullptr, false, true);
+	this->_spriteHold.load(base / "ui" / game->locale / "hold.png", nullptr, false, true);
 }
 
 void D2KCameo::Renderer::setTexture(const tgui::Texture &texture)
