@@ -51,6 +51,7 @@ public:
 	void loadMap();
 	void addPlayer(size_t factionIndex, const HSLColor &color);
 	void update();
+	void updateRender();
 	void render();
 	void renderAbove();
 	std::vector<Player> &getPlayers();

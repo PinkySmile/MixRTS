@@ -18,7 +18,7 @@ private:
 
 public:
 	ReqConst(bool value);
-	bool operator()(const std::unordered_map<std::string, std::list<Building *>> &) const override;
+	bool operator()(const std::unordered_map<std::string, unsigned> &) const override;
 };
 
 

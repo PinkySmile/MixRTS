@@ -31,11 +31,11 @@ void CursorAnimation::render() const
 
 	sf::View old = game->screen->getView();
 	sf::View v = sf::View{sf::FloatRect{
-			{0, 0},
-			{
-				static_cast<float>(game->screen->getSize().x),
-				static_cast<float>(game->screen->getSize().y)
-			}
+		{0, 0},
+		{
+			static_cast<float>(game->screen->getSize().x),
+			static_cast<float>(game->screen->getSize().y)
+		}
 	}};
 	auto pos = sf::Mouse::getPosition(*game->screen);
 	auto frame = this->_frames[this->_currentAnimation];

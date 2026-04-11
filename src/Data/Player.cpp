@@ -7,6 +7,7 @@
 #include "GameManager.hpp"
 #include "../Resources/Game.hpp"
 #include "../UI.hpp"
+#include "Resources/Assert.hpp"
 
 unsigned PlayerState::getCombinedMoney(const std::string &key)
 {
@@ -82,6 +83,11 @@ void Player::update()
 	for (auto &ui : this->_uis)
 		ui->update();
 	this->state.clean();
+	for (auto &ql : this->state.queues | std::ranges::views::values)
+		for (auto &q : ql | std::ranges::views::values) {
+			if (q.buildProgress != 0 && q.buildProgress != q.buildTime && !q.paused)
+				q.buildProgress++;
+		}
 }
 
 void Player::render()
@@ -148,12 +154,50 @@ void Player::mouseOnUi()
 		ui->mouseOnUi();
 }
 
+void Player::updateRender()
+{
+	for (auto &ui : this->_uis)
+		ui->updateRender();
+}
+
 void Player::handleUiEvents()
 {
 	for (auto &ui : this->_uis)
 		while (auto event = ui->pollEvent()) {
-			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event))
+			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event)) {
 				this->_parent.spawnBuilding(this->_index, place->position, place->queue, place->id, false);
+				for (auto &q : this->state.queues[place->queue] | std::ranges::views::values) {
+					q.buildable = true;
+					q.buildProgress = 0;
+				}
+			} else if (auto startBuild = std::get_if<UI::StartBuildEvent>(&*event)) {
+				bool b = true;
+
+				for (auto &[name, q] : this->state.queues[startBuild->queue]) {
+					if (q.paused) {
+						if (name == startBuild->id)
+							q.paused = false;
+						b = false;
+						break;
+					}
+					q.buildable = false;
+				}
+				if (b) {
+					this->state.queues[startBuild->queue][startBuild->id].buildable = true;
+					this->state.queues[startBuild->queue][startBuild->id].buildProgress = 1;
+				}
+			} else if (auto cancelBuild = std::get_if<UI::CancelBuildEvent>(&*event)) {
+				auto &sq = this->state.queues[cancelBuild->queue][cancelBuild->id];
+
+				if (sq.paused || sq.buildProgress == sq.buildTime)
+					for (auto &q : this->state.queues[cancelBuild->queue] | std::ranges::views::values) {
+						q.buildable = true;
+						q.paused = false;
+						q.buildProgress = 0;
+					}
+				else
+					this->state.queues[cancelBuild->queue][cancelBuild->id].paused = true;
+			} else
+				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));
 		}
 }
-

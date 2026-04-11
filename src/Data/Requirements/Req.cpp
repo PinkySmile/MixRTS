@@ -11,7 +11,7 @@ Req::Req(const std::string &base, const std::string &value) :
 {
 }
 
-bool Req::operator()(const std::unordered_map<std::string, std::list<Building *>> &m) const
+bool Req::operator()(const std::unordered_map<std::string, unsigned> &m) const
 {
-	return m.contains(this->_id) && !m.at(this->_id).empty();
+	return m.contains(this->_id) && m.at(this->_id) != 0;
 }

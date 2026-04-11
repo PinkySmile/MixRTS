@@ -19,7 +19,7 @@ private:
 
 public:
 	ReqOrCombinator(const std::string &base, const nlohmann::json &value);
-	bool operator()(const std::unordered_map<std::string, std::list<Building *>> &) const override;
+	bool operator()(const std::unordered_map<std::string, unsigned> &) const override;
 };
 
 

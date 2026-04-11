@@ -43,6 +43,7 @@ Building::Building(const Building &b) :
 	_maxHp(b._maxHp),
 	_hp(b._hp),
 	_sight(b._sight),
+	_buildSpeed(b._buildSpeed),
 	_power(b._power),
 	_building(b._building),
 	_producing(b._producing),
@@ -75,7 +76,7 @@ Building::Building(const Faction &faction, const std::string &id, const std::map
 	this->_tiles = json["tiles"];
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
-	this->_buildSpeed = json.contains("speed") ? json["speed"].get<unsigned>() : 0;
+	this->_buildSpeed = json.contains("speed") ? json["speed"].get<unsigned>() : -1;
 
 	if (json.contains("queue"))
 		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);

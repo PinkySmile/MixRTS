@@ -69,6 +69,12 @@ void GameManager::update()
 			++it;
 }
 
+void GameManager::updateRender()
+{
+	for (auto &player : this->_players)
+		player.updateRender();
+}
+
 void GameManager::render()
 {
 	for (auto &list : this->_renderBuildings | std::ranges::views::values)
@@ -159,7 +165,10 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 			player.state.queueBuildings[*gqueue].push_back(&b);
 		if (nbTiles != nbConcreteTiles)
 			b.damage(b.getHealth() * (nbTiles - nbConcreteTiles) / (nbTiles * 2));
-		player.state.buildingsByName[b.getGroup()].push_back(&b);
+		if (!player.state.elementsOwned.contains(b.getGroup()))
+			player.state.elementsOwned[b.getGroup()] = 1;
+		else
+			++player.state.elementsOwned[b.getGroup()];
 
 		auto p = b.getPower();
 		auto &storage = b.getStorage();
@@ -175,7 +184,7 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 
 		if (parent)
 			parent->produced();
-		else if (!player.state.queueBuildings.contains(buildQueue))
+		else if (player.state.queueBuildings.contains(buildQueue))
 			for (auto &p: player.state.queueBuildings[buildQueue])
 				 if (!p->isObstructed()) {
 					p->produced();
@@ -197,7 +206,7 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 			}
 		}
 		for (auto &[name, building] : b.getFaction().getBuildings()) {
-			if (building.getRequirements()(player.state.buildingsByName)) {
+			if (building.getRequirements()(player.state.elementsOwned)) {
 				auto &bqueue = building.getBuildQueue();
 
 				if (!bqueue)
@@ -213,7 +222,7 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 			}
 		}
 		for (auto &[name, upgrade] : b.getFaction().getUpgrades()) {
-			if (upgrade.getRequirements()(player.state.buildingsByName)) {
+			if (upgrade.getRequirements()(player.state.elementsOwned)) {
 				auto &bqueue = upgrade.getBuildQueue();
 
 				if (!bqueue)

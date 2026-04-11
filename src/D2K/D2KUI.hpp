@@ -42,8 +42,12 @@ private:
 	tgui::Picture::Ptr _redPower;
 	std::vector<std::string> _buildOrder;
 	std::vector<std::string> _unitsOrder;
+	std::vector<std::string> _upgradeOrder;
+	std::vector<std::string> _starportOrder;
 	tgui::ScrollablePanel::Ptr _buildQueue;
 	tgui::ScrollablePanel::Ptr _unitsQueue;
+	tgui::ScrollablePanel::Ptr _upgradeQueue;
+	tgui::ScrollablePanel::Ptr _starportQueue;
 
 	unsigned _placementAnimation[3] = {0, 0, 0};
 	Vector2i _placementPos;
@@ -60,6 +64,8 @@ private:
 	std::array<tgui::Texture, 11> _creditRawDigits;
 	std::vector<std::string> _buildQueueAdded;
 	std::vector<std::string> _unitsQueueAdded;
+	std::vector<std::string> _upgradeQueueAdded;
+	std::vector<std::string> _starportQueueAdded;
 
 	sf::SoundBuffer _moveBlocked;
 	sf::SoundBuffer _button;
@@ -68,6 +74,7 @@ private:
 	sf::Sound _soundButton{this->_button};
 	sf::Sound _soundMove{this->_move};
 
+	bool _hasUpgrades();
 	void _updatePlacementTexture();
 	void _handleTryPlace();
 	void _displaySelectedBuildingUI(const Building &building);
@@ -82,6 +89,8 @@ public:
 	void tileClicked(Vector2i pos) override;
 	void mouseMovedToTile(Vector2i pos) override;
 	void mouseOnUi() override;
+
+	void updateRender() override;
 };
 
 

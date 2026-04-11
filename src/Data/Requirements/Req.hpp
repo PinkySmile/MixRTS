@@ -19,7 +19,7 @@ private:
 
 public:
 	Req(const std::string &base, const std::string &value);
-	bool operator()(const std::unordered_map<std::string, std::list<Building *>> &) const override;
+	bool operator()(const std::unordered_map<std::string, unsigned> &) const override;
 };
 
 

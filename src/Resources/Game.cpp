@@ -14,7 +14,7 @@ Game::Game(const std::filesystem::path &fontPath, const std::filesystem::path &l
 	screen(new Screen("MixRTS")),
 	gui(*this->screen)
 {
-	this->screen->setFramerateLimit(60);
+	this->screen->setFramerateLimit(150);
 	assert_exp(!game);
 	game = this;
 }

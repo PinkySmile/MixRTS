@@ -20,13 +20,18 @@ public:
 		std::string queue;
 	};
 
+	struct CancelBuildEvent {
+		std::string id;
+		std::string queue;
+	};
+
 	struct PlaceBuildEvent {
 		std::string id;
 		std::string queue;
 		Vector2u position;
 	};
 
-	typedef std::variant<StartBuildEvent, PlaceBuildEvent> Event;
+	typedef std::variant<StartBuildEvent, PlaceBuildEvent, CancelBuildEvent> Event;
 
 	PlayerState *state;
 	MapState *map;
@@ -45,6 +50,7 @@ public:
 	virtual void update() = 0;
 	virtual void render() = 0;
 	virtual void renderAbove() = 0;
+	virtual void updateRender() = 0;
 
 protected:
 	std::deque<Event> _eventQueue;

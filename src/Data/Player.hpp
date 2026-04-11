@@ -35,7 +35,7 @@ struct PlayerState {
 	std::unordered_map<std::string, unsigned> money;
 	std::unordered_map<std::string, unsigned> systemMoney;
 	std::unordered_map<std::string, unsigned> totalStorage;
-	std::unordered_map<std::string, std::list<Building *>> buildingsByName;
+	std::unordered_map<std::string, unsigned> elementsOwned;
 	std::unordered_map<std::string, std::list<Building *>> queueBuildings;
 	std::unordered_map<std::string, Building *> primaryBuildings;
 	std::map<Vector2u, std::list<Building *>> buildingHitboxes;
@@ -64,6 +64,7 @@ public:
 
 	Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &state);
 	void update();
+	void updateRender();
 	void render();
 	void renderAbove();
 	void handleUiEvents();

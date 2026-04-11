@@ -15,7 +15,7 @@
 class IReq {
 public:
 	virtual ~IReq() = default;
-	virtual bool operator()(const std::unordered_map<std::string, std::list<Building *>> &) const = 0;
+	virtual bool operator()(const std::unordered_map<std::string, unsigned> &) const = 0;
 };
 
 

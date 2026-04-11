@@ -14,6 +14,13 @@
 #include "Data/GameManager.hpp"
 
 
+static std::string __upgradeOrder[] = {
+	"cony.upgrade",
+	"barr.upgrade",
+	"ahtec.upgrade",
+	"lfac.upgrade",
+	"hfac.upgrade"
+};
 static std::string __buildOrder[] = {
 	"2con",
 	"3con",
@@ -90,6 +97,8 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_redPower        = this->_power->get<tgui::Picture>("RedPower");
 	this->_buildQueue      = this->_panel->get<tgui::ScrollablePanel>("BuildingQueue");
 	this->_unitsQueue      = this->_panel->get<tgui::ScrollablePanel>("UnitsQueue");
+	this->_upgradeQueue    = this->_panel->get<tgui::ScrollablePanel>("UpgradeQueue");
+	this->_starportQueue   = this->_panel->get<tgui::ScrollablePanel>("StarportQueue");
 	this->_creditDigits[0] = this->_panel->get<tgui::Picture>("Credit0");
 	this->_creditDigits[1] = this->_panel->get<tgui::Picture>("Credit1");
 	this->_creditDigits[2] = this->_panel->get<tgui::Picture>("Credit2");
@@ -117,6 +126,8 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_main2->setVisible(false);
 	this->_upgrade->setVisible(false);
 	this->_starport->setVisible(false);
+	this->_upgradeQueue->setVisible(false);
+	this->_starportQueue->setVisible(false);
 	this->_buildQueue->getVerticalScrollbar()->setScrollAmount(47);
 	this->_unitsQueue->getVerticalScrollbar()->setScrollAmount(47);
 
@@ -160,6 +171,42 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 		else
 			this->_soundMove.play();
 	});
+	this->_upgrade->onMousePress([this]{
+		this->_upgrade->setVisible(false);
+		this->_starport->setVisible(false);
+		this->_main1->setVisible(true);
+		this->_buildQueue->setVisible(false);
+		this->_unitsQueue->setVisible(false);
+		this->_upgradeQueue->setVisible(true);
+		this->_up1->setVisible(false);
+		this->_up2->setVisible(false);
+		this->_down1->setVisible(false);
+		this->_down2->setVisible(false);
+	});
+	this->_main1->onMousePress([this]{
+		this->_upgrade->setVisible(this->_hasUpgrades());
+		this->_starport->setVisible(this->state->queues.contains(this->_faction.getBase().getName() + ":starport"));
+		this->_main1->setVisible(false);
+		this->_buildQueue->setVisible(true);
+		this->_unitsQueue->setVisible(true);
+		this->_upgradeQueue->setVisible(false);
+		this->_up1->setVisible(true);
+		this->_up2->setVisible(true);
+		this->_down1->setVisible(true);
+		this->_down2->setVisible(true);
+	});
+	this->_main2->onMousePress([this]{
+		this->_upgrade->setVisible(this->_hasUpgrades());
+		this->_starport->setVisible(this->state->queues.contains(this->_faction.getBase().getName() + ":starport"));
+		this->_main1->setVisible(false);
+		this->_buildQueue->setVisible(true);
+		this->_unitsQueue->setVisible(true);
+		this->_upgradeQueue->setVisible(false);
+		this->_up1->setVisible(true);
+		this->_up2->setVisible(true);
+		this->_down1->setVisible(true);
+		this->_down2->setVisible(true);
+	});
 
 	const std::string &prefix = params["cameo_prefix"];
 	auto start = faction.getBase().getName();
@@ -177,6 +224,9 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 		this->_cameos[start + name] = tgui::Texture{entryPath.native(), {}, {}, true};
 	}
 
+	this->_upgradeOrder.reserve(std::size(__upgradeOrder));
+	for (auto &b : __upgradeOrder)
+		this->_upgradeOrder.push_back(start + b);
 	this->_buildOrder.reserve(std::size(__buildOrder));
 	for (auto &b : __buildOrder)
 		this->_buildOrder.push_back(start + b);
@@ -187,6 +237,17 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 
 D2KUI::~D2KUI() noexcept = default;
 
+bool D2KUI::_hasUpgrades()
+{
+	auto it = this->state->queues.find(this->_faction.getBase().getName() + ":upgrade");
+
+	if (it == this->state->queues.end())
+		return false;
+	return std::ranges::any_of(it->second | std::ranges::views::values, [](const PlayerQueue &q){
+		return q.buildable;
+	});
+}
+
 static void updateList(
 	const std::filesystem::path &base,
 	const std::unordered_map<std::string, PlayerQueue> &list,
@@ -194,7 +255,7 @@ static void updateList(
 	tgui::ScrollablePanel::Ptr panel,
 	std::vector<std::string> &added,
 	std::unordered_map<std::string, tgui::Texture> &cameos,
-	const std::function<void (const std::string &id)> &&queueCb
+	const std::function<void (const std::string &id, bool rightClick)> &&queueCb
 )
 {
 	bool needGenerate = false;
@@ -238,8 +299,85 @@ static void updateList(
 			}
 			last = b;
 			pic->setSize("&.w", size.y + 1);
-			pic->onClick([queueCb, b]{ queueCb(b); });
+			pic->onMousePress([queueCb, b]{ queueCb(b, false); });
+			pic->onRightMousePress([queueCb, b]{ queueCb(b, true); });
 			r->setTexture(cameos[b]);
+			panel->add(pic, "cameo" + b);
+			added.push_back(b);
+		}
+		panel->getVerticalScrollbar()->setValue(scroll);
+	}
+
+	for (auto &b : order) {
+		auto it = list.find(b);
+
+		if (it == list.end() || !it->second.unlocked)
+			continue;
+
+		auto w = panel->get<D2KCameo>("cameo" + std::string(b));
+
+		w->setOnHold(it->second.paused);
+		if (!it->second.buildable) {
+			w->setFill(0);
+			continue;
+		}
+		if (it->second.buildProgress == 0) {
+			w->setFill(1);
+			w->setReady(false);
+		} else {
+			w->setFill(it->second.buildProgress / static_cast<float>(it->second.buildTime));
+			w->setReady(it->second.buildProgress == it->second.buildTime);
+		}
+	}
+}
+
+static void updateList2(
+	const std::filesystem::path &base,
+	const std::unordered_map<std::string, PlayerQueue> &list,
+	const std::vector<std::string> &order,
+	tgui::ScrollablePanel::Ptr panel,
+	std::vector<std::string> &added,
+	std::unordered_map<std::string, tgui::Texture> &cameos,
+	const std::function<void (const std::string &id, bool rightClick)> &&queueCb
+)
+{
+	bool needGenerate = false;
+
+	for (auto &b : order) {
+		auto it = list.find(b);
+		bool wasAdded = std::ranges::find(added, b) != added.end();
+		bool mustBeAdded = it != list.end() && it->second.unlocked;
+
+		if (wasAdded != mustBeAdded) {
+			needGenerate = true;
+			break;
+		}
+	}
+	if (needGenerate) {
+		unsigned scroll = panel->getVerticalScrollbar()->getValue();
+		std::string last;
+
+		panel->removeAllWidgets();
+		added.clear();
+		for (size_t i = 0; i < order.size(); i++) {
+			auto &b = order[i];
+			auto it = list.find(b);
+
+			if (it == list.end() || !it->second.unlocked)
+				continue;
+
+			auto pos = b.find('.');
+			auto pic = D2KCameo::create(base);
+			auto r = pic->getRenderer();
+			auto &cameo = cameos[pos == std::string::npos ? b : b.substr(0, pos)];
+
+			if (!last.empty())
+				pic->setPosition({i % 2 * 60, i / 2 * 47});
+			last = b;
+			pic->setSize(60, 48);
+			pic->onMousePress([queueCb, b]{ queueCb(b, false); });
+			pic->onRightMousePress([queueCb, b]{ queueCb(b, true); });
+			r->setTexture(cameo);
 			panel->add(pic, "cameo" + b);
 			added.push_back(b);
 		}
@@ -273,12 +411,12 @@ void D2KUI::update()
 {
 	unsigned i = 0;
 	unsigned credits = std::min(99999999U, this->state->getCombinedMoney("base:credits"));
-	auto &bQueue = this->state->queues["d2k:building"];
-	auto &uQueue = this->state->queues["units"];
+	auto &bQueue = this->state->queues[this->_faction.getBase().getName() + ":building"];
+	auto &uQueue = this->state->queues[this->_faction.getBase().getName() + ":units"];
+	auto &pQueue = this->state->queues[this->_faction.getBase().getName() + ":upgrade"];
 	auto &placement = this->_faction.getPlacementCursors();
 	auto &anim = this->_placementAnimation;
 
-	this->_cursors.at(this->_cursor).update();
 	if (!placement[0].empty()) {
 		anim[0] = (anim[0] + 1) % placement[0].size();
 		anim[1] = (anim[1] + 1) % placement[1].size();
@@ -299,14 +437,25 @@ void D2KUI::update()
 		bQueue, this->_buildOrder,
 		this->_buildQueue, this->_buildQueueAdded,
 		this->_cameos,
-		[this](const std::string &id){
-			auto &map = this->_faction.getBuildings();
-			auto it = map.find(id);
+		[this, &bQueue](const std::string &id, bool rightClick){
+			if (!bQueue[id].buildable)
+				return;
+			if (rightClick)
+				this->_eventQueue.emplace_back(CancelBuildEvent{
+					id, this->_faction.getBase().getName() + ":building"
+				});
+			else if (bQueue[id].buildProgress == bQueue[id].buildTime) {
+				auto &map = this->_faction.getBuildings();
+				auto it = map.find(id);
 
-			if (it != map.end())
-				this->_placementBuilding = &it->second;
-			else
-				game->logger.debug("Cannot find " + id);
+				if (it != map.end())
+					this->_placementBuilding = &it->second;
+				else
+					game->logger.debug("Cannot find " + id);
+			} else
+				this->_eventQueue.emplace_back(StartBuildEvent{
+					id, this->_faction.getBase().getName() + ":building"
+				});
 		}
 	);
 	updateList(
@@ -314,22 +463,37 @@ void D2KUI::update()
 		uQueue, this->_unitsOrder,
 		this->_unitsQueue, this->_unitsQueueAdded,
 		this->_cameos,
-		[](const std::string &){}
+		[&uQueue](const std::string &id, bool rightClick){
+			if (!uQueue[id].buildable)
+				return;
+		}
+	);
+	updateList2(
+		this->_faction.getBase().getBase(),
+		pQueue, this->_upgradeOrder,
+		this->_upgradeQueue, this->_upgradeQueueAdded,
+		this->_cameos,
+		[this, &pQueue](const std::string &id, bool rightClick){
+			if (!pQueue[id].buildable)
+				return;
+			if (rightClick)
+				this->_eventQueue.emplace_back(CancelBuildEvent{
+					id, this->_faction.getBase().getName() + ":upgrade"
+				});
+			else
+				this->_eventQueue.emplace_back(StartBuildEvent{
+					id, this->_faction.getBase().getName() + ":upgrade"
+				});
+		}
 	);
 
-	float percent;
-
-	if (this->state->producedPower == 0)
-		percent = 0;
-	else if (this->state->consumedPower == 0)
-		percent = 1 + this->state->producedPower / 200.f;
-	else
-		percent = static_cast<float>(this->state->producedPower) / this->state->consumedPower;
-
+	float percent = (static_cast<float>(this->state->producedPower) - this->state->consumedPower) / 2;
 	this->_power->setSize({10, ceil(100 * percent)});
 	this->_greenPower->setVisible(percent >= 1);
 	this->_yellowPower->setVisible(percent >= 0.7 && percent < 1);
 	this->_redPower->setVisible(percent < 0.7);
+
+	this->_upgrade->setVisible(this->_hasUpgrades());
 }
 
 void D2KUI::_displaySelectedBuildingUI(const Building &building)
@@ -389,7 +553,6 @@ void D2KUI::render()
 		});
 		game->screen->draw(this->_placementSprite);
 	}
-
 
 	for (auto &b : this->_selectedBuildings)
 		this->_displaySelectedBuildingUI(*b);
@@ -528,7 +691,7 @@ void D2KUI::mouseMovedToTile(Vector2i pos)
 	} else {
 		auto it = this->state->buildingHitboxes.find(pos.to<unsigned>());
 
-		if (it != this->state->buildingHitboxes.end())
+		if (it != this->state->buildingHitboxes.end() && !it->second.empty())
 			this->_cursor = "select";
 		else
 			this->_cursor = "normal";
@@ -538,4 +701,9 @@ void D2KUI::mouseMovedToTile(Vector2i pos)
 void D2KUI::mouseOnUi()
 {
 	this->_cursor = "normal";
+}
+
+void D2KUI::updateRender()
+{
+	this->_cursors.at(this->_cursor).update();
 }

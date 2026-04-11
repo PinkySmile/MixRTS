@@ -245,6 +245,7 @@ void D2KCameo::rendererChanged(const tgui::String &property)
 		sf::Image img{tex->getSize(), tex->getPixels()};
 
 		assert_exp(this->_bnwTexture.loadFromImage(img));
+		this->_bnwTexture.setSmooth(texture.isSmooth());
 		this->_computeFillVertices();
 	} else if (property == U"BnWTexture") {
 		this->_sprite.setTexture(this->getSharedRenderer()->getBnWTexture());

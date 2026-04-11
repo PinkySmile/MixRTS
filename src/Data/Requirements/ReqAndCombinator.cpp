@@ -21,7 +21,7 @@ ReqAndCombinator::ReqAndCombinator(const std::string &base, const nlohmann::json
 	}
 }
 
-bool ReqAndCombinator::operator()(const std::unordered_map<std::string, std::list<Building *>> &m) const
+bool ReqAndCombinator::operator()(const std::unordered_map<std::string, unsigned> &m) const
 {
 	return std::ranges::all_of(this->_elems, [&m](const std::unique_ptr<IReq> &c){
 		return (*c)(m);

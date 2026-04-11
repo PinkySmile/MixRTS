@@ -9,7 +9,7 @@ ReqConst::ReqConst(bool value) :
 {
 }
 
-bool ReqConst::operator()(const std::unordered_map<std::string, std::list<Building *>> &) const
+bool ReqConst::operator()(const std::unordered_map<std::string, unsigned> &) const
 {
 	return this->_value;
 }

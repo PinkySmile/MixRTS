@@ -152,6 +152,7 @@ int main()
 	std::vector<Faction> allFactions{factions.at("d2k:atreides")};
 	GameManager manager{allFactions};
 	auto &players = manager.getPlayers();
+	float timer = 0;
 
 	manager.loadMap();
 	manager.addPlayer(0, HSLColor{214, 375, 919}); // Atreides blue
@@ -178,6 +179,11 @@ int main()
 			for (auto &p : players)
 				p.mouseOnUi();
 		manager.update();
+		timer++;
+		if (timer >= 2.5) {
+			manager.updateRender();
+			timer -= 2.5;
+		}
 		game->screen->clear(sf::Color{0x80, 0xFF, 0x40});
 		manager.render();
 		//displayGrid();
