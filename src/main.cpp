@@ -58,7 +58,7 @@ void debugInit(Player &player)
 	state.money["base:credits"] = 10000;
 	state.systemMoney["base:credits"] = 10000;
 
-	/*
+#if 0
 	state.queues["d2k:building"]["d2k:wall"].unlocked = true;
 	state.queues["d2k:building"]["d2k:gunt"].unlocked = true;
 	state.queues["d2k:building"]["d2k:roct"].unlocked = true;
@@ -117,7 +117,7 @@ void debugInit(Player &player)
 		b.second.buildTime = 120;
 		b.second.buildProgress = 120;
 	}
-	*/
+#endif
 }
 
 bool isMouseOverUI()

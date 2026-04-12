@@ -530,6 +530,7 @@ void D2KUI::_displaySelectedBuildingUI(const Building &building)
 	Vector2f top = building.getBaseAnims().front().getAnims().front().getOffset();
 	sf::Sprite sprite{this->_selectCorners[0]};
 	sf::RectangleShape rect;
+	auto &storage = building.getStorage();
 
 	top.x = 0;
 	top += building.getPosition();
@@ -567,6 +568,28 @@ void D2KUI::_displaySelectedBuildingUI(const Building &building)
 		top.y - this->_selectCorners[3].getSize().y + size.y
 	});
 	game->screen->draw(sprite);
+
+	if (!storage.empty()) {
+		sf::Vector2f pos = {top.x + 2, top.y - this->_selectCorners[2].getSize().y + size.y - 5};
+		unsigned count = 7;
+		float percent = 0;
+
+		for (auto &key : storage | std::ranges::views::keys)
+			percent += static_cast<float>(this->state->money[key]) / this->state->totalStorage[key];
+		percent /= storage.size();
+		if (size.x >= 64)
+			count = 15;
+		rect.setSize({2, 2});
+		for (size_t i = 0; i < count; i++) {
+			rect.setPosition(pos);
+			game->screen->draw(rect);
+			if (percent * (count - 1) >= i)
+				rect.setFillColor(sf::Color{0, 255, 0, 255});
+			else
+				rect.setFillColor(sf::Color{0, 0, 0, 128});
+			pos.x += 3;
+		}
+	}
 }
 
 void D2KUI::render()
