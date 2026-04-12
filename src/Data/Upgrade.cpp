@@ -12,6 +12,7 @@ Upgrade::Upgrade(const Faction &faction, const std::string &id, const nlohmann::
 	auto &base = faction.getBase();
 
 	this->_id = id;
+	this->_limit = json.contains("limit") ? json["limit"].get<unsigned>() : UINT32_MAX;
 	this->_buildSpeed = json.contains("speed") ? json["speed"].get<unsigned>() : 0;
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
@@ -53,4 +54,9 @@ unsigned Upgrade::getBuildSpeed() const
 const ReqAndCombinator &Upgrade::getRequirements() const
 {
 	return *this->_requirements;
+}
+
+unsigned Upgrade::getLimit() const
+{
+	return this->_limit;
 }

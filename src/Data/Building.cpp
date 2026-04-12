@@ -44,6 +44,7 @@ Building::Building(const Building &b) :
 	_hp(b._hp),
 	_sight(b._sight),
 	_buildSpeed(b._buildSpeed),
+	_limit(b._limit),
 	_power(b._power),
 	_building(b._building),
 	_producing(b._producing),
@@ -70,7 +71,9 @@ Building::Building(const Faction &faction, const std::string &id, const std::map
 	auto &base = faction.getBase();
 
 	this->_id = id;
-	this->_buildSound.load(base.getBase() / json["build"].get<std::string>());
+	this->_limit = json.contains("limit") ? json["limit"].get<unsigned>() : UINT32_MAX;
+	this->_buildSound.load(base.getBase() / json["build"]["path"].get<std::string>());
+	this->_buildSound.setVolume(json["build"]["volume"]);
 	this->_hp = json["hp"];
 	this->_maxHp = this->_hp;
 	this->_tiles = json["tiles"];
@@ -313,4 +316,9 @@ const std::string &Building::getGroup() const
 bool Building::isObstructed() const
 {
 	return false;
+}
+
+unsigned Building::getLimit() const
+{
+	return this->_limit;
 }

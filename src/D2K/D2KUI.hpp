@@ -74,6 +74,7 @@ private:
 	sf::Sound _soundButton{this->_button};
 	sf::Sound _soundMove{this->_move};
 
+	void _loadEvaSounds(const std::filesystem::path &base, const std::string &folder);
 	bool _hasUpgrades();
 	void _updatePlacementTexture();
 	void _handleTryPlace();
@@ -89,8 +90,8 @@ public:
 	void tileClicked(Vector2i pos) override;
 	void mouseMovedToTile(Vector2i pos) override;
 	void mouseOnUi() override;
-
 	void updateRender() override;
+	void playEVA(EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args) override;
 };
 
 

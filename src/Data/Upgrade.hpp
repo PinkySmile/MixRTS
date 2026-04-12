@@ -20,6 +20,7 @@ public:
 	std::string _id;
 	std::string _group;
 	unsigned _buildSpeed;
+	unsigned _limit;
 	std::shared_ptr<ReqAndCombinator> _requirements;
 
 public:
@@ -30,6 +31,7 @@ public:
 	const std::string &getGroup() const;
 	unsigned getBuildSpeed() const;
 	const ReqAndCombinator &getRequirements() const;
+	unsigned getLimit() const;
 };
 
 

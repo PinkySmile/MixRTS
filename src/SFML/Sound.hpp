@@ -12,6 +12,7 @@
 class Sound {
 private:
 	unsigned _handle = 0;
+	float _volume = 100;
 
 public:
 	Sound();
@@ -21,6 +22,7 @@ public:
 	void load(const std::string &file);
 	void setHandle(unsigned handle);
 	void play();
+	void setVolume(float volume);
 };
 
 

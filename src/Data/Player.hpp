@@ -17,11 +17,18 @@
 #include "Vector.hpp"
 #include "Color.hpp"
 #include "Utils.hpp"
+#include "UI.hpp"
 
 struct PlayerQueue {
+	const Faction *faction;
+	const std::string *queueId;
+	const std::string *elementId;
 	std::string tooltip;
 	unsigned buildTime;
 	unsigned buildProgress;
+	unsigned limit;
+	bool isBuilding;
+	bool isUpgrade;
 	bool unlocked;
 	bool buildable;
 	bool paused;
@@ -40,6 +47,7 @@ struct PlayerState {
 	std::unordered_map<std::string, Building *> primaryBuildings;
 	std::map<Vector2u, std::list<Building *>> buildingHitboxes;
 	std::list<Building *> myBuildings;
+	std::unordered_map<std::string, PlayerQueue *> buildQueues;
 	std::unordered_map<std::string, std::unordered_map<std::string, PlayerQueue>> queues;
 
 	unsigned getCombinedMoney(const std::string &key);
@@ -59,6 +67,8 @@ private:
 	std::vector<std::unique_ptr<UI>> _uis;
 	std::map<std::string, const Building *> _loadedBuildings;
 
+	void _tryEndBuild(PlayerQueue &queue);
+
 public:
 	PlayerState state;
 
@@ -74,6 +84,9 @@ public:
 	void consumeEvent(const sf::Event &event);
 	const Faction &getPrimaryFaction() const;
 	const std::map<std::string, const Building *> &getBuildings() const;
+	void playEVA(UI::EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
+	void checkUnlocked(const Faction &faction);
+	void resetQueue(const std::string &queueId);
 };
 
 

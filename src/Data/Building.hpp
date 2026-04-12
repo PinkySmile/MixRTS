@@ -38,6 +38,7 @@ private:
 	unsigned _hp;
 	unsigned _sight;
 	unsigned _buildSpeed;
+	unsigned _limit;
 	int _power;
 	bool _building = false;
 	bool _producing = false;
@@ -96,6 +97,7 @@ public:
 	unsigned getBuildSpeed() const;
 	const std::string &getGroup() const;
 	bool isObstructed() const;
+	unsigned getLimit() const;
 };
 
 

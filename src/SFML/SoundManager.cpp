@@ -79,12 +79,17 @@ void SoundManager::remove(unsigned int id)
 	this->_freedIndexes.push_back(id);
 }
 
-void SoundManager::play(unsigned id) const
+void SoundManager::play(unsigned id, float volume) const
 {
 	if (id == 0)
 		return;
-	game->logger.debug("Playing sound " + std::to_string(id));
-	this->_sounds.at(id).sound.play();
+
+	auto &snd = this->_sounds.at(id).sound;
+
+	volume *= this->_volume;
+	volume /= 100;
+	snd.setVolume(volume);
+	snd.play();
 }
 
 void SoundManager::addRef(unsigned int id)

@@ -4,10 +4,18 @@
 
 #include "Player.hpp"
 #include "Faction.hpp"
+#include "Upgrade.hpp"
+#include "Building.hpp"
 #include "GameManager.hpp"
 #include "../Resources/Game.hpp"
 #include "../UI.hpp"
 #include "Resources/Assert.hpp"
+
+#define PRIORITY_BUILD 3
+#define EXPIRE_BUILD 1800
+#define PRIORITY_POWER 0
+#define EXPIRE_POWER 1800
+#define COOLDOWN_POWER 1800
 
 unsigned PlayerState::getCombinedMoney(const std::string &key)
 {
@@ -67,12 +75,12 @@ void PlayerState::clean()
 				++it;
 	}
 
-	//auto mit = this->primaryBuildings.begin();
-	//while (mit != this->primaryBuildings.end())
-	//	if (mit->second->isDisposable())
-	//		mit = this->primaryBuildings.erase(mit);
-	//	else
-	//		++mit;
+	auto mit = this->buildQueues.begin();
+	while (mit != this->buildQueues.end()) {
+		if (mit->second && mit->second->buildProgress == 0)
+			mit->second = nullptr;
+		++mit;
+	}
 	for (auto &[name, b] : this->primaryBuildings)
 		if (b && b->isDisposable())
 			b = nullptr;
@@ -83,11 +91,19 @@ void Player::update()
 	for (auto &ui : this->_uis)
 		ui->update();
 	this->state.clean();
-	for (auto &ql : this->state.queues | std::ranges::views::values)
-		for (auto &q : ql | std::ranges::views::values) {
-			if (q.buildProgress != 0 && q.buildProgress != q.buildTime && !q.paused)
-				q.buildProgress++;
+	for (auto &[qname, q] : this->state.buildQueues) {
+		if (!q)
+			continue;
+		if (q->buildProgress == q->buildTime) {
+			this->_tryEndBuild(*q);
+		} else if (!q->paused) {
+			q->buildProgress++;
+			if (q->buildProgress == q->buildTime)
+				this->playEVA(UI::EVA_BUILDING_DONE, EXPIRE_BUILD, PRIORITY_BUILD, 0, qname);
 		}
+	}
+	if (this->state.producedPower < this->state.consumedPower)
+		this->playEVA(UI::EVA_LOW_POWER, EXPIRE_POWER, PRIORITY_POWER, COOLDOWN_POWER);
 }
 
 void Player::render()
@@ -166,10 +182,7 @@ void Player::handleUiEvents()
 		while (auto event = ui->pollEvent()) {
 			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event)) {
 				this->_parent.spawnBuilding(this->_index, place->position, place->queue, place->id, false);
-				for (auto &q : this->state.queues[place->queue] | std::ranges::views::values) {
-					q.buildable = true;
-					q.buildProgress = 0;
-				}
+				this->resetQueue(place->queue);
 			} else if (auto startBuild = std::get_if<UI::StartBuildEvent>(&*event)) {
 				bool b = true;
 
@@ -185,19 +198,105 @@ void Player::handleUiEvents()
 				if (b) {
 					this->state.queues[startBuild->queue][startBuild->id].buildable = true;
 					this->state.queues[startBuild->queue][startBuild->id].buildProgress = 1;
+					this->state.buildQueues[startBuild->queue] = &this->state.queues[startBuild->queue][startBuild->id];
 				}
+				this->playEVA(UI::EVA_BUILDING, EXPIRE_BUILD, PRIORITY_BUILD, 0, startBuild->queue);
 			} else if (auto cancelBuild = std::get_if<UI::CancelBuildEvent>(&*event)) {
+				if (this->state.buildQueues[cancelBuild->queue] == nullptr)
+					continue;
+
 				auto &sq = this->state.queues[cancelBuild->queue][cancelBuild->id];
 
-				if (sq.paused || sq.buildProgress == sq.buildTime)
-					for (auto &q : this->state.queues[cancelBuild->queue] | std::ranges::views::values) {
-						q.buildable = true;
-						q.paused = false;
-						q.buildProgress = 0;
-					}
-				else
-					this->state.queues[cancelBuild->queue][cancelBuild->id].paused = true;
+				if (sq.paused || sq.buildProgress == sq.buildTime) {
+					this->resetQueue(cancelBuild->queue);
+					this->playEVA(UI::EVA_CANCEL, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
+				} else {
+					sq.paused = true;
+					this->playEVA(UI::EVA_HOLD_QUEUE, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
+				}
 			} else
 				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));
 		}
+}
+
+void Player::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args)
+{
+	for (auto &ui : this->_uis)
+		ui->playEVA(sound, expireIn, priority, cooldown, args);
+}
+
+void Player::checkUnlocked(const Faction &faction)
+{
+	for (auto &[name, building] : faction.getBuildings()) {
+		if (building.getRequirements()(this->state.elementsOwned)) {
+			auto &bqueue = building.getBuildQueue();
+
+			if (!bqueue)
+				continue;
+
+			auto &queue = this->state.queues[*bqueue][name];
+
+			if (queue.unlocked)
+				continue;
+			queue.unlocked = true;
+			queue.limit = building.getLimit();
+			queue.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < queue.limit;
+			queue.paused = false;
+			queue.isBuilding = true;
+			queue.isUpgrade = false;
+			queue.buildProgress = 0;
+			queue.buildTime = building.getBuildSpeed();
+			queue.faction = &faction;
+			queue.elementId = &name;
+			queue.queueId = &*bqueue;
+			this->playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
+		}
+	}
+	for (auto &[name, upgrade] : faction.getUpgrades()) {
+		if (upgrade.getRequirements()(this->state.elementsOwned)) {
+			auto &bqueue = upgrade.getBuildQueue();
+
+			if (!bqueue)
+				continue;
+
+			auto &queue = this->state.queues[*bqueue][name];
+
+			if (queue.unlocked)
+				continue;
+			queue.unlocked = true;
+			queue.limit = upgrade.getLimit();
+			queue.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < queue.limit;
+			queue.paused = false;
+			queue.isBuilding = false;
+			queue.isUpgrade = true;
+			queue.buildProgress = 0;
+			queue.buildTime = upgrade.getBuildSpeed();
+			queue.faction = &faction;
+			queue.elementId = &name;
+			queue.queueId = &*bqueue;
+			this->playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
+		}
+	}
+}
+
+void Player::_tryEndBuild(PlayerQueue &queue)
+{
+	if (queue.isBuilding) {
+		// TODO: For place-first-build-later factions
+	} else if (queue.isUpgrade) {
+		this->state.elementsOwned[*queue.elementId]++;
+		this->resetQueue(*queue.queueId);
+		this->checkUnlocked(*queue.faction);
+	} else {
+		// TODO: Units
+	}
+}
+
+void Player::resetQueue(const std::string &queueId)
+{
+	for (auto &[name, q] : this->state.queues[queueId]) {
+		q.buildable = this->state.elementsOwned[name] < q.limit;
+		q.paused = false;
+		q.buildProgress = 0;
+	}
 }

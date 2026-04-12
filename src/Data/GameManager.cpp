@@ -165,10 +165,12 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 			player.state.queueBuildings[*gqueue].push_back(&b);
 		if (nbTiles != nbConcreteTiles)
 			b.damage(b.getHealth() * (nbTiles - nbConcreteTiles) / (nbTiles * 2));
-		if (!player.state.elementsOwned.contains(b.getGroup()))
-			player.state.elementsOwned[b.getGroup()] = 1;
-		else
-			++player.state.elementsOwned[b.getGroup()];
+
+		auto group = b.getGroup();
+
+		++player.state.elementsOwned[group];
+		if (group != id)
+			++player.state.elementsOwned[id];
 
 		auto p = b.getPower();
 		auto &storage = b.getStorage();
@@ -205,38 +207,7 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 					player.state.buildingHitboxes[Vector2u(pos.x + x, pos.y + y)].push_back(&b);
 			}
 		}
-		for (auto &[name, building] : b.getFaction().getBuildings()) {
-			if (building.getRequirements()(player.state.elementsOwned)) {
-				auto &bqueue = building.getBuildQueue();
-
-				if (!bqueue)
-					continue;
-
-				auto &queue = player.state.queues[*bqueue][name];
-
-				queue.unlocked = true;
-				queue.buildable = true;
-				queue.paused = false;
-				queue.buildProgress = 0;
-				queue.buildTime = building.getBuildSpeed();
-			}
-		}
-		for (auto &[name, upgrade] : b.getFaction().getUpgrades()) {
-			if (upgrade.getRequirements()(player.state.elementsOwned)) {
-				auto &bqueue = upgrade.getBuildQueue();
-
-				if (!bqueue)
-					continue;
-
-				auto &queue = player.state.queues[*bqueue][name];
-
-				queue.unlocked = true;
-				queue.buildable = true;
-				queue.paused = false;
-				queue.buildProgress = 0;
-				queue.buildTime = upgrade.getBuildSpeed();
-			}
-		}
+		player.checkUnlocked(b.getFaction());
 	}
 }
 

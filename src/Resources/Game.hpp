@@ -35,7 +35,8 @@ struct Game {
 	SoundManager soundMgr;
 	SceneManager scene;
 	ModManager modManager;
-	Vector2u _mousePos;
+	Vector2u mousePos;
+	sf::SoundBuffer dummySoundBuffer;
 
 	Game(const std::filesystem::path &fontPath, const std::filesystem::path &loggerPath = "./latest.log");
 };

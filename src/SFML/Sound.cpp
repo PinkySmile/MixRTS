@@ -17,6 +17,7 @@ Sound::Sound(unsigned handle)
 
 Sound::Sound(const Sound &o)
 {
+	this->_volume = o._volume;
 	this->_handle = o._handle;
 	game->soundMgr.addRef(o._handle);
 }
@@ -42,5 +43,10 @@ void Sound::setHandle(unsigned handle)
 
 void Sound::play()
 {
-	game->soundMgr.play(this->_handle);
+	game->soundMgr.play(this->_handle, this->_volume);
+}
+
+void Sound::setVolume(float volume)
+{
+	this->_volume = volume;
 }

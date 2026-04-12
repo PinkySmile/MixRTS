@@ -29,7 +29,7 @@ public:
 	unsigned load(std::string file);
 	void addRef(unsigned id);
 	void remove(unsigned id);
-	void play(unsigned id) const;
+	void play(unsigned id, float volume) const;
 	void setVolume(float volume);
 };
 

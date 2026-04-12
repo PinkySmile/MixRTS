@@ -69,6 +69,28 @@ static std::string __unitsOrder[] = {
 	"sard",
 };
 
+void D2KUI::_loadEvaSounds(const std::filesystem::path &base, const std::string &folder)
+{
+	this->_evaSounds[EVA_BUILDING]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "build.ogg");
+	this->_evaSounds[EVA_BUILDING_DONE]    = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "building_done.ogg");
+	this->_evaSounds[EVA_CANCEL]           = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "cancel.ogg");
+	this->_evaSounds[EVA_CANNOT_DEPLOY]    = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "cannot_deploy.ogg");
+	this->_evaSounds[EVA_CANNOT_BUILD]     = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "cannot_place.ogg");
+	this->_evaSounds[EVA_GUARDING]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "guarding.ogg");
+	this->_evaSounds[EVA_HOLD_QUEUE]       = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "hold.ogg");
+	this->_evaSounds[EVA_LOST]             = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "lose.ogg");
+	this->_evaSounds[EVA_WON]              = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "win.ogg");
+	this->_evaSounds[EVA_LOW_POWER]        = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "low_power.ogg");
+	this->_evaSounds[EVA_UNLOCKED]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "new_unlock.ogg");
+	this->_evaSounds[EVA_NO_CREDITS]       = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "no_money.ogg");
+	this->_evaSounds[EVA_PRIMARY_SELECTED] = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "primary.ogg");
+	this->_evaSounds[EVA_RETREAT]          = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "retreat.ogg");
+	this->_evaSounds[EVA_SELL]             = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "sell.ogg");
+	this->_evaSounds[EVA_TRAINING]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "train.ogg");
+	this->_evaSounds[EVA_UNIT_READY]       = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "unit_ready.ogg");
+	this->_evaSounds[EVA_UPGRADING]        = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "upgrading.ogg");
+}
+
 D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nlohmann::json &params) :
 	_faction(faction)
 {
@@ -233,6 +255,7 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_unitsOrder.reserve(std::size(__unitsOrder));
 	for (auto &u : __unitsOrder)
 		this->_unitsOrder.push_back(start + u);
+	this->_loadEvaSounds(base, params["eva_folder"]);
 }
 
 D2KUI::~D2KUI() noexcept = default;
@@ -319,6 +342,7 @@ static void updateList(
 		w->setOnHold(it->second.paused);
 		if (!it->second.buildable) {
 			w->setFill(0);
+			w->setReady(false);
 			continue;
 		}
 		if (it->second.buildProgress == 0) {
@@ -395,6 +419,7 @@ static void updateList2(
 		w->setOnHold(it->second.paused);
 		if (!it->second.buildable) {
 			w->setFill(0);
+			w->setReady(false);
 			continue;
 		}
 		if (it->second.buildProgress == 0) {
@@ -409,6 +434,8 @@ static void updateList2(
 
 void D2KUI::update()
 {
+	UI::update();
+
 	unsigned i = 0;
 	unsigned credits = std::min(99999999U, this->state->getCombinedMoney("base:credits"));
 	auto &bQueue = this->state->queues[this->_faction.getBase().getName() + ":building"];
@@ -452,7 +479,7 @@ void D2KUI::update()
 					this->_placementBuilding = &it->second;
 				else
 					game->logger.debug("Cannot find " + id);
-			} else
+			} else if (bQueue[id].buildProgress == 0)
 				this->_eventQueue.emplace_back(StartBuildEvent{
 					id, this->_faction.getBase().getName() + ":building"
 				});
@@ -487,11 +514,12 @@ void D2KUI::update()
 		}
 	);
 
-	float percent = (static_cast<float>(this->state->producedPower) - this->state->consumedPower) / 2;
-	this->_power->setSize({10, ceil(100 * percent)});
-	this->_greenPower->setVisible(percent >= 1);
-	this->_yellowPower->setVisible(percent >= 0.7 && percent < 1);
-	this->_redPower->setVisible(percent < 0.7);
+	float percent = 100 + (static_cast<float>(this->state->producedPower) - this->state->consumedPower) / 2;
+
+	this->_power->setSize({10, ceil(percent)});
+	this->_greenPower->setVisible(percent >= 100);
+	this->_yellowPower->setVisible(percent >= 70 && percent < 100);
+	this->_redPower->setVisible(percent < 70);
 
 	this->_upgrade->setVisible(this->_hasUpgrades());
 }
@@ -706,4 +734,21 @@ void D2KUI::mouseOnUi()
 void D2KUI::updateRender()
 {
 	this->_cursors.at(this->_cursor).update();
+}
+
+void D2KUI::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args)
+{
+	if (sound == EVA_BUILDING) {
+		if (args == this->_faction.getBase().getName() + ":upgrade")
+			sound = EVA_UPGRADING;
+		else if (args == this->_faction.getBase().getName() + ":infantry")
+			sound = EVA_TRAINING;
+	} else if (sound == EVA_BUILDING_DONE) {
+		if (args == this->_faction.getBase().getName() + ":upgrade")
+			// No built sound for upgrade queue
+			return;
+		else if (args != this->_faction.getBase().getName() + ":building")
+			sound = EVA_UNIT_READY;
+	}
+	UI::playEVA(sound, expireIn, priority, cooldown, args);
 }
