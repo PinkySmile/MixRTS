@@ -97,7 +97,30 @@ void Player::update()
 		if (q->buildProgress == q->buildTime) {
 			this->_tryEndBuild(*q);
 		} else if (!q->paused) {
+			float percent = static_cast<float>(q->buildProgress + 1) / q->buildTime;
+			std::unordered_map<std::string, unsigned> expected;
+			std::unordered_map<std::string, unsigned> extra;
+
+			if (q->building)
+				expected = q->building->getCost();
+			else if (q->upgrade)
+				expected = q->upgrade->getCost();
+			for (auto &f : expected | std::ranges::views::values)
+				f *= percent;
+			for (auto &[n, f] : expected)
+				extra[n] = f - q->spent[n];
+			if (std::ranges::any_of(extra, [this](const std::pair<std::string, unsigned> &p){
+				if (this->state.getCombinedMoney(p.first) >= p.second)
+					return false;
+				this->playEVA(UI::EVA_NO_CREDITS, 15, 2, 300, p.first);
+				return true;
+			}))
+				continue;
+
+			for (auto &p : extra)
+				this->_consume(p.first, p.second);
 			q->buildProgress++;
+			q->spent = expected;
 			if (q->buildProgress == q->buildTime)
 				this->playEVA(UI::EVA_BUILDING_DONE, EXPIRE_BUILD, PRIORITY_BUILD, 0, qname);
 		}
@@ -207,12 +230,16 @@ void Player::handleUiEvents()
 
 				auto &sq = this->state.queues[cancelBuild->queue][cancelBuild->id];
 
+				for (auto &ui : this->_uis)
+					ui->onCancel();
 				if (sq.paused || sq.buildProgress == sq.buildTime) {
-					this->resetQueue(cancelBuild->queue);
 					this->playEVA(UI::EVA_CANCEL, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
+					for (auto &p : sq.spent)
+						this->_credit(p.first, p.second, CREDIT_SYSTEM);
+					this->resetQueue(cancelBuild->queue);
 				} else {
-					sq.paused = true;
 					this->playEVA(UI::EVA_HOLD_QUEUE, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
+					sq.paused = true;
 				}
 			} else
 				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));
@@ -242,11 +269,12 @@ void Player::checkUnlocked(const Faction &faction)
 			queue.limit = building.getLimit();
 			queue.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < queue.limit;
 			queue.paused = false;
-			queue.isBuilding = true;
-			queue.isUpgrade = false;
 			queue.buildProgress = 0;
 			queue.buildTime = building.getBuildSpeed();
 			queue.faction = &faction;
+			queue.building = &building;
+			queue.upgrade = nullptr;
+			queue.unit = nullptr;
 			queue.elementId = &name;
 			queue.queueId = &*bqueue;
 			this->playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
@@ -267,11 +295,12 @@ void Player::checkUnlocked(const Faction &faction)
 			queue.limit = upgrade.getLimit();
 			queue.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < queue.limit;
 			queue.paused = false;
-			queue.isBuilding = false;
-			queue.isUpgrade = true;
 			queue.buildProgress = 0;
 			queue.buildTime = upgrade.getBuildSpeed();
 			queue.faction = &faction;
+			queue.building = nullptr;
+			queue.upgrade = &upgrade;
+			queue.unit = nullptr;
 			queue.elementId = &name;
 			queue.queueId = &*bqueue;
 			this->playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
@@ -281,15 +310,16 @@ void Player::checkUnlocked(const Faction &faction)
 
 void Player::_tryEndBuild(PlayerQueue &queue)
 {
-	if (queue.isBuilding) {
+	if (queue.building) {
 		// TODO: For place-first-build-later factions
-	} else if (queue.isUpgrade) {
+	} else if (queue.upgrade) {
 		this->state.elementsOwned[*queue.elementId]++;
 		this->resetQueue(*queue.queueId);
 		this->checkUnlocked(*queue.faction);
-	} else {
+	} else if (queue.unit) {
 		// TODO: Units
-	}
+	} else
+		assert_not_reached();
 }
 
 void Player::resetQueue(const std::string &queueId)
@@ -298,5 +328,49 @@ void Player::resetQueue(const std::string &queueId)
 		q.buildable = this->state.elementsOwned[name] < q.limit;
 		q.paused = false;
 		q.buildProgress = 0;
+		q.spent.clear();
 	}
+}
+
+bool Player::_credit(const std::string &type, unsigned int amount, CreditStrategy strategy)
+{
+	switch (strategy) {
+	case CREDIT_SYSTEM:
+		this->playEVA(UI::EVA_CASH_UP, 1, 0, 0);
+		this->state.systemMoney[type] += amount;
+		return true;
+	default:
+		unsigned result = this->state.money[type] + amount;
+
+		if (result <= this->state.totalStorage[type]) {
+			this->playEVA(UI::EVA_CASH_UP, 1, 0, 0);
+			this->state.money[type] = result;
+			return true;
+		}
+		if (strategy == CREDIT_SPILL) {
+			this->playEVA(UI::EVA_CASH_UP, 1, 0, 0);
+			this->state.money[type] = this->state.totalStorage[type];
+		}
+		return false;
+	}
+}
+
+bool Player::_consume(const std::string &type, unsigned int amount)
+{
+	auto &stored = this->state.money[type];
+
+	if (stored >= amount) {
+		this->playEVA(UI::EVA_CASH_DOWN, 1, 0, 0);
+		stored -= amount;
+		return true;
+	}
+
+	auto &system = this->state.systemMoney[type];
+
+	if (stored + system < amount)
+		return false;
+	this->playEVA(UI::EVA_CASH_DOWN, 1, 0, 0);
+	system -= amount - stored;
+	stored = 0;
+	return true;
 }

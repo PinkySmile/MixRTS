@@ -20,6 +20,7 @@ struct MapState {
 	Vector2u tileSize;
 	Vector2u gridSize;
 	Vector2i translate;
+	std::vector<Vector2u> startAreas;
 
 	struct Quad {
 		Vector2f pt1;
@@ -49,12 +50,13 @@ private:
 public:
 	GameManager(const std::vector<Faction> &factions);
 	void loadMap();
-	void addPlayer(size_t factionIndex, const HSLColor &color);
+	void addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea);
 	void update();
 	void updateRender();
 	void render();
 	void renderAbove();
 	std::vector<Player> &getPlayers();
+	const std::vector<Faction> &getFactions() const;
 	void spawnBuilding(size_t owner, Vector2u pos, const std::string &buildQueue, const std::string &id, bool forceConcrete);
 };
 

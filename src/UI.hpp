@@ -35,6 +35,8 @@ public:
 		EVA_TRAINING,
 		EVA_UNIT_READY,
 		EVA_UPGRADING,
+		EVA_CASH_UP,
+		EVA_CASH_DOWN,
 		EVA_COUNT
 	};
 
@@ -84,6 +86,7 @@ protected:
 		unsigned cooldown;
 	};
 
+	unsigned _globalEvaCooldown = 0;
 	std::deque<EVAQueue> _evaQueue;
 	std::array<unsigned, EVA_COUNT> _evaCooldown{0};
 	std::array<std::unique_ptr<sf::SoundBuffer>, EVA_COUNT> _evaSounds{nullptr};

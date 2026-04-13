@@ -10,6 +10,9 @@
 #define GRID_SIZE 32
 
 float guiScale = 1.5f;
+#ifdef _DEBUG
+bool DEBUG_MODE = false;
+#endif
 
 void displayGrid()
 {
@@ -51,73 +54,56 @@ void reloadViews(Vector2u size)
 	game->gui.setAbsoluteView(viewGui);
 }
 
-void debugInit(Player &player)
+void debugInit(Player &player, const std::vector<Faction> &factions)
 {
 	auto &state = player.state;
 
-	state.money["base:credits"] = 10000;
-	state.systemMoney["base:credits"] = 10000;
+	for (auto &f : factions) {
+		for (auto &[name, b] : f.getBuildings()) {
+			auto &bqueue = b.getBuildQueue();
 
-#if 0
-	state.queues["d2k:building"]["d2k:wall"].unlocked = true;
-	state.queues["d2k:building"]["d2k:gunt"].unlocked = true;
-	state.queues["d2k:building"]["d2k:roct"].unlocked = true;
-	state.queues["d2k:building"]["d2k:wall"].buildable = false;
-	state.queues["d2k:building"]["d2k:gunt"].buildable = false;
-	state.queues["d2k:building"]["d2k:roct"].buildable = false;
+			if (!bqueue)
+				continue;
 
-	state.queues["d2k:building"]["d2k:repr"].unlocked = true;
-	state.queues["d2k:building"]["d2k:2con"].unlocked = true;
-	state.queues["d2k:building"]["d2k:3con"].unlocked = true;
-	state.queues["d2k:building"]["d2k:wtra"].unlocked = true;
-	state.queues["d2k:building"]["d2k:barr"].unlocked = true;
-	state.queues["d2k:building"]["d2k:refi"].unlocked = true;
-	state.queues["d2k:building"]["d2k:lfac"].unlocked = true;
-	state.queues["d2k:building"]["d2k:hfac"].unlocked = true;
-	state.queues["d2k:building"]["d2k:outp"].unlocked = true;
-	state.queues["d2k:building"]["d2k:silo"].unlocked = true;
-	state.queues["d2k:building"]["d2k:star"].unlocked = true;
-	state.queues["d2k:building"]["d2k:htec"].unlocked = true;
-	state.queues["d2k:building"]["d2k:ixrc"].unlocked = true;
-	state.queues["d2k:building"]["d2k:ahtec"].unlocked = true;
-	state.queues["d2k:building"]["d2k:apala"].unlocked = true;
-	state.queues["d2k:building"]["d2k:hpala"].unlocked = true;
-	state.queues["d2k:building"]["d2k:opala"].unlocked = true;
-	state.queues["d2k:building"]["d2k:repr"].buildable = true;
-	state.queues["d2k:building"]["d2k:2con"].buildable = true;
-	state.queues["d2k:building"]["d2k:3con"].buildable = true;
-	state.queues["d2k:building"]["d2k:wtra"].buildable = true;
-	state.queues["d2k:building"]["d2k:barr"].buildable = true;
-	state.queues["d2k:building"]["d2k:refi"].buildable = true;
-	state.queues["d2k:building"]["d2k:lfac"].buildable = true;
-	state.queues["d2k:building"]["d2k:hfac"].buildable = true;
-	state.queues["d2k:building"]["d2k:outp"].buildable = true;
-	state.queues["d2k:building"]["d2k:silo"].buildable = true;
-	state.queues["d2k:building"]["d2k:star"].buildable = true;
-	state.queues["d2k:building"]["d2k:htec"].buildable = true;
-	state.queues["d2k:building"]["d2k:ixrc"].buildable = true;
-	state.queues["d2k:building"]["d2k:ahtec"].buildable = true;
-	state.queues["d2k:building"]["d2k:apala"].buildable = true;
-	state.queues["d2k:building"]["d2k:hpala"].buildable = true;
-	state.queues["d2k:building"]["d2k:opala"].buildable = true;
+			auto &queue = state.queues[*bqueue][name];
 
-	for (auto &b : state.queues["d2k:building"]) {
-		b.second.buildTime = 120;
-		b.second.buildProgress = 120;
+			queue.unlocked = true;
+			queue.limit = b.getLimit();
+			queue.buildable = true;
+			queue.paused = false;
+			queue.buildProgress = 0;
+			queue.buildTime = 1;
+			queue.faction = &f;
+			queue.building = &b;
+			queue.upgrade = nullptr;
+			queue.unit = nullptr;
+			queue.elementId = &name;
+			queue.queueId = &*bqueue;
+			player.playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
+		}
+		for (auto &[name, u] : f.getUpgrades()) {
+			auto &bqueue = u.getBuildQueue();
+
+			if (!bqueue)
+				continue;
+
+			auto &queue = state.queues[*bqueue][name];
+
+			queue.unlocked = true;
+			queue.limit = u.getLimit();
+			queue.buildable = true;
+			queue.paused = false;
+			queue.buildProgress = 0;
+			queue.buildTime = 1;
+			queue.faction = &f;
+			queue.building = nullptr;
+			queue.upgrade = &u;
+			queue.unit = nullptr;
+			queue.elementId = &name;
+			queue.queueId = &*bqueue;
+			player.playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
+		}
 	}
-
-	state.queues["units"]["d2k:rifl"].unlocked = true;
-	state.queues["units"]["d2k:trop"].unlocked = true;
-	state.queues["units"]["d2k:engi"].unlocked = true;
-	state.queues["units"]["d2k:rifl"].buildable = true;
-	state.queues["units"]["d2k:trop"].buildable = true;
-	state.queues["units"]["d2k:engi"].buildable = true;
-
-	for (auto &b : state.queues["units"]) {
-		b.second.buildTime = 120;
-		b.second.buildProgress = 120;
-	}
-#endif
 }
 
 bool isMouseOverUI()
@@ -156,12 +142,12 @@ int main()
 	float timer = 0;
 
 	manager.loadMap();
-	manager.addPlayer(0, HSLColor{214, 375, 919}); // Atreides blue
+	manager.addPlayer(0, HSLColor{214, 375, 919}, 0); // Atreides blue
 	//manager.addPlayer(0, HSLColor{0, 800, 750}); // Harkonen's red
 	//manager.addPlayer(0, HSLColor{145, 250, 900}); // Ordos's green
-	debugInit(players[0]);
 	players[0].setEnabled(true);
-	manager.spawnBuilding(0, {0, 1}, "d2k:building", "d2k:a_cony", false);
+	if (DEBUG_MODE)
+		debugInit(players[0], manager.getFactions());
 
 	reloadViews(game->screen->getSize());
 	while (game->screen->isOpen()) {

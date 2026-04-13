@@ -41,5 +41,10 @@ struct Game {
 	Game(const std::filesystem::path &fontPath, const std::filesystem::path &loggerPath = "./latest.log");
 };
 
+#ifdef _DEBUG
+extern bool DEBUG_MODE;
+#else
+#define DEBUG_MODE false
+#endif
 
 #endif //SOFGV_GAME_HPP

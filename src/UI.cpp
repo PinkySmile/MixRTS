@@ -5,6 +5,7 @@
 #include "UI.hpp"
 #include "../Data/Player.hpp"
 #include "../Resources/Game.hpp"
+#include "Resources/Assert.hpp"
 
 
 UI::UI() :
@@ -60,18 +61,23 @@ void UI::update()
 		return this->_evaQueue.clear();
 	if (this->_evaQueue.empty())
 		return;
-	while (!this->_evaSounds[this->_evaQueue.front().soundId])
-		this->_evaQueue.pop_front();
-	if (this->_evaQueue.empty())
-		return;
 	if (this->_evaSound.getStatus() != sf::Sound::Status::Playing) {
-		this->_evaSound.setBuffer(*this->_evaSounds[this->_evaQueue.front().soundId]);
-		this->_evaSound.play();
-		this->_evaCooldown[this->_evaQueue.front().soundId] = this->_evaQueue.front().cooldown;
-		this->_evaQueue.pop_front();
+		if (this->_globalEvaCooldown == 0) {
+			auto &e = this->_evaQueue.front();
+
+			assert_msg(this->_evaSounds[e.soundId], "Trying to play invalid EVA " + std::to_string(e.soundId));
+			this->_evaSound.setBuffer(*this->_evaSounds[e.soundId]);
+			this->_evaSound.play();
+			this->_evaCooldown[e.soundId] = e.cooldown;
+			this->_evaQueue.pop_front();
+			this->_globalEvaCooldown = 30;
+		} else
+			this->_globalEvaCooldown--;
 	}
+
 	for (auto &q : this->_evaQueue)
-		q.expireTimer--;
+		if (q.expireTimer != 0)
+			q.expireTimer--;
 	while (!this->_evaQueue.empty() && (
 		this->_evaQueue.front().expireTimer == 0 ||
 		this->_evaCooldown[this->_evaQueue.front().soundId]

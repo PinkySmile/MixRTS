@@ -26,6 +26,7 @@ private:
 	std::optional<ConditionalAnim> _producedAnim;
 	std::vector<std::vector<uint8_t>> _tiles;
 	std::shared_ptr<ReqAndCombinator> _requirements;
+	std::unordered_map<std::string, unsigned> _cost;
 	std::unordered_map<std::string, unsigned> _storage;
 	std::string _id;
 	std::string _group;
@@ -92,6 +93,7 @@ public:
 	const Faction &getFaction() const;
 	const std::vector<std::vector<uint8_t>> &getTileData() const;
 	const std::optional<std::string> &getProxy() const;
+	const std::unordered_map<std::string, unsigned> &getCost() const;
 	const std::unordered_map<std::string, unsigned> &getStorage() const;
 	const ReqAndCombinator &getRequirements() const;
 	unsigned getBuildSpeed() const;

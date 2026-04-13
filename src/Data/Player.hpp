@@ -21,14 +21,15 @@
 
 struct PlayerQueue {
 	const Faction *faction;
+	const Upgrade *upgrade;
+	const void *unit; // TODO:
+	const Building *building;
 	const std::string *queueId;
 	const std::string *elementId;
-	std::string tooltip;
+	std::unordered_map<std::string, unsigned> spent;
 	unsigned buildTime;
 	unsigned buildProgress;
 	unsigned limit;
-	bool isBuilding;
-	bool isUpgrade;
 	bool unlocked;
 	bool buildable;
 	bool paused;
@@ -67,7 +68,15 @@ private:
 	std::vector<std::unique_ptr<UI>> _uis;
 	std::map<std::string, const Building *> _loadedBuildings;
 
+	enum CreditStrategy {
+		CREDIT_SYSTEM,
+		CREDIT_SPILL,
+		CREDIT_STRICT
+	};
+
 	void _tryEndBuild(PlayerQueue &queue);
+	bool _credit(const std::string &type, unsigned amount, CreditStrategy strategy);
+	bool _consume(const std::string &type, unsigned amount);
 
 public:
 	PlayerState state;

@@ -33,6 +33,7 @@ Building::Building(const Building &b) :
 	_giveQueue(b._giveQueue),
 	_tiles(b._tiles),
 	_requirements(b._requirements),
+	_cost(b._cost),
 	_storage(b._storage),
 	_id(b._id),
 	_group(b._group),
@@ -76,6 +77,7 @@ Building::Building(const Faction &faction, const std::string &id, const std::map
 	this->_buildSound.setVolume(json["build"]["volume"]);
 	this->_hp = json["hp"];
 	this->_maxHp = this->_hp;
+	this->_cost = json["cost"];
 	this->_tiles = json["tiles"];
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
@@ -321,4 +323,9 @@ bool Building::isObstructed() const
 unsigned Building::getLimit() const
 {
 	return this->_limit;
+}
+
+const std::unordered_map<std::string, unsigned> &Building::getCost() const
+{
+	return this->_cost;
 }

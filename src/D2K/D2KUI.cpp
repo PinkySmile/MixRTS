@@ -89,6 +89,8 @@ void D2KUI::_loadEvaSounds(const std::filesystem::path &base, const std::string 
 	this->_evaSounds[EVA_TRAINING]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "train.ogg");
 	this->_evaSounds[EVA_UNIT_READY]       = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "unit_ready.ogg");
 	this->_evaSounds[EVA_UPGRADING]        = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "upgrading.ogg");
+	this->_evaSounds[EVA_CASH_DOWN]        = std::make_unique<sf::SoundBuffer>(base / "sounds/CASHTIK1.ogg");
+	this->_evaSounds[EVA_CASH_UP]          = std::make_unique<sf::SoundBuffer>(base / "sounds/CASHTIK1.ogg");
 }
 
 D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nlohmann::json &params) :
@@ -153,9 +155,9 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_buildQueue->getVerticalScrollbar()->setScrollAmount(47);
 	this->_unitsQueue->getVerticalScrollbar()->setScrollAmount(47);
 
-	assert_exp(this->_move.loadFromFile(base / "sounds/SIDEBAR1.WAV"));
-	assert_exp(this->_button.loadFromFile(base / "sounds/BUTTON1.WAV"));
-	assert_exp(this->_moveBlocked.loadFromFile(base / "sounds/ENDLIST1.WAV"));
+	assert_exp(this->_move.loadFromFile(base / "sounds/SIDEBAR1.ogg"));
+	assert_exp(this->_button.loadFromFile(base / "sounds/BUTTON1.ogg"));
+	assert_exp(this->_moveBlocked.loadFromFile(base / "sounds/ENDLIST1.ogg"));
 
 	this->_up1->onMousePress([this] {
 		auto amount = this->_buildQueue->getContentOffset();
@@ -570,7 +572,7 @@ void D2KUI::_displaySelectedBuildingUI(const Building &building)
 	game->screen->draw(sprite);
 
 	if (!storage.empty()) {
-		sf::Vector2f pos = {top.x + 2, top.y - this->_selectCorners[2].getSize().y + size.y - 5};
+		sf::Vector2f pos = {top.x + 2, top.y + size.y - 5};
 		unsigned count = 7;
 		float percent = 0;
 
@@ -582,11 +584,11 @@ void D2KUI::_displaySelectedBuildingUI(const Building &building)
 		rect.setSize({2, 2});
 		for (size_t i = 0; i < count; i++) {
 			rect.setPosition(pos);
-			game->screen->draw(rect);
-			if (percent * (count - 1) >= i)
+			if (percent * count > i && percent != 0)
 				rect.setFillColor(sf::Color{0, 255, 0, 255});
 			else
 				rect.setFillColor(sf::Color{0, 0, 0, 128});
+			game->screen->draw(rect);
 			pos.x += 3;
 		}
 	}

@@ -21,6 +21,7 @@ public:
 	std::string _group;
 	unsigned _buildSpeed;
 	unsigned _limit;
+	std::unordered_map<std::string, unsigned> _cost;
 	std::shared_ptr<ReqAndCombinator> _requirements;
 
 public:
@@ -31,6 +32,7 @@ public:
 	const std::string &getGroup() const;
 	unsigned getBuildSpeed() const;
 	const ReqAndCombinator &getRequirements() const;
+	const std::unordered_map<std::string, unsigned> &getCost() const;
 	unsigned getLimit() const;
 };
 

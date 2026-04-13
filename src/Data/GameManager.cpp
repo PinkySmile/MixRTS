@@ -27,18 +27,24 @@ GameManager::GameManager(const std::vector<Faction> &factions) :
 
 void GameManager::loadMap()
 {
+	// TODO:
 	for (auto &state : this->_mapStates) {
 		state.tileSize = {GRID_SIZE, GRID_SIZE};
 		state.gridSize = {GRID_DIMS_X, GRID_DIMS_Y};
 		state.grid = new uint32_t[GRID_DIMS_X * GRID_DIMS_Y];
 		for (size_t i = 0; i < GRID_DIMS_X * GRID_DIMS_Y; i++)
 			state.grid[i] = ~GRIDMASK_HAS_CONCRETE;
+		state.startAreas.emplace_back(1, 2);
 	}
 }
 
-void GameManager::addPlayer(size_t factionIndex, const HSLColor &color)
+void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea)
 {
 	this->_players.emplace_back(*this, this->_factions, factionIndex, color, this->_mapStates);
+	// TODO:
+	this->spawnBuilding(0, {0, 1}, "d2k:building", "d2k:a_cony", false);
+	this->_players[0].state.money["base:credits"] = 10000;
+	this->_players[0].state.systemMoney["base:credits"] = 10000;
 }
 
 void GameManager::update()
@@ -209,6 +215,11 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 		}
 		player.checkUnlocked(b.getFaction());
 	}
+}
+
+const std::vector<Faction> &GameManager::getFactions() const
+{
+	return this->_factions;
 }
 
 Vector2i MapState::absToTileCoord(const Vector2i &p)
