@@ -27,7 +27,7 @@ Sound::~Sound()
 	game->soundMgr.remove(this->_handle);
 }
 
-void Sound::load(const std::string &file)
+void Sound::load(const std::filesystem::path &file)
 {
 	if (this->_handle)
 		game->soundMgr.remove(this->_handle);

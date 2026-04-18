@@ -16,6 +16,7 @@ Faction::Faction(const Mod &base, const nlohmann::json &data) :
 	_buildings(data["buildings"]),
 	_animations(data["animations"]),
 	_upgrades(data["upgrades"]),
+	_startingMoney(data["starting_money"]),
 	_uiData(data["ui"]),
 	_regressTech(data["regress_tech"])
 {
@@ -31,6 +32,17 @@ Faction::Faction(const Mod &base, const nlohmann::json &data) :
 		this->_placementCursors[2].emplace_back();
 		this->_placementCursors[2].back().load(base.getBase() / p);
 	}
+	for (const auto &p : data["starting_building"]) {
+		StartBuilding b;
+
+		b.name  = RESOURCE(base.getName(), p["name"]);
+		b.queue = RESOURCE(base.getName(), p["queue"]);
+		if (p.contains("offset")) {
+			b.offset.x = p["offset"]["x"];
+			b.offset.y = p["offset"]["y"];
+		}
+		this->_startingBuildings.push_back(b);
+	}
 }
 
 void Faction::load()
@@ -43,14 +55,24 @@ void Faction::load()
 		this->_base.loadUpgrades(u, *this, this->_loadedUpgrades);
 }
 
-const std::map<std::string, Building> &Faction::getBuildings() const
+const std::unordered_map<std::string, Building> &Faction::getBuildings() const
 {
 	return this->_loadedBuildings;
 }
 
-const std::map<std::string, Upgrade> &Faction::getUpgrades() const
+const std::unordered_map<std::string, Upgrade> &Faction::getUpgrades() const
 {
 	return this->_loadedUpgrades;
+}
+
+const std::unordered_map<std::string, unsigned> &Faction::getStartingMoney() const
+{
+	return this->_startingMoney;
+}
+
+const std::vector<StartBuilding> &Faction::getStartingBuildings() const
+{
+	return this->_startingBuildings;
 }
 
 UI *Faction::createUI() const

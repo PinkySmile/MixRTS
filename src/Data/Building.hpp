@@ -67,7 +67,7 @@ public:
 
 
 	Building(const Building &b);
-	Building(const Faction &base, const std::string &id, const std::map<std::string, std::vector<Animation>> &animList, const nlohmann::json &json);
+	Building(const Faction &base, const std::string &id, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &json);
 	void update();
 	void render(int layer);
 	void built();

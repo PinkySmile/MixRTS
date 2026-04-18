@@ -66,7 +66,7 @@ Building::Building(const Building &b) :
 		this->_producedAnim.emplace(*this, *b._producedAnim);
 }
 
-Building::Building(const Faction &faction, const std::string &id, const std::map<std::string, std::vector<Animation>> &animList, const nlohmann::json &json) :
+Building::Building(const Faction &faction, const std::string &id, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &json) :
 	_base(faction)
 {
 	auto &base = faction.getBase();

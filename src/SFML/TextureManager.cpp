@@ -3,11 +3,9 @@
 //
 
 #include "TextureManager.hpp"
-
-#include "Utils.hpp"
 #include "Resources/Game.hpp"
-#include "Data/Logger.hpp"
 #include "Resources/Assert.hpp"
+#include "Data/Logger.hpp"
 
 static unsigned pngCrcTable[256];
 
@@ -157,19 +155,12 @@ unsigned TextureManager::_loadPaletted(const std::filesystem::path &path, Alloca
 
 	buffer.resize(fileSize);
 	pngStream.read(reinterpret_cast<char *>(buffer.data()), buffer.size());
-	if (pngStream.fail()) {
-		// TODO: Only works on Linux
-		game->logger.error("Failed to load " + path.string() + " (read): " + strerror(errno));
-		return 0;
-	}
 	pngStream.close();
 
 	std::string_view view{reinterpret_cast<char *>(buffer.data()), buffer.size()};
 	size_t pos = view.find("PLTE");
 
 	if (pos != std::string::npos) {
-		// Check that the file isn't truncated
-		assert_exp(pos + 4 + 768 + 4 <= buffer.size());
 		tex.paletteData.emplace();
 		tex.palette = palette;
 
@@ -191,6 +182,10 @@ unsigned TextureManager::_loadPaletted(const std::filesystem::path &path, Alloca
 		buffer[pos++] = (crc >> 16) & 0xFF;
 		buffer[pos++] = (crc >> 8) & 0xFF;
 		buffer[pos++] = (crc >> 0) & 0xFF;
+
+		pos = buffer.size();
+		buffer.resize(buffer.size() + 13);
+		memcpy(&buffer[pos], "\x00\x00\x00\x01tRNS\x00\x40\xe6\xd8\x66", 13);
 	}
 
 	if (id != 0)
@@ -205,23 +200,138 @@ unsigned TextureManager::_loadPaletted(const std::filesystem::path &path, Alloca
 	}
 
 	assert_exp(this->_textures[tex.index].loadFromMemory(buffer.data(), buffer.size()));
-	game->logger.verbose("Loaded texture " + path.string() + " successfully");
+	game->logger.verbose("Loaded texture" + path.string() + " successfully");
 	return tex.index;
+}
+
+unsigned TextureManager::_loadPaletted(const std::filesystem::path &path, AllocatedTexture &tex, const std::filesystem::path &palette, unsigned id)
+{
+	std::error_code err;
+	std::vector<unsigned char> buffer;
+	size_t fileSize = std::filesystem::file_size(path, err);
+	if (err) {
+		// TODO: Only works on Linux
+		game->logger.error("Failed to load " + path.string() + ": " + strerror(errno));
+		return 0;
+	}
+
+	std::ifstream pngStream{path, std::fstream::binary};
+	if (pngStream.fail()) {
+		// TODO: Only works on Linux
+		game->logger.error("Failed to load " + path.string() + ": " + strerror(errno));
+		return 0;
+	}
+
+	buffer.resize(fileSize);
+	pngStream.read(reinterpret_cast<char *>(buffer.data()), buffer.size());
+	pngStream.close();
+
+	std::string_view view{reinterpret_cast<char *>(buffer.data()), buffer.size()};
+	size_t pos = view.find("PLTE");
+
+	if (pos != std::string::npos) {
+		size_t start = pos;
+		std::ifstream palStream{palette, std::fstream::binary};
+		if (palStream.fail()) {
+			// TODO: Only works on Linux
+			game->logger.error("Failed to load " + palette.string() + ": " + strerror(errno));
+			return 0;
+		}
+
+		tex.palette.emplace();
+		tex.paletteData.emplace();
+
+		assert_eq(std::filesystem::file_size(palette), 768ULL);
+		palStream.read(reinterpret_cast<char *>(tex.paletteData->data()), tex.paletteData->size());
+		palStream.close();
+
+		for (size_t i = 0, j = 0; i < tex.palette->size(); i++, j += 3) {
+			(*tex.palette)[i].r = (*tex.paletteData)[j];
+			(*tex.palette)[i].g = (*tex.paletteData)[j + 1];
+			(*tex.palette)[i].b = (*tex.paletteData)[j + 2];
+		}
+
+		pos += 4;
+		memcpy(&buffer[pos], tex.paletteData->data(), tex.paletteData->size());
+		pos += tex.paletteData->size();
+
+		unsigned crc = pngCrc32(&buffer[start], tex.paletteData->size() + 4);
+
+		buffer[pos++] = (crc >> 24) & 0xFF;
+		buffer[pos++] = (crc >> 16) & 0xFF;
+		buffer[pos++] = (crc >> 8) & 0xFF;
+		buffer[pos++] = (crc >> 0) & 0xFF;
+
+		pos = buffer.size();
+		buffer.resize(buffer.size() + 13);
+		memcpy(&buffer[pos], "\x00\x00\x00\x01tRNS\x00\x40\xe6\xd8\x66", 13);
+	}
+
+	if (id != 0)
+		tex.index = id;
+	else if (this->_freedIndexes.empty()) {
+		this->_lastIndex += this->_lastIndex == 0;
+		tex.index = this->_lastIndex++;
+	} else {
+		tex.index = this->_freedIndexes.back();
+		this->_freedIndexes.pop_back();
+	}
+
+	assert_exp(this->_textures[tex.index].loadFromMemory(buffer.data(), buffer.size()));
+	game->logger.verbose("Loaded texture" + path.string() + " successfully");
+	return tex.index;
+}
+
+unsigned TextureManager::load(const std::filesystem::path &path, const std::filesystem::path &palette, Vector2u *size, bool repeated, bool smooth)
+{
+	if (palette.empty())
+		return this->load(path, size, repeated);
+
+	std::string allocName = path.string() + ":" + palette.string();
+	auto oit = this->_overrideList.find(path);
+	auto file = oit == this->_overrideList.end() ? path : oit->second;
+
+	if (this->_allocatedTextures[allocName].count != 0) {
+		this->_allocatedTextures[allocName].count++;
+		game->logger.verbose("Returning already loaded paletted file " + allocName);
+		if (size)
+			*size = this->_textures[this->_allocatedTextures[allocName].index].getSize();
+		return this->_allocatedTextures[allocName].index;
+	}
+
+	if (file != path)
+		game->logger.debug("Loading texture " + file.string() + " (" + path.string() + ") with palette " + palette.string());
+	else
+		game->logger.debug("Loading texture " + file.string() + " with palette " + palette.string());
+
+	AllocatedTexture texture;
+
+	texture.path = path;
+	texture.count = 1;
+	if (this->_loadPaletted(file, texture, palette, 0) == 0)
+		this->_loadEmpty(texture, 0);
+
+	if (size)
+		*size = this->_textures[texture.index].getSize();
+
+	this->_textures[texture.index].setSmooth(smooth);
+	this->_textures[texture.index].setRepeated(repeated);
+	this->_allocatedTextures[allocName] = texture;
+	this->_allocatedTexturesPaths[texture.index] = allocName;
+	return texture.index;
 }
 
 unsigned TextureManager::load(const std::filesystem::path &path, const std::array<Color, 256> &palette, Vector2u *size, bool repeated, bool smooth)
 {
 	if (palette.empty())
-		return this->load(path, size, repeated, smooth);
+		return this->load(path, size, repeated);
 
 	std::vector<unsigned char> buffer;
+	std::string paletteName;
 	std::error_code err;
-	std::string allocName = path;
 	auto oit = this->_overrideList.find(path);
 	auto file = oit == this->_overrideList.end() ? path : oit->second;
-	std::string paletteName;
 
-#if 0
 	paletteName.resize(256 * 6);
 
 	auto ptr = paletteName.data();
@@ -230,16 +340,9 @@ unsigned TextureManager::load(const std::filesystem::path &path, const std::arra
 		sprintf(ptr, "%02X%02X%02X", color.r, color.g, color.b);
 		ptr += 6;
 	}
-#else
-	auto crc = pngCrc32(reinterpret_cast<const unsigned char *>(palette.data()), palette.size() * sizeof(palette.data()));
 
-	paletteName = toHex(crc);
-#endif
+	std::string allocName = path.string() + ":" + paletteName;
 
-	for (auto pos = allocName.find('\\'); pos != std::string::npos; pos = allocName.find('\\'))
-		allocName[pos] = '/';
-	allocName += ":";
-	allocName += paletteName;
 	if (this->_allocatedTextures[allocName].count != 0) {
 		this->_allocatedTextures[allocName].count++;
 		game->logger.verbose("Returning already loaded paletted file " + allocName);
@@ -327,7 +430,7 @@ void TextureManager::reloadEverything()
 {
 	for (auto &[loadedPath, attr] : this->_allocatedTextures)
 		if (attr.count) {
-			game->logger.debug("Reloading " + loadedPath);
+			game->logger.debug("Reloading " + loadedPath.string());
 			this->_load(attr.path, attr, attr.index);
 		}
 }

@@ -9,6 +9,9 @@
 #include <unordered_map>
 #include <string>
 #include <SFML/Audio.hpp>
+#include "Sprite.hpp"
+#include "Data/Vector.hpp"
+#include "Color.hpp"
 
 class SoundManager {
 private:
@@ -21,12 +24,12 @@ private:
 	unsigned _lastIndex = 0;
 	std::vector<unsigned> _freedIndexes;
 	std::unordered_map<unsigned, SoundPair> _sounds;
-	std::unordered_map<std::string, std::pair<unsigned, unsigned>> _allocatedSounds;
+	std::unordered_map<std::filesystem::path, std::pair<unsigned, unsigned>> _allocatedSounds;
 
 public:
 	SoundManager() = default;
 
-	unsigned load(std::string file);
+	unsigned load(const std::filesystem::path &file);
 	void addRef(unsigned id);
 	void remove(unsigned id);
 	void play(unsigned id, float volume) const;

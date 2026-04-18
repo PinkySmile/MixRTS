@@ -21,7 +21,7 @@ Mod::Mod(std::filesystem::path base, const nlohmann::json &metadata) :
 {
 }
 
-void Mod::loadFactions(const std::filesystem::path &path, std::map<std::string, Faction> &factions) const
+void Mod::loadFactions(const std::filesystem::path &path, std::unordered_map<std::string, Faction> &factions) const
 {
 	std::ifstream stream{this->_base / path};
 	nlohmann::json json;
@@ -43,7 +43,7 @@ void Mod::loadFactions(const std::filesystem::path &path, std::map<std::string, 
 	}
 }
 
-void Mod::loadCursors(const std::filesystem::path &path, std::map<std::string, CursorAnimation> &cursors) const
+void Mod::loadCursors(const std::filesystem::path &path, std::unordered_map<std::string, CursorAnimation> &cursors) const
 {
 	std::ifstream stream{this->_base / path};
 	nlohmann::json json;
@@ -63,7 +63,7 @@ void Mod::loadCursors(const std::filesystem::path &path, std::map<std::string, C
 	}
 }
 
-void Mod::loadAnimations(const std::filesystem::path &path, std::map<std::string, std::vector<Animation>> &anims) const
+void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<std::string, std::vector<Animation>> &anims) const
 {
 	std::ifstream stream{this->_base / path};
 	nlohmann::json json;
@@ -88,7 +88,7 @@ void Mod::loadAnimations(const std::filesystem::path &path, std::map<std::string
 	}
 }
 
-void Mod::loadUpgrades(const std::filesystem::path &path, const Faction &base, std::map<std::string, Upgrade> &upgrades) const
+void Mod::loadUpgrades(const std::filesystem::path &path, const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades) const
 {
 	std::ifstream stream{this->_base / path};
 	nlohmann::json json;
@@ -110,7 +110,7 @@ void Mod::loadUpgrades(const std::filesystem::path &path, const Faction &base, s
 	}
 }
 
-void Mod::loadBuildings(const std::filesystem::path &path, const Faction &base, const std::map<std::string, std::vector<Animation>> &anims, std::map<std::string, Building> &buildings) const
+void Mod::loadBuildings(const std::filesystem::path &path, const Faction &base, const std::unordered_map<std::string, std::vector<Animation>> &anims, std::unordered_map<std::string, Building> &buildings) const
 {
 	std::ifstream stream{this->_base / path};
 	nlohmann::json json;

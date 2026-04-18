@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_compile_definitions(_USE_MATH_DEFINES)
 
+set(TGUI_SHARED_LIBS ON)
+set(SFML_STATIC_LIBRARIES OFF)
 find_package(TGUI)
 find_package(SFML 3 REQUIRED COMPONENTS Graphics Audio Network)
 include_directories(thirdparty src src/SFML)
@@ -73,7 +75,6 @@ add_executable(
 	src/Resources/SceneManager.hpp
 	src/SFML/Color.cpp
 	src/SFML/Color.hpp
-	src/SFML/lib.cpp
 	src/SFML/Screen.cpp
 	src/SFML/Screen.hpp
 	src/SFML/Sound.cpp
@@ -118,5 +119,4 @@ target_link_libraries(
 	SFML::Audio
 	SFML::Network
 	TGUI::TGUI
-	X11
 )

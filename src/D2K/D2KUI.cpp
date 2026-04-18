@@ -642,7 +642,7 @@ void D2KUI::_updatePlacementTexture()
 			if (fullX >= 0 && fullY >= 0 && static_cast<size_t>(fullX) < this->map->gridSize.x && static_cast<size_t>(fullY) < this->map->gridSize.y) {
 				uint32_t gridMask = this->map->grid[fullX + fullY * this->map->gridSize.x];
 
-				if (!(gridMask & GRIDMASK_IS_FREE) || (
+				if (!GRID_CAN_BUILD(gridMask) || (
 					(gridMask & GRIDMASK_HAS_CONCRETE) &&
 					(buildingMask & Building::MASK_PLACEMENT_CONCRETE) &&
 					!(buildingMask & Building::MASK_PLACEMENT_REQUIRED)
@@ -685,11 +685,11 @@ void D2KUI::_handleTryPlace()
 			if (fullX >= 0 && fullY >= 0 && static_cast<size_t>(fullX) < this->map->gridSize.x && static_cast<size_t>(fullY) < this->map->gridSize.y)
 				gridMask = this->map->grid[fullX + fullY * this->map->gridSize.x];
 			if (buildingMask & Building::MASK_PLACEMENT_REQUIRED) {
-				if (!(gridMask & GRIDMASK_IS_FREE))
+				if (!GRID_CAN_BUILD(gridMask))
 					return;
 				foundGood = true;
 			} else if (buildingMask & Building::MASK_PLACEMENT_CONCRETE) {
-				if ((gridMask & GRIDMASK_IS_FREE) && !(gridMask & GRIDMASK_HAS_CONCRETE))
+				if (GRID_CAN_BUILD(gridMask) && !(gridMask & GRIDMASK_HAS_CONCRETE))
 					foundGood = true;
 			}
 		}

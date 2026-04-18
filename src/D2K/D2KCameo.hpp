@@ -15,7 +15,7 @@
 
 class D2KCameo : public tgui::ClickableWidget {
 public:
-	class TGUI_API Renderer : public tgui::WidgetRenderer {
+	class Renderer : public tgui::WidgetRenderer {
 	public:
 		using WidgetRenderer::WidgetRenderer;
 

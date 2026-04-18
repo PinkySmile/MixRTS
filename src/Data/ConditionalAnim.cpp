@@ -22,7 +22,7 @@ ConditionalAnim::ConditionalAnim(const Building &parent, const ConditionalAnim &
 {
 }
 
-ConditionalAnim::ConditionalAnim(const Building &parent, const std::map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j) :
+ConditionalAnim::ConditionalAnim(const Building &parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j) :
 	_parent(parent)
 {
 	std::function<bool(const ConditionalAnim &This)> cb = [](const ConditionalAnim &){ return true; };

@@ -2,6 +2,7 @@
 // Created by PinkySmile on 07/04/2026.
 //
 
+#include <fstream>
 #include "GameManager.hpp"
 #include "Faction.hpp"
 #include "Building.hpp"
@@ -11,10 +12,7 @@
 #include "Mod.hpp"
 #include "UI.hpp"
 #include "Resources/Assert.hpp"
-
-#define GRID_SIZE 32
-#define GRID_DIMS_X 40
-#define GRID_DIMS_Y 20
+#include "Resources/Game.hpp"
 
 GameManager::GameManager(const std::vector<Faction> &factions) :
 	_factions(factions)
@@ -25,26 +23,36 @@ GameManager::GameManager(const std::vector<Faction> &factions) :
 	}
 }
 
-void GameManager::loadMap()
+void GameManager::loadMap(Mod &mod, const std::filesystem::path &path)
 {
-	// TODO:
-	for (auto &state : this->_mapStates) {
-		state.tileSize = {GRID_SIZE, GRID_SIZE};
-		state.gridSize = {GRID_DIMS_X, GRID_DIMS_Y};
-		state.grid = new uint32_t[GRID_DIMS_X * GRID_DIMS_Y];
-		for (size_t i = 0; i < GRID_DIMS_X * GRID_DIMS_Y; i++)
-			state.grid[i] = ~GRIDMASK_HAS_CONCRETE;
-		state.startAreas.emplace_back(1, 2);
-	}
+	this->_map.load(path);
+
+	// TODO: Properly convert
+	for (auto &state : this->_mapStates)
+		state = this->_map.grid;
+	//for (auto &state : this->_mapStates) {
+	//	state.tileSize = {GRID_SIZE, GRID_SIZE};
+	//	state.gridSize = {GRID_DIMS_X, GRID_DIMS_Y};
+	//	state.grid.resize(GRID_DIMS_X * GRID_DIMS_Y);
+	//	for (size_t i = 0; i < GRID_DIMS_X * GRID_DIMS_Y; i++)
+	//		state.grid[i] = ~GRIDMASK_HAS_CONCRETE;
+	//	state.startAreas.emplace_back(1, 2);
+	//}
 }
 
 void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea)
 {
+	size_t index = this->_players.size();
+	auto &faction = this->_factions[factionIndex];
+
 	this->_players.emplace_back(*this, this->_factions, factionIndex, color, this->_mapStates);
-	// TODO:
-	this->spawnBuilding(0, {0, 1}, "d2k:building", "d2k:a_cony", false);
-	this->_players[0].state.money["base:credits"] = 10000;
-	this->_players[0].state.systemMoney["base:credits"] = 10000;
+	this->_players[index].state.systemMoney = faction.getStartingMoney();
+	for (auto &b : faction.getStartingBuildings()) {
+		auto start = this->_mapStates[factionIndex].startAreas[startingArea];
+
+		start += b.offset;
+		this->spawnBuilding(index, start, b.queue, b.name, false);
+	}
 }
 
 void GameManager::update()
@@ -83,6 +91,9 @@ void GameManager::updateRender()
 
 void GameManager::render()
 {
+	sf::Sprite sprite{this->_map.renderCache.getTexture()};
+
+	game->screen->draw(sprite);
 	for (auto &list : this->_renderBuildings | std::ranges::views::values)
 		for (auto b : list)
 			b->render(0);
@@ -125,14 +136,14 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 			if (x + pos.x >= map.gridSize.x)
 				break;
 
-			uint32_t &tile = map.grid[x + pos.x + (y + pos.y) * GRID_DIMS_X];
+			uint32_t &tile = map.grid[x + pos.x + (y + pos.y) * map.gridSize.x];
 
 			if (
 				(
 					(line[x] & Building::MASK_PLACEMENT_CONCRETE) ||
 					((line[x] & Building::MASK_PLACEMENT_REQUIRED) && forceConcrete)
 				) &&
-				(tile & GRIDMASK_IS_FREE)
+				GRID_CAN_BUILD(tile)
 			) {
 				tile |= GRIDMASK_HAS_CONCRETE;
 				this->_liveBuildings.emplace_back(concBase);
@@ -222,6 +233,11 @@ const std::vector<Faction> &GameManager::getFactions() const
 	return this->_factions;
 }
 
+const LoadedMap &GameManager::getLoadedMap() const
+{
+	return this->_map;
+}
+
 Vector2i MapState::absToTileCoord(const Vector2i &p)
 {
 	return {
@@ -233,4 +249,79 @@ Vector2i MapState::absToTileCoord(const Vector2i &p)
 MapState::Quad MapState::tileCoordToAbs(const Vector2i &)
 {
 	assert_not_reached_msg("Not implemented");
+}
+
+void LoadedMap::load(const std::filesystem::path &path)
+{
+	std::ifstream streamMap{path / "map.json"};
+	nlohmann::json json;
+
+	streamMap >> json;
+	this->grid.gridSize.x = json["size"]["x"];
+	this->grid.gridSize.y = json["size"]["y"];
+	this->grid.tileSize.x = json["grid"]["x"];
+	this->grid.tileSize.y = json["grid"]["y"];
+	this->grid.translate.x = json["translate"]["x"];
+	this->grid.translate.y = json["translate"]["y"];
+	for (auto &v : json["starts"])
+		this->grid.startAreas.emplace_back(v["x"].get<unsigned>(), v["y"].get<unsigned>());
+	this->grid.grid.resize(this->grid.gridSize.x * this->grid.gridSize.y);
+	this->originalIndices.resize(this->grid.gridSize.x * this->grid.gridSize.y);
+	assert_exp(this->renderCache.resize({
+		this->grid.tileSize.x * this->grid.gridSize.x,
+		this->grid.tileSize.y * this->grid.gridSize.y
+	}));
+	assert_exp(this->tileSet.loadFromFile(path / json["tilesheet"].get<std::string>()));
+
+	std::filesystem::path attributesPath = path / json["tileattrs"].get<std::string>();
+	size_t attributesSize = std::filesystem::file_size(attributesPath);
+	auto tileSetSize = this->tileSet.getSize();
+
+	assert_exp(tileSetSize.x % this->grid.tileSize.x == 0);
+	assert_exp(tileSetSize.y % this->grid.tileSize.y == 0);
+	assert_exp(attributesSize / 4 == (tileSetSize.x / this->grid.tileSize.x) * (tileSetSize.y / this->grid.tileSize.y));
+
+	std::ifstream streamTiles{path / "tiles.dat", std::fstream::binary};
+
+	assert_exp(streamTiles);
+	assert_exp(streamTiles.read(reinterpret_cast<char *>(this->originalIndices.data()), this->originalIndices.size() * sizeof(*this->originalIndices.data())));
+	this->displayedIndices = this->originalIndices;
+
+	std::ifstream streamAttributes{attributesPath, std::fstream::binary};
+	std::vector<uint32_t> attributes;
+
+	attributes.resize(attributesSize / 4);
+	assert_exp(streamAttributes);
+	assert_exp(streamAttributes.read(reinterpret_cast<char *>(attributes.data()), attributes.size() * sizeof(*attributes.data())));
+
+	for (size_t i = 0; i < this->grid.grid.size(); i++)
+		this->grid.grid[i] = attributes[this->originalIndices[i] & 0xFFFFFF];
+	this->buildCache();
+}
+
+void LoadedMap::buildCache()
+{
+	sf::Sprite sprite{this->tileSet};
+	auto textureSize = this->tileSet.getSize();
+
+	textureSize.x /= this->grid.tileSize.x;
+	this->renderCache.clear(sf::Color::Transparent);
+	for (unsigned y = 0; y < this->grid.gridSize.y; y++)
+		for (unsigned x = 0; x < this->grid.gridSize.x; x++) {
+			size_t index = this->displayedIndices[x + y * this->grid.gridSize.x] & 0xFFFFFF;
+
+			sprite.setPosition({
+				static_cast<float>(x * this->grid.tileSize.x),
+				static_cast<float>(y * this->grid.tileSize.y)
+			});
+			sprite.setTextureRect({
+				sf::Vector2i(
+					index % textureSize.x * this->grid.tileSize.x,
+					index / textureSize.x * this->grid.tileSize.y
+				),
+				sf::Vector2i(this->grid.tileSize)
+			});
+			this->renderCache.draw(sprite);
+		}
+	this->renderCache.display();
 }

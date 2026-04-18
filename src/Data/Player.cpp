@@ -112,7 +112,7 @@ void Player::update()
 			if (std::ranges::any_of(extra, [this](const std::pair<std::string, unsigned> &p){
 				if (this->state.getCombinedMoney(p.first) >= p.second)
 					return false;
-				this->playEVA(UI::EVA_NO_CREDITS, 15, 2, 300, p.first);
+				this->playEVA(UI::EVA_NO_CREDITS, 15, 2, 1800, p.first);
 				return true;
 			}))
 				continue;

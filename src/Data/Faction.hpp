@@ -11,6 +11,12 @@
 #include "forward.hpp"
 #include "Sprite.hpp"
 
+struct StartBuilding {
+	Vector2i offset = {0, 0};
+	std::string name;
+	std::string queue;
+};
+
 class Faction {
 private:
 	const Mod &_base;
@@ -20,9 +26,11 @@ private:
 	std::vector<std::string> _buildings;
 	std::vector<std::string> _animations;
 	std::vector<std::string> _upgrades;
-	std::map<std::string, Upgrade> _loadedUpgrades;
-	std::map<std::string, Building> _loadedBuildings;
-	std::map<std::string, std::vector<Animation>> _loadedAnimations;
+	std::unordered_map<std::string, Upgrade> _loadedUpgrades;
+	std::unordered_map<std::string, Building> _loadedBuildings;
+	std::unordered_map<std::string, std::vector<Animation>> _loadedAnimations;
+	std::unordered_map<std::string, unsigned> _startingMoney;
+	std::vector<StartBuilding> _startingBuildings;
 	nlohmann::json _uiData;
 	bool _regressTech;
 
@@ -35,8 +43,10 @@ public:
 
 	Faction(const Mod &base, const nlohmann::json &data);
 	void load();
-	const std::map<std::string, Upgrade> &getUpgrades() const;
-	const std::map<std::string, Building> &getBuildings() const;
+	const std::unordered_map<std::string, Upgrade> &getUpgrades() const;
+	const std::unordered_map<std::string, Building> &getBuildings() const;
+	const std::unordered_map<std::string, unsigned> &getStartingMoney() const;
+	const std::vector<StartBuilding> &getStartingBuildings() const;
 	UI *createUI() const;
 	const Mod &getBase() const;
 	std::array<std::vector<Sprite>, 3> &getPlacementCursors() const;

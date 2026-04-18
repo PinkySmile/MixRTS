@@ -19,7 +19,7 @@ public:
 	Sound(unsigned handle);
 	Sound(const Sound &o);
 	~Sound();
-	void load(const std::string &file);
+	void load(const std::filesystem::path &file);
 	void setHandle(unsigned handle);
 	void play();
 	void setVolume(float volume);

@@ -24,7 +24,7 @@ private:
 
 public:
 	ConditionalAnim(const Building &parent, const ConditionalAnim &other);
-	ConditionalAnim(const Building &parent, const std::map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j);
+	ConditionalAnim(const Building &parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j);
 	bool operator()() const;
 	bool update();
 	void reset();

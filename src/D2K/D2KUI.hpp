@@ -57,7 +57,7 @@ private:
 	std::set<Building *> _selectedBuildings;
 	std::array<sf::Texture, 4> _selectCorners;
 
-	std::map<std::string, CursorAnimation> _cursors;
+	std::unordered_map<std::string, CursorAnimation> _cursors;
 	std::string _cursor = "normal";
 	std::unordered_map<std::string, tgui::Texture> _cameos;
 	std::array<tgui::Picture::Ptr, 8> _creditDigits;
