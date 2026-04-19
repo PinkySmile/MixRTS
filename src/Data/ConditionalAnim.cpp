@@ -27,7 +27,20 @@ ConditionalAnim::ConditionalAnim(const Building &parent, const std::unordered_ma
 {
 	std::function<bool(const ConditionalAnim &This)> cb = [](const ConditionalAnim &){ return true; };
 
-	this->_anim = animList.at(RESOURCE(parent.getBase().getName(), j["anim"]));
+	assert_exp(j.contains("anim"));
+	assert_exp(j["anim"].is_string());
+
+	std::string animName = RESOURCE(parent.getBase().getName(), j["anim"]);
+
+	assert_msg(animList.contains(animName), animName);
+	assert_exp(!j.contains("delay") || j["delay"].is_number());
+	assert_exp(j.contains("layer"));
+	assert_exp(!j.contains("when_hp_lower") || j["when_hp_lower"].is_number());
+	assert_exp(!j.contains("when_hp_bigger") || j["when_hp_bigger"].is_number());
+	assert_exp(!j.contains("when_storage_bigger") || j["when_storage_bigger"].is_number());
+	assert_exp(!j.contains("when_storage_is_in") || j["when_storage_is_in"].is_array());
+
+	this->_anim = animList.at(animName);
 	if (j.contains("delay"))
 		this->_delay = j["delay"];
 	this->_layer = j["layer"];
@@ -42,8 +55,9 @@ ConditionalAnim::ConditionalAnim(const Building &parent, const std::unordered_ma
 			return This._parent.animationState.health * 100.f >= hp;
 		};
 	if (j.contains("when_storage_is_in")) {
+		assert_exp(j["when_storage_is_in"].size() == 2);
+		assert_exp(j["when_storage_is_in"][0].is_number() && j["when_storage_is_in"][1].is_number());
 		auto range = j["when_storage_is_in"].get<std::vector<unsigned>>();
-		assert_exp(range.size() == 2);
 		cb = [cb, range](const ConditionalAnim &This) {
 			if (!cb(This)) return false;
 			unsigned total = This._parent.playerState->totalStorage[This._parent.animationState.storageKey];

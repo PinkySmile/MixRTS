@@ -20,8 +20,6 @@ struct StartBuilding {
 class Faction {
 private:
 	const Mod &_base;
-	bool _canSell;
-	bool _canRepair;
 	mutable std::array<std::vector<Sprite>, 3> _placementCursors;
 	std::vector<std::string> _buildings;
 	std::vector<std::string> _animations;
@@ -32,7 +30,10 @@ private:
 	std::unordered_map<std::string, unsigned> _startingMoney;
 	std::vector<StartBuilding> _startingBuildings;
 	nlohmann::json _uiData;
+	std::string _name;
 	bool _regressTech;
+	bool _canSell;
+	bool _canRepair;
 
 public:
 	enum CursorIndex {
@@ -41,7 +42,7 @@ public:
 		CURSORINDEX_BAD,
 	};
 
-	Faction(const Mod &base, const nlohmann::json &data);
+	Faction(const Mod &base, const std::string &name, const nlohmann::json &data);
 	void load();
 	const std::unordered_map<std::string, Upgrade> &getUpgrades() const;
 	const std::unordered_map<std::string, Building> &getBuildings() const;

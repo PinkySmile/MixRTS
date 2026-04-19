@@ -12,7 +12,7 @@
 #include "Resources/Assert.hpp"
 
 #define PRIORITY_BUILD 3
-#define EXPIRE_BUILD 1800
+#define EXPIRE_BUILD 300
 #define PRIORITY_POWER 0
 #define EXPIRE_POWER 1800
 #define COOLDOWN_POWER 1800

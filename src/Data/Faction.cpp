@@ -9,17 +9,69 @@
 #include "Upgrade.hpp"
 #include "D2K/D2KUI.hpp"
 
-Faction::Faction(const Mod &base, const nlohmann::json &data) :
+Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json &data) :
 	_base(base),
-	_canSell(data["can_sell"]),
-	_canRepair(data["can_repair"]),
-	_buildings(data["buildings"]),
-	_animations(data["animations"]),
-	_upgrades(data["upgrades"]),
-	_startingMoney(data["starting_money"]),
-	_uiData(data["ui"]),
-	_regressTech(data["regress_tech"])
+	_name(name)
 {
+	assert_exp(data.contains("can_sell"));
+	assert_exp(data.contains("can_repair"));
+	assert_exp(data.contains("buildings"));
+	assert_exp(data.contains("animations"));
+	assert_exp(data.contains("upgrades"));
+	assert_exp(data.contains("starting_money"));
+	assert_exp(data.contains("ui"));
+	assert_exp(data.contains("regress_tech"));
+
+	assert_exp(data["can_sell"].is_boolean());
+	assert_exp(data["can_repair"].is_boolean());
+	assert_exp(data["regress_tech"].is_boolean());
+	assert_exp(data["buildings"].is_array());
+	for (size_t i = 0; i < data["buildings"].size(); i++)
+		assert_msg(data["buildings"][i].is_string(), "data[\"buildings\"][" + std::to_string(i) + "]");
+	assert_exp(data["animations"].is_array());
+	for (size_t i = 0; i < data["animations"].size(); i++)
+		assert_msg(data["animations"][i].is_string(), "data[\"animations\"][" + std::to_string(i) + "]");
+	assert_exp(data["upgrades"].is_array());
+	for (size_t i = 0; i < data["upgrades"].size(); i++)
+		assert_msg(data["upgrades"][i].is_string(), "data[\"upgrades\"][" + std::to_string(i) + "]");
+	assert_exp(data["starting_money"].is_object());
+	for (auto &[key, value] : data["starting_money"].items())
+		assert_msg(value.is_number(), "data[\"starting_money\"][\"" + key + "\"]");
+	assert_exp(data["place"].is_object());
+	assert_exp(data["place"]["best"].is_array());
+	for (size_t i = 0; i < data["place"]["best"].size(); i++)
+		assert_msg(data["place"]["best"][i].is_string(), "data[\"place\"][\"best\"][" + std::to_string(i) + "]");
+	assert_exp(data["place"]["ok"].is_array());
+	for (size_t i = 0; i < data["place"]["ok"].size(); i++)
+		assert_msg(data["place"]["ok"][i].is_string(), "data[\"place\"][\"ok\"][" + std::to_string(i) + "]");
+	assert_exp(data["place"]["bad"].is_array());
+	for (size_t i = 0; i < data["place"]["bad"].size(); i++)
+		assert_msg(data["place"]["bad"][i].is_string(), "data[\"place\"][\"bad\"][" + std::to_string(i) + "]");
+	assert_exp(data["starting_building"].is_array());
+	for (size_t i = 0; i < data["starting_building"].size(); i++) {
+		assert_msg(data["starting_building"][i].is_object(), "data[\"starting_building\"][" + std::to_string(i) + "]");
+		assert_msg(data["starting_building"][i].contains("name"), "data[\"starting_building\"][" + std::to_string(i) + "]");
+		assert_msg(data["starting_building"][i].contains("queue"), "data[\"starting_building\"][" + std::to_string(i) + "]");
+		assert_msg(data["starting_building"][i]["name"].is_string(), "data[\"starting_building\"][" + std::to_string(i) + "]");
+		assert_msg(data["starting_building"][i]["queue"].is_string(), "data[\"starting_building\"][" + std::to_string(i) + "]");
+		assert_msg(!data["starting_building"][i].contains("offset") || data["starting_building"][i]["offset"].is_object(), "data[\"starting_building\"][" + std::to_string(i) + "]");
+		if (data["starting_building"][i].contains("offset")) {
+			assert_msg(data["starting_building"][i]["offset"].contains("x"), "data[\"starting_building\"][" + std::to_string(i) + "]");
+			assert_msg(data["starting_building"][i]["offset"].contains("y"), "data[\"starting_building\"][" + std::to_string(i) + "]");
+			assert_msg(data["starting_building"][i]["offset"]["x"].is_number(), "data[\"starting_building\"][" + std::to_string(i) + "]");
+			assert_msg(data["starting_building"][i]["offset"]["y"].is_number(), "data[\"starting_building\"][" + std::to_string(i) + "]");
+		}
+	}
+
+	this->_canSell = data["can_sell"];
+	this->_canRepair = data["can_repair"];
+	this->_buildings = data["buildings"];
+	this->_animations = data["animations"];
+	this->_upgrades = data["upgrades"];
+	this->_startingMoney = data["starting_money"];
+	this->_uiData = data["ui"];
+	this->_regressTech = data["regress_tech"];
+
 	for (const auto &p : data["place"]["best"]) {
 		this->_placementCursors[0].emplace_back();
 		this->_placementCursors[0].back().load(base.getBase() / p);
@@ -47,12 +99,16 @@ Faction::Faction(const Mod &base, const nlohmann::json &data) :
 
 void Faction::load()
 {
-	for (auto &a : this->_animations)
-		this->_base.loadAnimations(a, this->_loadedAnimations);
-	for (auto &b : this->_buildings)
-		this->_base.loadBuildings(b, *this, this->_loadedAnimations, this->_loadedBuildings);
-	for (auto &u : this->_upgrades)
-		this->_base.loadUpgrades(u, *this, this->_loadedUpgrades);
+	try {
+		for (auto &a: this->_animations)
+			this->_base.loadAnimations(a, this->_loadedAnimations);
+		for (auto &b: this->_buildings)
+			this->_base.loadBuildings(b, *this, this->_loadedAnimations, this->_loadedBuildings);
+		for (auto &u: this->_upgrades)
+			this->_base.loadUpgrades(u, *this, this->_loadedUpgrades);
+	} catch (std::exception &e) {
+		throw _AssertionFailedException("While loading faction \"" + this->_name + "\"\n" + e.what());
+	}
 }
 
 const std::unordered_map<std::string, Building> &Faction::getBuildings() const

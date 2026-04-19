@@ -276,7 +276,7 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 			Vector2i fullPos = {static_cast<int>(pos.x + x), static_cast<int>(pos.y + y)};
 			auto topLeftAbs = map.topLeftCoordToAbs(fullPos);
 			auto fullPosAbs = map.tileCoordToAbs(fullPos);
-			uint32_t tile = map.grid[fullPos.x + fullPos.y * map.gridSize.x];
+			uint32_t &tile = map.grid[fullPos.x + fullPos.y * map.gridSize.x];
 
 			if (
 				(

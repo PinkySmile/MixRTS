@@ -8,10 +8,13 @@
 #include "ReqAndCombinator.hpp"
 #include "Req.hpp"
 #include "ReqConst.hpp"
+#include "Resources/Assert.hpp"
 
 ReqOrCombinator::ReqOrCombinator(const std::string &base, const nlohmann::json &value)
 {
+	assert_exp(value.is_array());
 	for (auto &v : value) {
+		assert_exp(v.is_array() || v.is_string() || v.is_boolean());
 		if (v.is_array())
 			this->_elems.emplace_back(new ReqAndCombinator(base, v));
 		else if (v.is_string())

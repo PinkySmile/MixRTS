@@ -10,12 +10,35 @@
 
 Animation::Animation(const std::filesystem::path &base, const nlohmann::json &json)
 {
+	assert_exp(json.contains("sprite"));
+	assert_exp(json["sprite"].is_string());
+	assert_exp(json.contains("offset"));
+	assert_exp(json["offset"].is_object());
+	assert_exp(json["offset"].contains("x"));
+	assert_exp(json["offset"].contains("y"));
+	assert_exp(json["offset"]["x"].is_number());
+	assert_exp(json["offset"]["y"].is_number());
+	assert_exp(json.contains("bounds"));
+	assert_exp(json["bounds"].is_object());
+	assert_exp(json["bounds"].contains("x"));
+	assert_exp(json["bounds"].contains("y"));
+	assert_exp(json["bounds"].contains("w"));
+	assert_exp(json["bounds"].contains("h"));
+	assert_exp(json["bounds"]["x"].is_number());
+	assert_exp(json["bounds"]["y"].is_number());
+	assert_exp(json["bounds"]["h"].is_number());
+	assert_exp(json["bounds"]["w"].is_number());
+	assert_exp(!json.contains("blending") || json["blending"].is_string());
+	assert_exp(!json.contains("coloring") || json["coloring"].is_object());
+
 	this->_file = base / json["sprite"].get<std::string>();
 	if (json.contains("blending")) {
 		if (json["blending"] == "alpha")
 			this->_blending = BLEND_ALPHA;
 		else if (json["blending"] == "add")
 			this->_blending = BLEND_ADD;
+		else
+			assert_not_reached_msg("Invalid json[\"blending\"]");
 	}
 	if (json.contains("coloring")) {
 		std::string coloring = json["coloring"]["type"];
@@ -28,9 +51,12 @@ Animation::Animation(const std::filesystem::path &base, const nlohmann::json &js
 				this->_pal = PAL_NONE;
 		} else if (coloring == "mask") {
 			// TODO:
+			assert_not_reached_msg("Coloring \"mask\": Not implemented");
 		} else if (coloring == "hue") {
 			// TODO:
-		}
+			assert_not_reached_msg("Coloring \"hue\": Not implemented");
+		} else
+			assert_not_reached_msg("Invalid coloring");
 	}
 	if (this->_pal == PAL_NONE) {
 		this->_sprite.load(this->_file);

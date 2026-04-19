@@ -5,8 +5,9 @@
 #include "nlohmann/json.hpp"
 #include "Building.hpp"
 #include "Animation.hpp"
-#include "../Resources/Game.hpp"
 #include "Utils.hpp"
+#include "../Resources/Assert.hpp"
+#include "../Resources/Game.hpp"
 
 void Building::_displayAnim(Animation &anim)
 {
@@ -70,6 +71,53 @@ Building::Building(const Building &b) :
 Building::Building(const Faction &faction, const std::string &id, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &json) :
 	_base(faction)
 {
+	assert_exp(!json.contains("limit") || json["limit"].is_number_unsigned());
+	assert_exp(json.contains("build"));
+	assert_exp(json["build"].is_object());
+	assert_exp(json["build"].contains("path"));
+	assert_exp(json["build"]["path"].is_string());
+	assert_exp(json["build"].contains("volume"));
+	assert_exp(json["build"]["volume"].is_number());
+	assert_exp(json.contains("hp"));
+	assert_exp(json["hp"].is_number());
+	assert_exp(json.contains("cost"));
+	assert_exp(json["cost"].is_object());
+	for (auto &[key, value] : json["cost"].items())
+		assert_msg(value.is_number(), "json[\"cost\"][\"" + key + "\"]");
+	assert_exp(json.contains("size"));
+	assert_exp(json["size"].is_object());
+	assert_exp(json["size"].contains("x"));
+	assert_exp(json["size"]["x"].is_number());
+	assert_exp(json["size"].contains("y"));
+	assert_exp(json["size"]["y"].is_number());
+	assert_exp(!json.contains("speed") || json["speed"].is_number_unsigned());
+	assert_exp(json.contains("build_max_distance"));
+	assert_exp(json["build_max_distance"].is_number());
+	assert_exp(json.contains("selectable"));
+	assert_exp(json["selectable"].is_boolean());
+	assert_exp(json.contains("sellable"));
+	assert_exp(json["sellable"].is_boolean());
+	assert_exp(json.contains("repairable"));
+	assert_exp(json["repairable"].is_boolean());
+	assert_exp(!json.contains("queue") || json["queue"].is_string());
+	assert_exp(!json.contains("gives_queue") || json["gives_queue"].is_string());
+	assert_exp(!json.contains("group") || json["group"].is_string());
+	assert_exp(json.contains("anims"));
+	assert_exp(json["anims"].is_array());
+	assert_exp(!json.contains("storage") || json["storage"].is_object());
+	if (json.contains("storage"))
+		for (auto &[key, value] : json["storage"].items())
+			assert_msg(value.is_number(), "json[\"storage\"][\"" + key + "\"]");
+	assert_exp(!json.contains("proxy") || json["proxy"].is_string());
+	assert_exp(!json.contains("build_anim") || json["build_anim"].is_null() || json["build_anim"].is_object());
+	assert_exp(!json.contains("producing_anim") || json["producing_anim"].is_null() || json["producing_anim"].is_object());
+	assert_exp(!json.contains("produced_anim") || json["produced_anim"].is_null() || json["produced_anim"].is_object());
+	assert_exp(!json.contains("show_after_build") || json["show_after_build"].is_number());
+	assert_exp(!json.contains("power") || json["power"].is_number());
+	assert_exp(!json.contains("sight") || json["sight"].is_number());
+	assert_exp(!json.contains("fake") || json["fake"].is_boolean());
+	assert_exp(!json.contains("lower_power_when_damaged") || json["lower_power_when_damaged"].is_boolean());
+
 	auto &base = faction.getBase();
 
 	this->_id = id;

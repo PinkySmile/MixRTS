@@ -112,7 +112,7 @@ void debugInit(Player &player, const std::vector<Faction> &factions)
 
 int main()
 {
-#ifndef _DEBUG
+#if !defined(_DEBUG) || !defined(__linux__)
 	try {
 #endif
 	#ifdef _WIN32
@@ -175,8 +175,12 @@ int main()
 			game->screen->display();
 		}
 		return 0;
-#ifndef _DEBUG
+#if !defined(_DEBUG) || !defined(__linux__)
 	} catch (const std::exception &e) {
+		if (game)
+			game->logger.fatal(e.what());
+		else
+			fprintf(stderr, "[FATAL]: Failed to init: %s\n", e.what());
 		delete game;
 #ifdef _WIN32
 		MessageBoxA(nullptr, e.what(), "Fatal error", MB_ICONERROR);

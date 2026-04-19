@@ -597,13 +597,16 @@ void D2KUI::_displaySelectedBuildingUI(const Building &building)
 
 bool D2KUI::_isSelectionTooFar() const
 {
+	if (DEBUG_MODE)
+		return false;
+
 	const std::set<Vector2i> &okTiles = this->_placementBuilding->getCheckTiles();
 	auto &placementGrid = this->map->placementGrid[this->state->team];
 
 	for (auto &pos : okTiles) {
 		auto result = pos + this->_placementPos;
 
-		if (result.x < 0 || result.y < 0 || result.x >= this->map->gridSize.x || result.y >= this->map->gridSize.y)
+		if (result.x < 0 || result.y < 0 || result.x >= static_cast<int>(this->map->gridSize.x) || result.y >= static_cast<int>(this->map->gridSize.y))
 			continue;
 		if (placementGrid[result.x + result.y * this->map->gridSize.x])
 			return false;
@@ -699,8 +702,10 @@ void D2KUI::_handleTryPlace()
 			if (fullX >= 0 && fullY >= 0 && static_cast<size_t>(fullX) < this->map->gridSize.x && static_cast<size_t>(fullY) < this->map->gridSize.y)
 				gridMask = this->map->grid[fullX + fullY * this->map->gridSize.x];
 			if (buildingMask & Building::MASK_PLACEMENT_REQUIRED) {
-				if (!GRID_CAN_BUILD(gridMask))
+				if (!GRID_CAN_BUILD(gridMask)) {
+					this->playEVA(EVA_CANNOT_BUILD, 600, 2, 60, "");
 					return;
+				}
 				foundGood = true;
 			} else if (buildingMask & Building::MASK_PLACEMENT_CONCRETE) {
 				if (GRID_CAN_BUILD(gridMask) && !(gridMask & GRIDMASK_HAS_CONCRETE))
@@ -708,8 +713,10 @@ void D2KUI::_handleTryPlace()
 			}
 		}
 	}
-	if (!foundGood)
+	if (!foundGood) {
+		this->playEVA(EVA_CANNOT_BUILD, 600, 2, 60, "");
 		return;
+	}
 
 	this->_eventQueue.emplace_back(PlaceBuildEvent{
 		this->_placementBuilding->getId(),

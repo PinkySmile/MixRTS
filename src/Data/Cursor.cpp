@@ -11,6 +11,16 @@
 
 Cursor::Cursor(const std::filesystem::path &base, const nlohmann::json &json)
 {
+	assert_exp(json.contains("center"));
+	assert_exp(json["center"].is_object());
+	assert_exp(json["center"].contains("x"));
+	assert_exp(json["center"]["x"].is_number_unsigned());
+	assert_exp(json["center"].contains("y"));
+	assert_exp(json["center"]["y"].is_number_unsigned());
+	assert_exp(json.contains("sprite"));
+	assert_exp(json["sprite"].is_string());
+	assert_exp(json.contains("duration"));
+	assert_exp(json["duration"].is_number());
 	this->_offset.x = json["center"]["x"].get<unsigned>();
 	this->_offset.y = json["center"]["y"].get<unsigned>();
 	assert_exp(this->_texture.loadFromFile(base / json["sprite"].get<std::string>()));
