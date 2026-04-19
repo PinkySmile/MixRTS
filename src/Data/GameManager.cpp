@@ -14,6 +14,25 @@
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
 
+extern float guiScale;
+
+static bool isMouseOverUI()
+{
+	Vector2i pos = sf::Mouse::getPosition(*game->screen);
+
+	pos.x /= guiScale;
+	pos.y /= guiScale;
+	for (auto widget : game->gui.getWidgets()) {
+		if (!widget->isVisible())
+			continue;
+		if (auto container = widget->cast<tgui::Container>())
+			for (auto w : container->getWidgets())
+				if (w->isMouseOnWidget(pos))
+					return true;
+	}
+	return false;
+}
+
 GameManager::GameManager(const std::vector<Faction> &factions) :
 	_factions(factions)
 {
@@ -40,12 +59,18 @@ void GameManager::loadMap(Mod &mod, const std::filesystem::path &path)
 	//}
 }
 
-void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea)
+void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea, unsigned team)
 {
 	size_t index = this->_players.size();
 	auto &faction = this->_factions[factionIndex];
 
+	while (team >= this->_map.grid.placementGrid.size()) {
+		this->_map.grid.placementGrid.emplace_back(this->_map.grid.grid.size(), 0);
+		for (auto &m: this->_mapStates)
+			m.placementGrid.emplace_back(m.grid.size(), 0);
+	}
 	this->_players.emplace_back(*this, this->_factions, factionIndex, color, this->_mapStates);
+	this->_players[index].state.team = team;
 	this->_players[index].state.systemMoney = faction.getStartingMoney();
 	for (auto &b : faction.getStartingBuildings()) {
 		auto start = this->_mapStates[factionIndex].startAreas[startingArea];
@@ -53,10 +78,81 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned
 		start += b.offset;
 		this->spawnBuilding(index, start, b.queue, b.name, false);
 	}
+	// FIXME: Always teleport to player 0 starting point
+	if (index == 0) {
+		Vector2u size = game->screen->getSize();
+		auto start = this->_mapStates[factionIndex].startAreas[startingArea];
+
+		// TODO: Hardcoded UI offset
+		size.x -= 160 * guiScale;
+		size.y -= 20 * guiScale;
+		// size /= this->_cameraZoom;
+		this->_cameraZoom = 1;
+		this->_cameraTranslate = {
+			(start.x + 0.5f) * this->_map.grid.tileSize.x - size.x / 2,
+			(start.y + 0.5f) * this->_map.grid.tileSize.y - size.y / 2 + 20 * guiScale
+		};
+		if (this->_cameraTranslate.x < 0)
+			this->_cameraTranslate.x = 0;
+		if (this->_cameraTranslate.y < 0)
+			this->_cameraTranslate.y = 0;
+		if (this->_cameraTranslate.x >= this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x)
+			this->_cameraTranslate.x = 0;
+		if (this->_cameraTranslate.y >= this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y)
+			this->_cameraTranslate.y = 0;
+	}
+}
+
+#define SCROLL_SPEED 8
+
+void GameManager::_checkScroll()
+{
+	Vector2u size = game->screen->getSize();
+	auto pos = sf::Mouse::getPosition(*game->screen);
+	std::string name = "scroll_";
+	auto old = this->_cameraTranslate;
+
+	if (pos.y == 0) {
+		name += "t";
+		this->_cameraTranslate.y -= SCROLL_SPEED;
+	} else if (pos.y == static_cast<int>(size.y) - 1) {
+		name += "b";
+		this->_cameraTranslate.y += SCROLL_SPEED;
+	}
+	if (pos.x == 0) {
+		name += "l";
+		this->_cameraTranslate.x -= SCROLL_SPEED;
+	} else if (pos.x == static_cast<int>(size.x) - 1) {
+		name += "r";
+		this->_cameraTranslate.x += SCROLL_SPEED;
+	}
+
+	size /= this->_cameraZoom;
+	// TODO: Hardcoded UI offset
+	size.x -= 160 * guiScale;
+	this->_cameraTranslate.x = std::max<float>(this->_cameraTranslate.x, 0);
+	this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -20 * guiScale);
+	this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x);
+	this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y);
+	if (name != "scroll_") {
+		if (old == this->_cameraTranslate)
+			name = "no_" + name;
+		for (auto &p : this->_players)
+			for (auto &u : p.getUIs())
+				u->forcedCursor = name;
+	} else {
+		for (auto &p : this->_players)
+			for (auto &u : p.getUIs())
+				u->forcedCursor.reset();
+	}
 }
 
 void GameManager::update()
 {
+	this->_checkScroll();
+	if (isMouseOverUI())
+		for (auto &p: this->_players)
+			p.mouseOnUi();
 	for (auto &player : this->_players)
 		player.update();
 	for (auto &b : this->_liveBuildings)
@@ -91,8 +187,18 @@ void GameManager::updateRender()
 
 void GameManager::render()
 {
+	sf::View old = game->screen->getView();
 	sf::Sprite sprite{this->_map.renderCache.getTexture()};
 
+	//_cameraZoom
+	//_cameraTranslate
+	game->screen->setView(sf::View{sf::FloatRect{
+		this->_cameraTranslate,
+		sf::Vector2f{
+			old.getSize().x * this->_cameraZoom,
+			old.getSize().y * this->_cameraZoom
+		}
+	}});
 	game->screen->draw(sprite);
 	for (auto &list : this->_renderBuildings | std::ranges::views::values)
 		for (auto b : list)
@@ -102,6 +208,7 @@ void GameManager::render()
 			b->render(1);
 	for (auto &player : this->_players)
 		player.render();
+	game->screen->setView(old);
 }
 
 void GameManager::renderAbove()
@@ -113,6 +220,36 @@ void GameManager::renderAbove()
 std::vector<Player> &GameManager::getPlayers()
 {
 	return this->_players;
+}
+
+void GameManager::consumeEvent(const Event &event)
+{
+	if (auto mouseMove = event.getIf<sf::Event::MouseMoved>()) {
+		Vector2i pos = mouseMove->position;
+
+		pos /= this->_cameraZoom;
+		pos += this->_cameraTranslate;
+		if (!isMouseOverUI()) {
+			for (auto &p : this->_players)
+				p.onMouseMoved(pos);
+		}
+	} else if (auto mouseDown = event.getIf<sf::Event::MouseButtonPressed>()) {
+		Vector2i pos = mouseDown->position;
+
+		pos /= this->_cameraZoom;
+		pos += this->_cameraTranslate;
+		if (mouseDown->button == sf::Mouse::Button::Left) {
+			if (!isMouseOverUI()) {
+				for (auto &p: this->_players)
+					p.onLeftMouseClicked(pos);
+			}
+		} else if (mouseDown->button == sf::Mouse::Button::Right) {
+			if (!isMouseOverUI()) {
+				for (auto &p : this->_players)
+					p.onRightMouseClicked(pos);
+			}
+		}
+	}
 }
 
 void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &buildQueue, const std::string &id, bool forceConcrete)
@@ -136,7 +273,10 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 			if (x + pos.x >= map.gridSize.x)
 				break;
 
-			uint32_t &tile = map.grid[x + pos.x + (y + pos.y) * map.gridSize.x];
+			Vector2i fullPos = {static_cast<int>(pos.x + x), static_cast<int>(pos.y + y)};
+			auto topLeftAbs = map.topLeftCoordToAbs(fullPos);
+			auto fullPosAbs = map.tileCoordToAbs(fullPos);
+			uint32_t tile = map.grid[fullPos.x + fullPos.y * map.gridSize.x];
 
 			if (
 				(
@@ -145,18 +285,27 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 				) &&
 				GRID_CAN_BUILD(tile)
 			) {
-				tile |= GRIDMASK_HAS_CONCRETE;
+				this->_map.grid.setGridBits(fullPosAbs, GRIDMASK_HAS_CONCRETE);
+				for (auto &m : this->_mapStates)
+					m.setGridBits(fullPosAbs, GRIDMASK_HAS_CONCRETE);
 				this->_liveBuildings.emplace_back(concBase);
 				auto &b = this->_liveBuildings.back();
 				b.playerState = &player.state;
-				b.setPosition({static_cast<int>((pos.x + x) * 32), static_cast<int>((pos.y + y) * 32)});
+				b.setPosition(topLeftAbs);
 				b.setColor(player.getColor());
 				b.built();
 				player.state.myBuildings.emplace_back(&b);
 				this->_renderBuildings[pos.y + y].push_front(&b);
+				// TODO:
+				this->_map.grid.updatePlacementGrid(fullPosAbs, player.state.team, 1);
+				for (auto &m : this->_mapStates)
+					m.updatePlacementGrid(fullPosAbs, player.state.team, 1);
 			}
-			if (line[x] & Building::MASK_PLACEMENT_REQUIRED)
-				tile &= ~GRIDMASK_IS_FREE;
+			if (line[x] & Building::MASK_PLACEMENT_REQUIRED) {
+				this->_map.grid.resetGridBits(fullPosAbs, GRIDMASK_IS_FREE);
+				for (auto &m : this->_mapStates)
+					m.resetGridBits(fullPosAbs, GRIDMASK_IS_FREE);
+			}
 			if (line[x] & Building::MASK_SOLID) {
 				nbTiles++;
 				nbConcreteTiles += (tile & GRIDMASK_HAS_CONCRETE) == GRIDMASK_HAS_CONCRETE;
@@ -172,7 +321,7 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 			this->_liveBuildings.push_back(base);
 		auto &b = this->_liveBuildings.back();
 		b.playerState = &player.state;
-		b.setPosition({static_cast<int>(pos.x * 32), static_cast<int>(pos.y * 32)});
+		b.setPosition(map.topLeftCoordToAbs(pos));
 		b.setColor(player.getColor());
 		b.built();
 
@@ -246,9 +395,79 @@ Vector2i MapState::absToTileCoord(const Vector2i &p)
 	};
 }
 
-MapState::Quad MapState::tileCoordToAbs(const Vector2i &)
+Vector2i MapState::topLeftCoordToAbs(const Vector2i &p)
 {
-	assert_not_reached_msg("Not implemented");
+	return {static_cast<int>(p.x * this->tileSize.x), static_cast<int>(p.y * this->tileSize.y)};
+}
+
+MapState::Quad MapState::tileCoordToAbs(const Vector2i &p)
+{
+	return {
+		{static_cast<float>(p.x)     * this->tileSize.x, static_cast<float>(p.y)     * this->tileSize.y},
+		{static_cast<float>(p.x + 1) * this->tileSize.x, static_cast<float>(p.y)     * this->tileSize.y},
+		{static_cast<float>(p.x + 1) * this->tileSize.x, static_cast<float>(p.y + 1) * this->tileSize.y},
+		{static_cast<float>(p.x)     * this->tileSize.x, static_cast<float>(p.y + 1) * this->tileSize.y}
+	};
+}
+
+void MapState::updatePlacementGrid(const MapState::Quad &abs, unsigned int player, int delta)
+{
+	auto topLeft = this->absToTileCoord(abs.pt1);
+	auto bottomRight = this->absToTileCoord(abs.pt3 - Vector2i{1, 1});
+
+	assert_exp(delta != 0);
+	topLeft.x = std::max(topLeft.x, 0);
+	topLeft.y = std::max(topLeft.y, 0);
+	topLeft.x = std::min<int>(topLeft.x, this->gridSize.x - 1);
+	topLeft.y = std::min<int>(topLeft.y, this->gridSize.y - 1);
+	bottomRight.x = std::max(bottomRight.x, 0);
+	bottomRight.y = std::max(bottomRight.y, 0);
+	bottomRight.x = std::min<int>(bottomRight.x, this->gridSize.x - 1);
+	bottomRight.y = std::min<int>(bottomRight.y, this->gridSize.y - 1);
+	for (int y = topLeft.y; y <= bottomRight.y; y++)
+		for (int x = topLeft.x; x <= bottomRight.x; x++) {
+			auto &b = this->placementGrid[player][x + y * this->gridSize.x];
+
+			assert_exp(delta < 0 || b < 256 - delta);
+			assert_exp(delta > 0 || b >= delta);
+			b += delta;
+		}
+}
+
+void MapState::setGridBits(const MapState::Quad &abs, uint32_t bits)
+{
+	auto topLeft = this->absToTileCoord(abs.pt1);
+	auto bottomRight = this->absToTileCoord(abs.pt3 - Vector2i{1, 1});
+
+	topLeft.x = std::max(topLeft.x, 0);
+	topLeft.y = std::max(topLeft.y, 0);
+	topLeft.x = std::min<int>(topLeft.x, this->gridSize.x - 1);
+	topLeft.y = std::min<int>(topLeft.y, this->gridSize.y - 1);
+	bottomRight.x = std::max(bottomRight.x, 0);
+	bottomRight.y = std::max(bottomRight.y, 0);
+	bottomRight.x = std::min<int>(bottomRight.x, this->gridSize.x - 1);
+	bottomRight.y = std::min<int>(bottomRight.y, this->gridSize.y - 1);
+	for (int y = topLeft.y; y <= bottomRight.y; y++)
+		for (int x = topLeft.x; x <= bottomRight.x; x++)
+			this->grid[x + y * this->gridSize.x] |= bits;
+}
+
+void MapState::resetGridBits(const MapState::Quad &abs, uint32_t bits)
+{
+	auto topLeft = this->absToTileCoord(abs.pt1);
+	auto bottomRight = this->absToTileCoord(abs.pt3 - Vector2i{1, 1});
+
+	topLeft.x = std::max(topLeft.x, 0);
+	topLeft.y = std::max(topLeft.y, 0);
+	topLeft.x = std::min<int>(topLeft.x, this->gridSize.x - 1);
+	topLeft.y = std::min<int>(topLeft.y, this->gridSize.y - 1);
+	bottomRight.x = std::max(bottomRight.x, 0);
+	bottomRight.y = std::max(bottomRight.y, 0);
+	bottomRight.x = std::min<int>(bottomRight.x, this->gridSize.x - 1);
+	bottomRight.y = std::min<int>(bottomRight.y, this->gridSize.y - 1);
+	for (int y = topLeft.y; y <= bottomRight.y; y++)
+		for (int x = topLeft.x; x <= bottomRight.x; x++)
+			this->grid[x + y * this->gridSize.x] &= ~bits;
 }
 
 void LoadedMap::load(const std::filesystem::path &path)

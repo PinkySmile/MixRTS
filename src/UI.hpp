@@ -60,6 +60,7 @@ public:
 
 	PlayerState *state;
 	MapState *map;
+	std::optional<std::string> forcedCursor;
 
 	UI();
 	virtual ~UI();
@@ -68,6 +69,8 @@ public:
 	tgui::Panel::Ptr getPanel() const;
 	virtual void playEVA(EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
 	virtual std::optional<Event> pollEvent();
+	virtual void renderAbove();
+	virtual void updateRender();
 
 	virtual void mouseOnUi() = 0;
 	virtual void onCancel() = 0;
@@ -75,8 +78,6 @@ public:
 	virtual void mouseMovedToTile(Vector2i pos) = 0;
 	virtual void update();
 	virtual void render() = 0;
-	virtual void renderAbove() = 0;
-	virtual void updateRender() = 0;
 
 protected:
 	struct EVAQueue {
@@ -86,6 +87,8 @@ protected:
 		unsigned cooldown;
 	};
 
+	CursorAnimation &getCurrentCursor();
+
 	unsigned _globalEvaCooldown = 0;
 	std::deque<EVAQueue> _evaQueue;
 	std::array<unsigned, EVA_COUNT> _evaCooldown{0};
@@ -93,6 +96,8 @@ protected:
 	sf::Sound _evaSound;
 	std::deque<Event> _eventQueue;
 	tgui::Panel::Ptr _panel = tgui::Panel::create();
+	std::unordered_map<std::string, CursorAnimation> _cursors;
+	std::string _cursor = "normal";
 	bool _enabled = true;
 };
 

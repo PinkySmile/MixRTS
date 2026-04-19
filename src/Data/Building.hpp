@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <map>
+#include <set>
 #include <vector>
 #include "ConditionalAnim.hpp"
 #include "Sound.hpp"
@@ -33,6 +34,7 @@ private:
 	IntRect _selectBox;
 	Vector2u _size;
 	Vector2i _position;
+	std::set<Vector2i> _checkTiles;
 	std::optional<std::string> _proxy;
 	unsigned _showAfterBuild = 0;
 	unsigned _maxHp;
@@ -41,6 +43,10 @@ private:
 	unsigned _buildSpeed;
 	unsigned _limit;
 	int _power;
+	unsigned char _buildMaxDistance;
+	bool _selectable;
+	bool _sellable;
+	bool _repairable;
 	bool _building = false;
 	bool _producing = false;
 	bool _produced = false;
@@ -83,6 +89,10 @@ public:
 	bool isFake() const;
 	bool isDead() const;
 	bool isDisposable() const;
+	unsigned char getBuildMaxDistance() const;
+	bool isSelectable() const;
+	bool isSellable() const;
+	bool isRepairable() const;
 	const Vector2u &getSize() const;
 	const Vector2i &getPosition() const;
 	const std::vector<ConditionalAnim> &getBaseAnims() const;
@@ -100,6 +110,7 @@ public:
 	const std::string &getGroup() const;
 	bool isObstructed() const;
 	unsigned getLimit() const;
+	const std::set<Vector2i> &getCheckTiles() const;
 };
 
 

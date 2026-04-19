@@ -39,6 +39,7 @@ Building::Building(const Building &b) :
 	_group(b._group),
 	_size(b._size),
 	_position(b._position),
+	_checkTiles(b._checkTiles),
 	_proxy(b._proxy),
 	_showAfterBuild(b._showAfterBuild),
 	_maxHp(b._maxHp),
@@ -82,6 +83,10 @@ Building::Building(const Faction &faction, const std::string &id, const std::uno
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 	this->_buildSpeed = json.contains("speed") ? json["speed"].get<unsigned>() : -1;
+	this->_buildMaxDistance = json["build_max_distance"];
+	this->_selectable = json["selectable"];
+	this->_sellable = json["sellable"];
+	this->_repairable = json["repairable"];
 
 	if (json.contains("queue"))
 		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);
@@ -125,6 +130,21 @@ Building::Building(const Faction &faction, const std::string &id, const std::uno
 	this->animationState.health = 1;
 	if (this->_storage.size() == 1)
 		this->animationState.storageKey = this->_storage.begin()->first;
+
+	for (size_t y = 0; y < this->_tiles.size(); y++) {
+		auto &line = this->_tiles[y];
+
+		for (size_t x = 0; x < line.size(); x++) {
+			uint8_t buildingMask = line[x];
+
+			if ((buildingMask & (Building::MASK_PLACEMENT_REQUIRED | Building::MASK_PLACEMENT_CONCRETE)) == 0)
+				continue;
+
+			for (int i1 = -this->_buildMaxDistance - 1; i1 <= this->_buildMaxDistance + 1; i1++)
+				for (int i2 = -this->_buildMaxDistance - 1; i2 <= this->_buildMaxDistance + 1; i2++)
+					this->_checkTiles.emplace(i1 + x, i2 + y);
+		}
+	}
 }
 
 const Mod &Building::getBase() const
@@ -328,4 +348,29 @@ unsigned Building::getLimit() const
 const std::unordered_map<std::string, unsigned> &Building::getCost() const
 {
 	return this->_cost;
+}
+
+unsigned char Building::getBuildMaxDistance() const
+{
+	return this->_buildMaxDistance;
+}
+
+bool Building::isSelectable() const
+{
+	return this->_selectable;
+}
+
+bool Building::isSellable() const
+{
+	return this->_sellable;
+}
+
+bool Building::isRepairable() const
+{
+	return this->_repairable;
+}
+
+const std::set<Vector2i> &Building::getCheckTiles() const
+{
+	return this->_checkTiles;
 }

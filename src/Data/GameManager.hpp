@@ -11,6 +11,7 @@
 #include <list>
 #include <map>
 #include <SFML/Graphics/RenderTexture.hpp>
+#include <SFML/Window/Event.hpp>
 #include "forward.hpp"
 #include "Color.hpp"
 #include "Vector.hpp"
@@ -18,6 +19,7 @@
 
 struct MapState {
 	std::vector<uint32_t> grid;
+	std::vector<std::vector<uint8_t>> placementGrid;
 	Vector2u tileSize;
 	Vector2u gridSize;
 	Vector2i translate;
@@ -30,7 +32,11 @@ struct MapState {
 		Vector2f pt4;
 	};
 
+	void updatePlacementGrid(const Quad &abs, unsigned player, int delta);
+	void resetGridBits(const Quad &abs, uint32_t bits);
+	void setGridBits(const Quad &abs, uint32_t bits);
 	Vector2i absToTileCoord(const Vector2i &);
+	Vector2i topLeftCoordToAbs(const Vector2i &);
 	Quad tileCoordToAbs(const Vector2i &);
 };
 
@@ -67,6 +73,8 @@ enum GridMask {
 
 class GameManager {
 private:
+	float _cameraZoom = 1;
+	Vector2f _cameraTranslate = {0, 0};
 	LoadedMap _map;
 	std::vector<MapState> _mapStates;
 	std::vector<Player> _players;
@@ -74,10 +82,12 @@ private:
 	std::list<Building> _liveBuildings;
 	std::map<unsigned, std::list<Building *>> _renderBuildings;
 
+	void _checkScroll();
+
 public:
 	GameManager(const std::vector<Faction> &factions);
 	void loadMap(Mod &mod, const std::filesystem::path &path);
-	void addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea);
+	void addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea, unsigned team);
 	void update();
 	void updateRender();
 	void render();
@@ -86,6 +96,7 @@ public:
 	const std::vector<Faction> &getFactions() const;
 	void spawnBuilding(size_t owner, Vector2u pos, const std::string &buildQueue, const std::string &id, bool forceConcrete);
 	const LoadedMap &getLoadedMap() const;
+	void consumeEvent(const sf::Event &event);
 };
 
 

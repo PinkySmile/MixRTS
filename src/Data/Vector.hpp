@@ -127,11 +127,11 @@ public:
 	}
 
 	template<typename T2>
-	Vector2<T> operator/=(Vector2<T2> &b) noexcept
+	Vector2<T> &operator/=(Vector2<T2> &b) noexcept
 	{
 		this->x /= b.x;
 		this->y /= b.y;
-		return this;
+		return *this;
 	}
 
 	template<typename T2>
@@ -141,11 +141,11 @@ public:
 	}
 
 	template<typename T2>
-	Vector2<T> operator/=(T2 b) noexcept
+	Vector2<T> &operator/=(T2 b) noexcept
 	{
 		this->x /= b;
 		this->y /= b;
-		return this;
+		return *this;
 	}
 
 	template<typename T2>

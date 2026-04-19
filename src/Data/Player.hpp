@@ -90,12 +90,15 @@ public:
 	void setEnabled(bool enabled);
 	HSLColor getColor() const;
 	void mouseOnUi();
-	void consumeEvent(const sf::Event &event);
 	const Faction &getPrimaryFaction() const;
 	const std::map<std::string, const Building *> &getBuildings() const;
 	void playEVA(UI::EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
 	void checkUnlocked(const Faction &faction);
 	void resetQueue(const std::string &queueId);
+	std::vector<std::unique_ptr<UI>> &getUIs();
+	void onMouseMoved(Vector2i pos);
+	void onLeftMouseClicked(Vector2i pos);
+	void onRightMouseClicked(Vector2i pos);
 };
 
 

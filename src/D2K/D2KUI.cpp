@@ -477,9 +477,10 @@ void D2KUI::update()
 				auto &map = this->_faction.getBuildings();
 				auto it = map.find(id);
 
-				if (it != map.end())
+				if (it != map.end()) {
 					this->_placementBuilding = &it->second;
-				else
+					this->_updatePlacementTexture();
+				} else
 					game->logger.debug("Cannot find " + id);
 			} else if (bQueue[id].buildProgress == 0)
 				this->_eventQueue.emplace_back(StartBuildEvent{
@@ -594,6 +595,22 @@ void D2KUI::_displaySelectedBuildingUI(const Building &building)
 	}
 }
 
+bool D2KUI::_isSelectionTooFar() const
+{
+	const std::set<Vector2i> &okTiles = this->_placementBuilding->getCheckTiles();
+	auto &placementGrid = this->map->placementGrid[this->state->team];
+
+	for (auto &pos : okTiles) {
+		auto result = pos + this->_placementPos;
+
+		if (result.x < 0 || result.y < 0 || result.x >= this->map->gridSize.x || result.y >= this->map->gridSize.y)
+			continue;
+		if (placementGrid[result.x + result.y * this->map->gridSize.x])
+			return false;
+	}
+	return true;
+}
+
 void D2KUI::render()
 {
 	if (!this->_enabled)
@@ -611,18 +628,15 @@ void D2KUI::render()
 		this->_displaySelectedBuildingUI(*b);
 }
 
-void D2KUI::renderAbove()
-{
-	this->_cursors.at(this->_cursor).render();
-}
-
 void D2KUI::_updatePlacementTexture()
 {
-	auto &tileData = this->_placementBuilding->getTileData();
 	auto &placement = this->_faction.getPlacementCursors();
 
 	if (placement[0].empty())
 		return;
+
+	auto &tileData = this->_placementBuilding->getTileData();
+	bool tooFar = this->_isSelectionTooFar();
 
 	assert_exp(this->_placementTexture.resize(sf::Vector2u(tileData.front().size() * 32, tileData.size() * 32)));
 	this->_placementTexture.clear(sf::Color::Transparent);
@@ -642,7 +656,7 @@ void D2KUI::_updatePlacementTexture()
 			if (fullX >= 0 && fullY >= 0 && static_cast<size_t>(fullX) < this->map->gridSize.x && static_cast<size_t>(fullY) < this->map->gridSize.y) {
 				uint32_t gridMask = this->map->grid[fullX + fullY * this->map->gridSize.x];
 
-				if (!GRID_CAN_BUILD(gridMask) || (
+				if (tooFar || !GRID_CAN_BUILD(gridMask) || (
 					(gridMask & GRIDMASK_HAS_CONCRETE) &&
 					(buildingMask & Building::MASK_PLACEMENT_CONCRETE) &&
 					!(buildingMask & Building::MASK_PLACEMENT_REQUIRED)
@@ -754,11 +768,6 @@ void D2KUI::mouseMovedToTile(Vector2i pos)
 void D2KUI::mouseOnUi()
 {
 	this->_cursor = "normal";
-}
-
-void D2KUI::updateRender()
-{
-	this->_cursors.at(this->_cursor).update();
 }
 
 void D2KUI::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args)

@@ -84,3 +84,20 @@ void UI::update()
 	))
 		this->_evaQueue.pop_front();
 }
+
+CursorAnimation &UI::getCurrentCursor()
+{
+	if (this->forcedCursor)
+		return this->_cursors.at(*this->forcedCursor);
+	return this->_cursors.at(this->_cursor);
+}
+
+void UI::renderAbove()
+{
+	this->getCurrentCursor().render();
+}
+
+void UI::updateRender()
+{
+	this->getCurrentCursor().update();
+}

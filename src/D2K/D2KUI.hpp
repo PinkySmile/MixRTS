@@ -57,8 +57,6 @@ private:
 	std::set<Building *> _selectedBuildings;
 	std::array<sf::Texture, 4> _selectCorners;
 
-	std::unordered_map<std::string, CursorAnimation> _cursors;
-	std::string _cursor = "normal";
 	std::unordered_map<std::string, tgui::Texture> _cameos;
 	std::array<tgui::Picture::Ptr, 8> _creditDigits;
 	std::array<tgui::Texture, 11> _creditRawDigits;
@@ -79,18 +77,17 @@ private:
 	void _updatePlacementTexture();
 	void _handleTryPlace();
 	void _displaySelectedBuildingUI(const Building &building);
+	bool _isSelectionTooFar() const;
 
 public:
 	D2KUI(const Faction &faction, const std::filesystem::path &base, const nlohmann::json &params);
 	~D2KUI() noexcept override;
 	void update() override;
 	void render() override;
-	void renderAbove() override;
 	void onCancel() override;
 	void tileClicked(Vector2i pos) override;
 	void mouseMovedToTile(Vector2i pos) override;
 	void mouseOnUi() override;
-	void updateRender() override;
 	void playEVA(EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args) override;
 };
 

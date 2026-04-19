@@ -164,27 +164,22 @@ HSLColor Player::getColor() const
 
 extern float guiScale;
 
-void Player::consumeEvent(const sf::Event &event)
+void Player::onMouseMoved(Vector2i pos)
 {
-	if (auto mouseMove = event.getIf<sf::Event::MouseMoved>()) {
-		for (auto &ui : this->_uis)
-			ui->mouseMovedToTile(ui->map->absToTileCoord({
-				mouseMove->position.x,
-				// TODO: Hardcoded UI offset
-				static_cast<int>(mouseMove->position.y - 20 * guiScale)
-			}));
-	} else if (auto mouseDown = event.getIf<sf::Event::MouseButtonPressed>()) {
-		if (mouseDown->button == sf::Mouse::Button::Left)
-			for (auto &ui : this->_uis)
-				ui->tileClicked(ui->map->absToTileCoord({
-					mouseDown->position.x,
-					// TODO: Hardcoded UI offset
-					static_cast<int>(mouseDown->position.y - 20 * guiScale)
-				}));
-		else if (mouseDown->button == sf::Mouse::Button::Right)
-			for (auto &ui : this->_uis)
-				ui->onCancel();
-	}
+	for (auto &ui : this->_uis)
+		ui->mouseMovedToTile(ui->map->absToTileCoord(pos));
+}
+
+void Player::onLeftMouseClicked(Vector2i pos)
+{
+	for (auto &ui : this->_uis)
+		ui->tileClicked(ui->map->absToTileCoord(pos));
+}
+
+void Player::onRightMouseClicked(Vector2i)
+{
+	for (auto &ui : this->_uis)
+		ui->onCancel();
 }
 
 void Player::mouseOnUi()
@@ -373,4 +368,9 @@ bool Player::_consume(const std::string &type, unsigned int amount)
 	system -= amount - stored;
 	stored = 0;
 	return true;
+}
+
+std::vector<std::unique_ptr<UI>> &Player::getUIs()
+{
+	return this->_uis;
 }

@@ -110,23 +110,6 @@ void debugInit(Player &player, const std::vector<Faction> &factions)
 	}
 }
 
-bool isMouseOverUI()
-{
-	Vector2i pos = sf::Mouse::getPosition(*game->screen);
-
-	pos.x /= guiScale;
-	pos.y /= guiScale;
-	for (auto widget : game->gui.getWidgets()) {
-		if (!widget->isVisible())
-			continue;
-		if (auto container = widget->cast<tgui::Container>())
-			for (auto w : container->getWidgets())
-				if (w->isMouseOnWidget(pos))
-					return true;
-	}
-	return false;
-}
-
 int main()
 {
 #ifndef _DEBUG
@@ -139,8 +122,8 @@ int main()
 	#endif
 		game->modManager.loadMod("mods/dune2000/");
 		game->screen->setMouseCursorVisible(false);
+		game->screen->setMouseCursorGrabbed(true);
 		game->locale = "fr";
-		//game->screen->setMouseCursorGrabbed(true);
 
 		Mod &mod = game->modManager.get("d2k");
 		std::unordered_map<std::string, Faction> factions;
@@ -159,7 +142,7 @@ int main()
 		for (size_t i = 1; i < map.grid.startAreas.size(); i++)
 			if (map.grid.startAreas[i].distance2(Vector2u{0, 0}) < map.grid.startAreas[spawn].distance2(Vector2u{0, 0}))
 				spawn = i;
-		manager.addPlayer(0, HSLColor{214, 375, 919}, spawn); // Atreides blue
+		manager.addPlayer(0, HSLColor{214, 375, 919}, spawn, 0); // Atreides blue
 		//manager.addPlayer(0, HSLColor{0, 800, 750}); // Harkonen's red
 		//manager.addPlayer(0, HSLColor{145, 250, 900}); // Ordos's green
 		players[0].setEnabled(true);
@@ -174,15 +157,10 @@ int main()
 					game->screen->close();
 				else if (auto resized = event->getIf<sf::Event::Resized>())
 					reloadViews(resized->size);
-				if (!isMouseOverUI())
-					for (auto &p: players)
-						p.consumeEvent(*event);
+				manager.consumeEvent(*event);
 				game->gui.handleEvent(*event);
 			}
 
-			if (isMouseOverUI())
-				for (auto &p: players)
-					p.mouseOnUi();
 			manager.update();
 			timer++;
 			if (timer >= 2.5) {
