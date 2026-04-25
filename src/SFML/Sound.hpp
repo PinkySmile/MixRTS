@@ -21,7 +21,7 @@ public:
 	~Sound();
 	void load(const std::filesystem::path &file);
 	void setHandle(unsigned handle);
-	void play();
+	void play() const;
 	void setVolume(float volume);
 };
 

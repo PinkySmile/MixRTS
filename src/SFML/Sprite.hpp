@@ -2,8 +2,8 @@
 // Created by PinkySmile on 18/09/2021.
 //
 
-#ifndef SOFGV_SPRITE_HPP
-#define SOFGV_SPRITE_HPP
+#ifndef MIXRTS_SPRITE_HPP
+#define MIXRTS_SPRITE_HPP
 
 
 #include <SFML/Graphics.hpp>
@@ -30,4 +30,4 @@ public:
 };
 
 
-#endif //SOFGV_SPRITE_HPP
+#endif //MIXRTS_SPRITE_HPP

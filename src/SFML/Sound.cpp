@@ -41,7 +41,7 @@ void Sound::setHandle(unsigned handle)
 	game->soundMgr.addRef(handle);
 }
 
-void Sound::play()
+void Sound::play() const
 {
 	game->soundMgr.play(this->_handle, this->_volume);
 }

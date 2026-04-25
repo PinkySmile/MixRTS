@@ -2,8 +2,8 @@
 // Created by PinkySmile on 24/09/2021.
 //
 
-#ifndef SOFGV_ISCENE_HPP
-#define SOFGV_ISCENE_HPP
+#ifndef MIXRTS_ISCENE_HPP
+#define MIXRTS_ISCENE_HPP
 
 
 #include <SFML/Window/Event.hpp>
@@ -17,4 +17,4 @@ public:
 };
 
 
-#endif //SOFGV_ISCENE_HPP
+#endif //MIXRTS_ISCENE_HPP

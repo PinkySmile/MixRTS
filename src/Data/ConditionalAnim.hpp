@@ -14,7 +14,7 @@
 
 class ConditionalAnim {
 private:
-	const Building &_parent;
+	const GameObject &_parent;
 	std::vector<Animation> _anim;
 	std::function<bool(const ConditionalAnim &This)> _cond;
 	unsigned _index = 0;
@@ -23,8 +23,9 @@ private:
 	int _layer;
 
 public:
-	ConditionalAnim(const Building &parent, const ConditionalAnim &other);
-	ConditionalAnim(const Building &parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j);
+	ConditionalAnim(const GameObject &parent, const ConditionalAnim &other);
+	ConditionalAnim(const GameObject &parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j);
+	ConditionalAnim(const GameObject &parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j, unsigned index);
 	bool operator()() const;
 	bool update();
 	void reset();

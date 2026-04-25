@@ -8,6 +8,7 @@
 
 #include "Resources/MSVCMacros.hpp"
 
+class GameObject;
 class Animation;
 class Building;
 class Upgrade;
@@ -17,6 +18,7 @@ class CursorAnimation;
 class Mod;
 class Faction;
 class Player;
+class Unit;
 class UI;
 class GameManager;
 struct MapState;

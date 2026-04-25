@@ -436,6 +436,14 @@ static void updateList2(
 
 void D2KUI::update()
 {
+	auto it = this->_selectedObjects.begin();
+
+	while (it != this->_selectedObjects.end())
+		if ((*it)->isDisposable())
+			it = this->_selectedObjects.erase(it);
+		else
+			++it;
+
 	UI::update();
 
 	unsigned i = 0;
@@ -469,18 +477,18 @@ void D2KUI::update()
 		[this, &bQueue](const std::string &id, bool rightClick){
 			if (!bQueue[id].buildable)
 				return;
-			if (rightClick)
+			if (rightClick) {
 				this->_eventQueue.emplace_back(CancelBuildEvent{
 					id, this->_faction.getBase().getName() + ":building"
 				});
-			else if (bQueue[id].buildProgress == bQueue[id].buildTime) {
+				this->_placementBuilding = nullptr;
+			} else if (bQueue[id].buildProgress == bQueue[id].buildTime) {
 				auto &map = this->_faction.getBuildings();
 				auto it = map.find(id);
 
-				if (it != map.end()) {
+				if (it != map.end())
 					this->_placementBuilding = &it->second;
-					this->_updatePlacementTexture();
-				} else
+				else
 					game->logger.debug("Cannot find " + id);
 			} else if (bQueue[id].buildProgress == 0)
 				this->_eventQueue.emplace_back(StartBuildEvent{
@@ -525,72 +533,80 @@ void D2KUI::update()
 	this->_redPower->setVisible(percent < 70);
 
 	this->_upgrade->setVisible(this->_hasUpgrades());
+	this->_updateCursor();
 }
 
-void D2KUI::_displaySelectedBuildingUI(const Building &building)
+void D2KUI::_displaySelectedObjectUI(const GameObject &object)
 {
-	Vector2u size = building.getSize();
-	Vector2f top = building.getBaseAnims().front().getAnims().front().getOffset();
+	auto select = object.getSelectBox();
+	Vector2i size = select.size;
+	Vector2i top = select.position;
 	sf::Sprite sprite{this->_selectCorners[0]};
 	sf::RectangleShape rect;
-	auto &storage = building.getStorage();
 
 	top.x = 0;
-	top += building.getPosition();
-	rect.setPosition({top.x + 1, top.y + 1});
+	top += object.getPosition();
+	rect.setPosition({top.x + 1.f, top.y + 1.f});
 	rect.setSize({size.x - 2.f, 2});
 	rect.setOutlineThickness(1);
 	rect.setOutlineColor(sf::Color::Black);
 	rect.setFillColor(sf::Color{0, 0, 0, 128});
 	game->screen->draw(rect);
 
-	rect.setSize({(size.x - 2.f) * building.animationState.health, 2});
-	if (building.animationState.health >= 0.5)
+	rect.setSize({(size.x - 2.f) * object.animationState.health, 2});
+	if (object.animationState.health >= 0.5)
 		rect.setFillColor(sf::Color::Green);
-	else if (building.animationState.health >= 0.3)
+	else if (object.animationState.health >= 0.3)
 		rect.setFillColor(sf::Color{0xFF, 0x80, 0x00});
 	else
 		rect.setFillColor(sf::Color::Red);
 	game->screen->draw(rect);
 
 	top.y += 4;
-	sprite.setPosition({top.x, top.y});
+	sprite.setPosition(Vector2f(top.x, top.y));
 	game->screen->draw(sprite);
 
 	sprite.setTexture(this->_selectCorners[1], true);
-	sprite.setPosition({top.x - this->_selectCorners[1].getSize().x + size.x, top.y});
+	sprite.setPosition(Vector2f(top.x - this->_selectCorners[1].getSize().x + size.x, top.y));
 	game->screen->draw(sprite);
 
 	sprite.setTexture(this->_selectCorners[2], true);
-	sprite.setPosition({top.x, top.y - this->_selectCorners[2].getSize().y + size.y});
+	sprite.setPosition(Vector2f(top.x, top.y - this->_selectCorners[2].getSize().y + size.y));
 	game->screen->draw(sprite);
 
 	sprite.setTexture(this->_selectCorners[3], true);
-	sprite.setPosition({
+	sprite.setPosition(Vector2f(
 		top.x - this->_selectCorners[3].getSize().x + size.x,
 		top.y - this->_selectCorners[3].getSize().y + size.y
-	});
+	));
 	game->screen->draw(sprite);
 
-	if (!storage.empty()) {
-		sf::Vector2f pos = {top.x + 2, top.y + size.y - 5};
-		unsigned count = 7;
-		float percent = 0;
+	// FIXME:
+	auto *building = dynamic_cast<const Building *>(&object);
 
-		for (auto &key : storage | std::ranges::views::keys)
-			percent += static_cast<float>(this->state->money[key]) / this->state->totalStorage[key];
-		percent /= storage.size();
-		if (size.x >= 64)
-			count = 15;
-		rect.setSize({2, 2});
-		for (size_t i = 0; i < count; i++) {
-			rect.setPosition(pos);
-			if (percent * count > i && percent != 0)
-				rect.setFillColor(sf::Color{0, 255, 0, 255});
-			else
-				rect.setFillColor(sf::Color{0, 0, 0, 128});
-			game->screen->draw(rect);
-			pos.x += 3;
+	if (building) {
+		auto &storage = building->getStorage();
+
+		if (!storage.empty()) {
+			sf::Vector2f pos = {top.x + 2.f, top.y + size.y - 5.f};
+			unsigned count = 7;
+			float percent = 0;
+
+			for (auto &key: storage | std::ranges::views::keys)
+				percent += static_cast<float>(this->state->money[key]) / this->state->totalStorage[key];
+			percent /= storage.size();
+			if (size.x >= 64)
+				count = 15;
+			rect.setSize({2, 2});
+			for (size_t i = 0; i < count; i++) {
+				rect.setPosition(pos);
+				if (percent * count > i && percent != 0)
+					rect.setFillColor(sf::Color{0, 255, 0, 255});
+				else
+					rect.setFillColor(sf::Color{0, 0, 0, 128});
+				game->screen->draw(rect);
+				pos.x += 3;
+			}
 		}
 	}
 }
@@ -602,9 +618,10 @@ bool D2KUI::_isSelectionTooFar() const
 
 	const std::set<Vector2i> &okTiles = this->_placementBuilding->getCheckTiles();
 	auto &placementGrid = this->map->placementGrid[this->state->team];
+	auto gridPos = this->map->absToTileCoord(this->_placementPos);
 
 	for (auto &pos : okTiles) {
-		auto result = pos + this->_placementPos;
+		auto result = pos + gridPos;
 
 		if (result.x < 0 || result.y < 0 || result.x >= static_cast<int>(this->map->gridSize.x) || result.y >= static_cast<int>(this->map->gridSize.y))
 			continue;
@@ -618,20 +635,14 @@ void D2KUI::render()
 {
 	if (!this->_enabled)
 		return;
-	if (this->_placementBuilding != nullptr) {
-		this->_placementSprite.setTexture(this->_placementTexture.getTexture(), true);
-		this->_placementSprite.setPosition({
-			static_cast<float>(this->_placementPos.x * 32),
-			static_cast<float>(this->_placementPos.y * 32)
-		});
-		game->screen->draw(this->_placementSprite);
-	}
+	if (this->_placementBuilding != nullptr)
+		this->_displayPlacementPreview();
 
-	for (auto &b : this->_selectedBuildings)
-		this->_displaySelectedBuildingUI(*b);
+	for (auto &b : this->_selectedObjects)
+		this->_displaySelectedObjectUI(*b);
 }
 
-void D2KUI::_updatePlacementTexture()
+void D2KUI::_displayPlacementPreview()
 {
 	auto &placement = this->_faction.getPlacementCursors();
 
@@ -640,9 +651,8 @@ void D2KUI::_updatePlacementTexture()
 
 	auto &tileData = this->_placementBuilding->getTileData();
 	bool tooFar = this->_isSelectionTooFar();
+	auto gridPos = this->map->absToTileCoord(this->_placementPos);
 
-	assert_exp(this->_placementTexture.resize(sf::Vector2u(tileData.front().size() * 32, tileData.size() * 32)));
-	this->_placementTexture.clear(sf::Color::Transparent);
 	for (size_t y = 0; y < tileData.size(); y++) {
 		auto &line = tileData[y];
 
@@ -653,28 +663,58 @@ void D2KUI::_updatePlacementTexture()
 				continue;
 
 			Sprite *sprite = &placement[2][this->_placementAnimation[2]];
-			int fullX = static_cast<int>(x) + this->_placementPos.x;
-			int fullY = static_cast<int>(y) + this->_placementPos.y;
+			Vector2i full = {
+				static_cast<int>(x) + gridPos.x,
+				static_cast<int>(y) + gridPos.y
+			};
 
-			if (fullX >= 0 && fullY >= 0 && static_cast<size_t>(fullX) < this->map->gridSize.x && static_cast<size_t>(fullY) < this->map->gridSize.y) {
-				uint32_t gridMask = this->map->grid[fullX + fullY * this->map->gridSize.x];
-
-				if (tooFar || !GRID_CAN_BUILD(gridMask) || (
-					(gridMask & GRIDMASK_HAS_CONCRETE) &&
+			if (
+				full.x >= 0 && full.y >= 0
+				&& static_cast<size_t>(full.x) < this->map->gridSize.x && static_cast<size_t>(full.y) < this->map->gridSize.y
+			) {
+				if (tooFar || !this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD) || (
+					this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE) &&
 					(buildingMask & Building::MASK_PLACEMENT_CONCRETE) &&
 					!(buildingMask & Building::MASK_PLACEMENT_REQUIRED)
 				))
 					sprite = &placement[2][this->_placementAnimation[2]];
-				else if ((gridMask & GRIDMASK_HAS_CONCRETE) || (buildingMask & Building::MASK_PLACEMENT_CONCRETE))
+				else if (this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE) || (buildingMask & Building::MASK_PLACEMENT_CONCRETE))
 					sprite = &placement[0][this->_placementAnimation[0]];
 				else
 					sprite = &placement[1][this->_placementAnimation[1]];
 			}
-			sprite->setPosition({x * 32.f, y * 32.f});
-			this->_placementTexture.draw(*sprite);
+			sprite->setPosition(this->map->topLeftCoordToAbs(full));
+			game->screen->draw(*sprite);
 		}
 	}
-	this->_placementTexture.display();
+}
+
+void D2KUI::_updateCursor()
+{
+	Vector2i pos = this->map->absToTileCoord(this->_placementPos);
+
+	if (this->_placementBuilding != nullptr) {
+		this->_cursor = "normal";
+		return;
+	}
+
+	auto it = this->state->objectHitboxes.find(pos.to<unsigned>());
+
+	if (it != this->state->objectHitboxes.end() && !it->second.empty()) {
+		if (this->_selectedObjects.size() == 1) {
+			auto obj = *this->_selectedObjects.begin();
+
+			if (obj->isDeployable() && std::find(it->second.begin(), it->second.end(), obj) != it->second.end()) {
+				if (obj->canDeploy())
+					this->_cursor = "deploy";
+				else
+					this->_cursor = "no_deploy";
+				return;
+			}
+		}
+		this->_cursor = "select";
+	} else
+		this->_cursor = "normal";
 }
 
 void D2KUI::_handleTryPlace()
@@ -685,6 +725,12 @@ void D2KUI::_handleTryPlace()
 
 	if (placement[0].empty())
 		return;
+	if (this->_isSelectionTooFar()) {
+		this->playEVA(EVA_CANNOT_BUILD, 600, 2, 60, "");
+		return;
+	}
+
+	auto gridPos = this->map->absToTileCoord(this->_placementPos);
 
 	for (size_t y = 0; y < tileData.size(); y++) {
 		auto &line = tileData[y];
@@ -695,20 +741,21 @@ void D2KUI::_handleTryPlace()
 			if ((buildingMask & (Building::MASK_PLACEMENT_REQUIRED | Building::MASK_PLACEMENT_CONCRETE)) == 0)
 				continue;
 
-			uint32_t gridMask = 0;
-			int fullX = static_cast<int>(x) + this->_placementPos.x;
-			int fullY = static_cast<int>(y) + this->_placementPos.y;
+			Vector2i full = {
+				static_cast<int>(x) + gridPos.x,
+				static_cast<int>(y) + gridPos.y
+			};
 
-			if (fullX >= 0 && fullY >= 0 && static_cast<size_t>(fullX) < this->map->gridSize.x && static_cast<size_t>(fullY) < this->map->gridSize.y)
-				gridMask = this->map->grid[fullX + fullY * this->map->gridSize.x];
+			if (full.x < 0 || full.y < 0 || static_cast<size_t>(full.x) >= this->map->gridSize.x || static_cast<size_t>(full.y) >+ this->map->gridSize.y)
+				continue;
 			if (buildingMask & Building::MASK_PLACEMENT_REQUIRED) {
-				if (!GRID_CAN_BUILD(gridMask)) {
+				if (!this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD)) {
 					this->playEVA(EVA_CANNOT_BUILD, 600, 2, 60, "");
 					return;
 				}
 				foundGood = true;
 			} else if (buildingMask & Building::MASK_PLACEMENT_CONCRETE) {
-				if (GRID_CAN_BUILD(gridMask) && !(gridMask & GRIDMASK_HAS_CONCRETE))
+				if (this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD) && !this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE))
 					foundGood = true;
 			}
 		}
@@ -726,50 +773,56 @@ void D2KUI::_handleTryPlace()
 	this->_placementBuilding = nullptr;
 }
 
-void D2KUI::onCancel()
+void D2KUI::onCancel(Vector2i absPos)
 {
 	if (this->_placementBuilding)
 		this->_placementBuilding = nullptr;
-	else if (!this->_selectedBuildings.empty())
-		this->_selectedBuildings.clear();
+	else if (!this->_selectedObjects.empty())
+		this->_selectedObjects.clear();
+	this->mouseMovedToTile(absPos);
 }
 
-void D2KUI::tileClicked(Vector2i pos)
+void D2KUI::tileClicked(Vector2i absPos)
 {
-	this->_placementPos = pos;
+	Vector2i pos = this->map->absToTileCoord(absPos);
+
+	this->_placementPos = absPos;
 	if (this->_placementBuilding != nullptr)
 		return this->_handleTryPlace();
 	// TODO: Hardcoded key
-	if (!this->_selectedBuildings.empty() && !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)) {
-		this->_selectedBuildings.clear();
-		for (auto b : this->state->buildingHitboxes[pos.to<unsigned>()])
-			this->_selectedBuildings.emplace(b);
-	} else {
-		for (auto b : this->state->buildingHitboxes[pos.to<unsigned>()]) {
-			auto it = this->_selectedBuildings.find(b);
+	if (!this->_selectedObjects.empty() && !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)) {
+		auto &o = this->state->objectHitboxes[pos.to<unsigned>()];
 
-			if (it == this->_selectedBuildings.end())
-				this->_selectedBuildings.emplace(b);
-			else
-				this->_selectedBuildings.erase(it);
+		if (this->_selectedObjects.size() == 1) {
+			auto obj = *this->_selectedObjects.begin();
+
+			if (obj->isDeployable() && std::find(o.begin(), o.end(), obj) != o.end()) {
+				obj->deploy();
+				return;
+			}
+		}
+		this->_selectedObjects.clear();
+		for (auto b : this->state->objectHitboxes[pos.to<unsigned>()]) {
+			this->_selectedObjects.emplace(b);
+			b->select();
+		}
+	} else {
+		for (auto b : this->state->objectHitboxes[pos.to<unsigned>()]) {
+			auto it = this->_selectedObjects.find(b);
+
+			if (it == this->_selectedObjects.end()) {
+				this->_selectedObjects.emplace(b);
+				b->select();
+			} else
+				this->_selectedObjects.erase(it);
 		}
 	}
+	this->mouseMovedToTile(absPos);
 }
 
-void D2KUI::mouseMovedToTile(Vector2i pos)
+void D2KUI::mouseMovedToTile(Vector2i absPos)
 {
-	this->_placementPos = pos;
-	if (this->_placementBuilding != nullptr) {
-		this->_cursor = "normal";
-		this->_updatePlacementTexture();
-	} else {
-		auto it = this->state->buildingHitboxes.find(pos.to<unsigned>());
-
-		if (it != this->state->buildingHitboxes.end() && !it->second.empty())
-			this->_cursor = "select";
-		else
-			this->_cursor = "normal";
-	}
+	this->_placementPos = absPos;
 }
 
 void D2KUI::mouseOnUi()

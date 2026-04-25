@@ -2,8 +2,8 @@
 // Created by anonymus-raccoon on 1/15/20.
 //
 
-#ifndef SOFGV_VECTOR_HPP
-#define SOFGV_VECTOR_HPP
+#ifndef MIXRTS_VECTOR_HPP
+#define MIXRTS_VECTOR_HPP
 
 
 #include <ostream>

@@ -2,8 +2,8 @@
 // Created by PinkySmile on 10/02/24.
 //
 
-#ifndef SOFGV_ASSERT_HPP
-#define SOFGV_ASSERT_HPP
+#ifndef MIXRTS_ASSERT_HPP
+#define MIXRTS_ASSERT_HPP
 
 
 #include <string>
@@ -72,4 +72,9 @@ public:
 };
 
 
-#endif //SOFGV_ASSERT_HPP
+#if defined(_DEBUG) && defined(__linux__)
+#define PROPAGATE_CRASH
+#endif
+
+
+#endif //MIXRTS_ASSERT_HPP

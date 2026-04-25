@@ -78,6 +78,12 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned
 		start += b.offset;
 		this->spawnBuilding(index, start, b.queue, b.name, false);
 	}
+	for (auto &u : faction.getStartingUnits()) {
+		auto start = this->_mapStates[factionIndex].startAreas[startingArea];
+
+		start += u.offset;
+		this->spawnUnit(index, start, u.queue, u.name, false);
+	}
 	// FIXME: Always teleport to player 0 starting point
 	if (index == 0) {
 		Vector2u size = game->screen->getSize();
@@ -153,14 +159,16 @@ void GameManager::update()
 	if (isMouseOverUI())
 		for (auto &p: this->_players)
 			p.mouseOnUi();
-	for (auto &player : this->_players)
-		player.update();
 	for (auto &b : this->_liveBuildings)
 		b.update();
+	for (auto &u : this->_liveUnits)
+		u.update();
+	for (auto &player : this->_players)
+		player.update();
 	for (auto &player : this->_players)
 		player.handleUiEvents();
 
-	for (auto &list : this->_renderBuildings | std::ranges::views::values) {
+	for (auto &list : this->_renderObjects | std::ranges::views::values) {
 		auto it = list.begin();
 
 		while (it != list.end())
@@ -170,13 +178,31 @@ void GameManager::update()
 				++it;
 	}
 
-	auto it = this->_liveBuildings.begin();
+	auto itb = this->_liveBuildings.begin();
+	while (itb != this->_liveBuildings.end())
+		if (itb->isDisposable()) {
+			auto &group = itb->getGroup();
+			auto &id = itb->getId();
 
-	while (it != this->_liveBuildings.end())
-		if (it->isDisposable())
-			it = this->_liveBuildings.erase(it);
-		else
-			++it;
+			--itb->owner->state.elementsOwned[group];
+			if (group != id)
+				--itb->owner->state.elementsOwned[id];
+			itb = this->_liveBuildings.erase(itb);
+		} else
+			++itb;
+
+	auto itu = this->_liveUnits.begin();
+	while (itu != this->_liveUnits.end())
+		if (itu->isDisposable()) {
+			auto &group = itu->getGroup();
+			auto &id = itu->getId();
+
+			--itu->owner->state.elementsOwned[group];
+			if (group != id)
+				--itu->owner->state.elementsOwned[id];
+			itu = this->_liveUnits.erase(itu);
+		} else
+			++itu;
 }
 
 void GameManager::updateRender()
@@ -190,8 +216,6 @@ void GameManager::render()
 	sf::View old = game->screen->getView();
 	sf::Sprite sprite{this->_map.renderCache.getTexture()};
 
-	//_cameraZoom
-	//_cameraTranslate
 	game->screen->setView(sf::View{sf::FloatRect{
 		this->_cameraTranslate,
 		sf::Vector2f{
@@ -200,10 +224,10 @@ void GameManager::render()
 		}
 	}});
 	game->screen->draw(sprite);
-	for (auto &list : this->_renderBuildings | std::ranges::views::values)
+	for (auto &list : this->_renderObjects | std::ranges::views::values)
 		for (auto b : list)
 			b->render(0);
-	for (auto &list : this->_renderBuildings | std::ranges::views::values)
+	for (auto &list : this->_renderObjects | std::ranges::views::values)
 		for (auto b : list)
 			b->render(1);
 	for (auto &player : this->_players)
@@ -252,18 +276,51 @@ void GameManager::consumeEvent(const Event &event)
 	}
 }
 
-void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &buildQueue, const std::string &id, bool forceConcrete)
+bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id)
 {
 	auto &player = this->_players[owner];
 	auto &map = this->_mapStates[owner];
 	auto &buildings = player.getBuildings();
+	assert_msg(buildings.contains(id), id);
+	auto &base = *buildings.at(id);
+	auto &tiles = base.getTileData();
+	Vector2i pos = map.absToTileCoord(absPos);
+
+	assert_exp(pos.x >= 0 && pos.y >= 0 && static_cast<unsigned>(pos.x) < map.gridSize.x && static_cast<unsigned>(pos.y) < map.gridSize.y);
+	for (size_t y = 0; y < tiles.size(); y++) {
+		auto &line = tiles[y];
+
+		if (y + pos.y >= map.gridSize.y)
+			break;
+		for (size_t x = 0; x < line.size(); x++) {
+			if (x + pos.x >= map.gridSize.x)
+				break;
+
+			Vector2i fullPos = {static_cast<int>(pos.x + x), static_cast<int>(pos.y + y)};
+
+			if (line[x] & Building::MASK_PLACEMENT_REQUIRED)
+				if (!map.hasAllGridBits(fullPos, GRIDMASK_CAN_BUILD))
+					return false;
+		}
+	}
+	return true;
+}
+
+Building *GameManager::spawnBuilding(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, bool forceConcrete)
+{
+	auto &player = this->_players[owner];
+	auto &map = this->_mapStates[owner];
+	auto &buildings = player.getBuildings();
+	assert_msg(buildings.contains(id), id);
 	auto &base = *buildings.at(id);
 	auto &tiles = base.getTileData();
 	auto proxy = base.getProxy();
 	unsigned nbConcreteTiles = 0;
 	unsigned nbTiles = 0;
 	auto &concBase = *buildings.at(player.getPrimaryFaction().getBase().getName() + ":conc");
+	Vector2i pos = map.absToTileCoord(absPos);
 
+	assert_exp(pos.x >= 0 && pos.y >= 0 && static_cast<unsigned>(pos.x) < map.gridSize.x && static_cast<unsigned>(pos.y) < map.gridSize.y);
 	for (size_t y = 0; y < tiles.size(); y++) {
 		auto &line = tiles[y];
 
@@ -276,39 +333,42 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 			Vector2i fullPos = {static_cast<int>(pos.x + x), static_cast<int>(pos.y + y)};
 			auto topLeftAbs = map.topLeftCoordToAbs(fullPos);
 			auto fullPosAbs = map.tileCoordToAbs(fullPos);
-			uint32_t &tile = map.grid[fullPos.x + fullPos.y * map.gridSize.x];
 
 			if (
 				(
 					(line[x] & Building::MASK_PLACEMENT_CONCRETE) ||
 					((line[x] & Building::MASK_PLACEMENT_REQUIRED) && forceConcrete)
 				) &&
-				GRID_CAN_BUILD(tile)
+				// OPTIMIZE: Can use a reference instead of calling helpers
+				map.hasAllGridBits(fullPos, GRIDMASK_CAN_BUILD)
 			) {
-				this->_map.grid.setGridBits(fullPosAbs, GRIDMASK_HAS_CONCRETE);
+				// OPTIMIZE: Can use a reference instead of calling helpers
+				this->_map.grid.setGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
 				for (auto &m : this->_mapStates)
 					m.setGridBits(fullPosAbs, GRIDMASK_HAS_CONCRETE);
 				this->_liveBuildings.emplace_back(concBase);
 				auto &b = this->_liveBuildings.back();
-				b.playerState = &player.state;
+				b.manager = this;
+				b.owner = &player;
 				b.setPosition(topLeftAbs);
 				b.setColor(player.getColor());
 				b.built();
-				player.state.myBuildings.emplace_back(&b);
-				this->_renderBuildings[pos.y + y].push_front(&b);
-				// TODO:
-				this->_map.grid.updatePlacementGrid(fullPosAbs, player.state.team, 1);
+				player.state.myObjects.emplace_back(&b);
+				this->_renderObjects[pos.y + y].push_front(&b);
+				this->_map.grid.updatePlacementGrid(fullPos, player.state.team, 1);
 				for (auto &m : this->_mapStates)
 					m.updatePlacementGrid(fullPosAbs, player.state.team, 1);
 			}
 			if (line[x] & Building::MASK_PLACEMENT_REQUIRED) {
-				this->_map.grid.resetGridBits(fullPosAbs, GRIDMASK_IS_FREE);
+				// OPTIMIZE: Can use a reference instead of calling helpers
+				this->_map.grid.resetGridBits(fullPos, GRIDMASK_IS_FREE);
 				for (auto &m : this->_mapStates)
 					m.resetGridBits(fullPosAbs, GRIDMASK_IS_FREE);
 			}
 			if (line[x] & Building::MASK_SOLID) {
 				nbTiles++;
-				nbConcreteTiles += (tile & GRIDMASK_HAS_CONCRETE) == GRIDMASK_HAS_CONCRETE;
+				// OPTIMIZE: Can use a reference instead of calling helpers
+				nbConcreteTiles += map.hasAnyGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
 			}
 		}
 	}
@@ -320,7 +380,8 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 		else
 			this->_liveBuildings.push_back(base);
 		auto &b = this->_liveBuildings.back();
-		b.playerState = &player.state;
+		b.owner = &player;
+		b.manager = this;
 		b.setPosition(map.topLeftCoordToAbs(pos));
 		b.setColor(player.getColor());
 		b.built();
@@ -358,8 +419,8 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 					p->produced();
 					break;
 				}
-		player.state.myBuildings.emplace_back(&b);
-		this->_renderBuildings[tiles.size() + pos.y - 1].push_back(&b);
+		player.state.myObjects.emplace_back(&b);
+		this->_renderObjects[tiles.size() + pos.y - 1].push_back(&b);
 
 		for (size_t y = 0; y < tiles.size(); y++) {
 			auto &line = tiles[y];
@@ -370,11 +431,52 @@ void GameManager::spawnBuilding(size_t owner, Vector2u pos, const std::string &b
 				if (x + pos.x >= map.gridSize.x)
 					break;
 				if (line[x] & Building::MASK_SOLID)
-					player.state.buildingHitboxes[Vector2u(pos.x + x, pos.y + y)].push_back(&b);
+					player.state.objectHitboxes[Vector2u(pos.x + x, pos.y + y)].push_back(&b);
 			}
 		}
 		player.checkUnlocked(b.getFaction());
+		return &b;
 	}
+	return nullptr;
+}
+
+Unit *GameManager::spawnUnit(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, bool forceConcrete)
+{
+	auto &player = this->_players[owner];
+	auto &map = this->_mapStates[owner];
+	auto &units = player.getUnits();
+	auto &base = *units.at(id);
+	Vector2i pos = map.absToTileCoord(absPos);
+
+	assert_exp(pos.x >= 0 && pos.y >= 0 && static_cast<unsigned>(pos.x) < map.gridSize.x && static_cast<unsigned>(pos.y) < map.gridSize.y);
+	this->_liveUnits.push_back(base);
+	auto &u = this->_liveUnits.back();
+	u.manager = this;
+	u.owner = &player;
+	u.setPosition(map.topLeftCoordToAbs(pos));
+	u.setColor(player.getColor());
+
+	auto group = u.getGroup();
+
+	++player.state.elementsOwned[group];
+	if (group != id)
+		++player.state.elementsOwned[id];
+
+	auto &parent = player.state.primaryBuildings[buildQueue];
+
+	if (parent)
+		parent->produced();
+	else if (player.state.queueBuildings.contains(buildQueue))
+		for (auto &p: player.state.queueBuildings[buildQueue])
+			if (!p->isObstructed()) {
+				p->produced();
+				break;
+			}
+	player.state.myObjects.emplace_back(&u);
+	this->_renderObjects[pos.y].push_back(&u);
+	player.state.objectHitboxes[Vector2u(pos.x, pos.y)].push_back(&u);
+	player.checkUnlocked(u.getFaction());
+	return &u;
 }
 
 const std::vector<Faction> &GameManager::getFactions() const
@@ -410,12 +512,10 @@ MapState::Quad MapState::tileCoordToAbs(const Vector2i &p)
 	};
 }
 
-void MapState::updatePlacementGrid(const MapState::Quad &abs, unsigned int player, int delta)
+void MapState::clampedPosition(const MapState::Quad &abs, Vector2i &topLeft, Vector2i &bottomRight)
 {
-	auto topLeft = this->absToTileCoord(abs.pt1);
-	auto bottomRight = this->absToTileCoord(abs.pt3 - Vector2i{1, 1});
-
-	assert_exp(delta != 0);
+	topLeft = this->absToTileCoord(abs.pt1);
+	bottomRight = this->absToTileCoord(abs.pt3 - Vector2i{1, 1});
 	topLeft.x = std::max(topLeft.x, 0);
 	topLeft.y = std::max(topLeft.y, 0);
 	topLeft.x = std::min<int>(topLeft.x, this->gridSize.x - 1);
@@ -424,6 +524,27 @@ void MapState::updatePlacementGrid(const MapState::Quad &abs, unsigned int playe
 	bottomRight.y = std::max(bottomRight.y, 0);
 	bottomRight.x = std::min<int>(bottomRight.x, this->gridSize.x - 1);
 	bottomRight.y = std::min<int>(bottomRight.y, this->gridSize.y - 1);
+}
+
+void MapState::updatePlacementGrid(const Vector2i &rel, unsigned int player, int delta)
+{
+	assert_msg(rel.x >= 0 && static_cast<unsigned>(rel.x) < this->gridSize.x, std::to_string(rel.x));
+	assert_msg(rel.y >= 0 && static_cast<unsigned>(rel.y) < this->gridSize.y, std::to_string(rel.y));
+
+	auto &b = this->placementGrid[player][rel.x + rel.y * this->gridSize.x];
+
+	assert_exp(delta < 0 || b < 256 - delta);
+	assert_exp(delta > 0 || b >= delta);
+	b += delta;
+}
+
+void MapState::updatePlacementGrid(const MapState::Quad &abs, unsigned int player, int delta)
+{
+	Vector2i topLeft;
+	Vector2i bottomRight;
+
+	assert_exp(delta != 0);
+	this->clampedPosition(abs, topLeft, bottomRight);
 	for (int y = topLeft.y; y <= bottomRight.y; y++)
 		for (int x = topLeft.x; x <= bottomRight.x; x++) {
 			auto &b = this->placementGrid[player][x + y * this->gridSize.x];
@@ -434,40 +555,139 @@ void MapState::updatePlacementGrid(const MapState::Quad &abs, unsigned int playe
 		}
 }
 
+void MapState::setGridBits(const Vector2i &rel, uint32_t bits)
+{
+	assert_msg(rel.x >= 0 && static_cast<unsigned>(rel.x) < this->gridSize.x, std::to_string(rel.x));
+	assert_msg(rel.y >= 0 && static_cast<unsigned>(rel.y) < this->gridSize.y, std::to_string(rel.y));
+	this->grid[rel.x + rel.y * this->gridSize.x] |= bits;
+}
+
 void MapState::setGridBits(const MapState::Quad &abs, uint32_t bits)
 {
-	auto topLeft = this->absToTileCoord(abs.pt1);
-	auto bottomRight = this->absToTileCoord(abs.pt3 - Vector2i{1, 1});
+	Vector2i topLeft;
+	Vector2i bottomRight;
 
-	topLeft.x = std::max(topLeft.x, 0);
-	topLeft.y = std::max(topLeft.y, 0);
-	topLeft.x = std::min<int>(topLeft.x, this->gridSize.x - 1);
-	topLeft.y = std::min<int>(topLeft.y, this->gridSize.y - 1);
-	bottomRight.x = std::max(bottomRight.x, 0);
-	bottomRight.y = std::max(bottomRight.y, 0);
-	bottomRight.x = std::min<int>(bottomRight.x, this->gridSize.x - 1);
-	bottomRight.y = std::min<int>(bottomRight.y, this->gridSize.y - 1);
+	this->clampedPosition(abs, topLeft, bottomRight);
 	for (int y = topLeft.y; y <= bottomRight.y; y++)
 		for (int x = topLeft.x; x <= bottomRight.x; x++)
 			this->grid[x + y * this->gridSize.x] |= bits;
 }
 
+void MapState::resetGridBits(const Vector2i &rel, uint32_t bits)
+{
+	assert_msg(rel.x >= 0 && static_cast<unsigned>(rel.x) < this->gridSize.x, std::to_string(rel.x));
+	assert_msg(rel.y >= 0 && static_cast<unsigned>(rel.y) < this->gridSize.y, std::to_string(rel.y));
+	this->grid[rel.x + rel.y * this->gridSize.x] &= ~bits;
+}
+
 void MapState::resetGridBits(const MapState::Quad &abs, uint32_t bits)
 {
-	auto topLeft = this->absToTileCoord(abs.pt1);
-	auto bottomRight = this->absToTileCoord(abs.pt3 - Vector2i{1, 1});
+	Vector2i topLeft;
+	Vector2i bottomRight;
 
-	topLeft.x = std::max(topLeft.x, 0);
-	topLeft.y = std::max(topLeft.y, 0);
-	topLeft.x = std::min<int>(topLeft.x, this->gridSize.x - 1);
-	topLeft.y = std::min<int>(topLeft.y, this->gridSize.y - 1);
-	bottomRight.x = std::max(bottomRight.x, 0);
-	bottomRight.y = std::max(bottomRight.y, 0);
-	bottomRight.x = std::min<int>(bottomRight.x, this->gridSize.x - 1);
-	bottomRight.y = std::min<int>(bottomRight.y, this->gridSize.y - 1);
+	this->clampedPosition(abs, topLeft, bottomRight);
 	for (int y = topLeft.y; y <= bottomRight.y; y++)
 		for (int x = topLeft.x; x <= bottomRight.x; x++)
 			this->grid[x + y * this->gridSize.x] &= ~bits;
+}
+
+bool MapState::hasAnyGridBits(const Vector2i &rel, uint32_t bits)
+{
+	assert_msg(rel.x >= 0 && static_cast<unsigned>(rel.x) < this->gridSize.x, std::to_string(rel.x));
+	assert_msg(rel.y >= 0 && static_cast<unsigned>(rel.y) < this->gridSize.y, std::to_string(rel.y));
+	return (this->grid[rel.x + rel.y * this->gridSize.x] & bits) != 0;
+}
+
+bool MapState::hasAllGridBits(const Vector2i &rel, uint32_t bits)
+{
+	assert_msg(rel.x >= 0 && static_cast<unsigned>(rel.x) < this->gridSize.x, std::to_string(rel.x));
+	assert_msg(rel.y >= 0 && static_cast<unsigned>(rel.y) < this->gridSize.y, std::to_string(rel.y));
+	return (this->grid[rel.x + rel.y * this->gridSize.x] & bits) == bits;
+}
+
+bool MapState::hasSomeGridBits(const Vector2i &rel, uint32_t bits, uint32_t expectedBits)
+{
+	assert_msg(rel.x >= 0 && static_cast<unsigned>(rel.x) < this->gridSize.x, std::to_string(rel.x));
+	assert_msg(rel.y >= 0 && static_cast<unsigned>(rel.y) < this->gridSize.y, std::to_string(rel.y));
+	return (this->grid[rel.x + rel.y * this->gridSize.x] & bits) == expectedBits;
+}
+
+bool MapState::anyHasAnyGridBits(const MapState::Quad &abs, uint32_t bits)
+{
+	Vector2i topLeft;
+	Vector2i bottomRight;
+
+	this->clampedPosition(abs, topLeft, bottomRight);
+	for (int y = topLeft.y; y <= bottomRight.y; y++)
+		for (int x = topLeft.x; x <= bottomRight.x; x++)
+			if ((this->grid[x + y * this->gridSize.x] & bits) != 0)
+				return true;
+	return false;
+}
+
+bool MapState::anyHasAllGridBits(const MapState::Quad &abs, uint32_t bits)
+{
+	Vector2i topLeft;
+	Vector2i bottomRight;
+
+	this->clampedPosition(abs, topLeft, bottomRight);
+	for (int y = topLeft.y; y <= bottomRight.y; y++)
+		for (int x = topLeft.x; x <= bottomRight.x; x++)
+			if ((this->grid[x + y * this->gridSize.x] & bits) == bits)
+				return true;
+	return false;
+}
+
+bool MapState::anyHasSomeGridBits(const MapState::Quad &abs, uint32_t bits, uint32_t expected)
+{
+	Vector2i topLeft;
+	Vector2i bottomRight;
+
+	this->clampedPosition(abs, topLeft, bottomRight);
+	for (int y = topLeft.y; y <= bottomRight.y; y++)
+		for (int x = topLeft.x; x <= bottomRight.x; x++)
+			if ((this->grid[x + y * this->gridSize.x] & bits) == expected)
+				return true;
+	return false;
+}
+
+bool MapState::allHasAnyGridBits(const MapState::Quad &abs, uint32_t bits)
+{
+	Vector2i topLeft;
+	Vector2i bottomRight;
+
+	this->clampedPosition(abs, topLeft, bottomRight);
+	for (int y = topLeft.y; y <= bottomRight.y; y++)
+		for (int x = topLeft.x; x <= bottomRight.x; x++)
+			if ((this->grid[x + y * this->gridSize.x] & bits) == 0)
+				return false;
+	return true;
+}
+
+bool MapState::allHasAllGridBits(const MapState::Quad &abs, uint32_t bits)
+{
+	Vector2i topLeft;
+	Vector2i bottomRight;
+
+	this->clampedPosition(abs, topLeft, bottomRight);
+	for (int y = topLeft.y; y <= bottomRight.y; y++)
+		for (int x = topLeft.x; x <= bottomRight.x; x++)
+			if ((this->grid[x + y * this->gridSize.x] & bits) != bits)
+				return false;
+	return true;
+}
+
+bool MapState::allHasSomeGridBits(const MapState::Quad &abs, uint32_t bits, uint32_t expected)
+{
+	Vector2i topLeft;
+	Vector2i bottomRight;
+
+	this->clampedPosition(abs, topLeft, bottomRight);
+	for (int y = topLeft.y; y <= bottomRight.y; y++)
+		for (int x = topLeft.x; x <= bottomRight.x; x++)
+			if ((this->grid[x + y * this->gridSize.x] & bits) != expected)
+				return false;
+	return true;
 }
 
 void LoadedMap::load(const std::filesystem::path &path)

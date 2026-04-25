@@ -23,7 +23,6 @@ unsigned PlayerState::getCombinedMoney(const std::string &key)
 }
 
 Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &mapState) :
-	_index(index),
 	_parent(parent),
 	_mapState(mapState[index]),
 	_currentUi(index),
@@ -31,6 +30,7 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 	_primaryFaction(factions[index]),
 	_factions(factions)
 {
+	this->state.index = index;
 	for (size_t i = 0; i < factions.size(); i++) {
 		auto &f = factions[i];
 
@@ -42,22 +42,26 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 			continue;
 		for (auto &[key, val] : f.getBuildings())
 			this->_loadedBuildings[key] = &val;
+		for (auto &[key, val] : f.getUnits())
+			this->_loadedUnits[key] = &val;
 	}
 	for (auto &[key, val] : this->_primaryFaction.getBuildings())
 		this->_loadedBuildings[key] = &val;
+	for (auto &[key, val] : this->_primaryFaction.getUnits())
+		this->_loadedUnits[key] = &val;
 }
 
 void PlayerState::clean()
 {
-	auto it = this->myBuildings.begin();
+	auto it = this->myObjects.begin();
 
-	while (it != this->myBuildings.end())
+	while (it != this->myObjects.end())
 		if ((*it)->isDisposable())
-			it = this->myBuildings.erase(it);
+			it = this->myObjects.erase(it);
 		else
 			++it;
 
-	for (auto &list : this->buildingHitboxes | std::ranges::views::values) {
+	for (auto &list : this->objectHitboxes | std::ranges::views::values) {
 		it = list.begin();
 		while (it != list.end())
 			if ((*it)->isDisposable())
@@ -67,12 +71,12 @@ void PlayerState::clean()
 	}
 
 	for (auto &list : this->queueBuildings | std::ranges::views::values) {
-		it = list.begin();
-		while (it != list.end())
-			if ((*it)->isDisposable())
-				it = list.erase(it);
+		auto it_ = list.begin();
+		while (it_ != list.end())
+			if ((*it_)->isDisposable())
+				it_ = list.erase(it_);
 			else
-				++it;
+				++it_;
 	}
 
 	auto mit = this->buildQueues.begin();
@@ -147,9 +151,14 @@ void Player::setEnabled(bool enabled)
 		ui->setEnabled(enabled);
 }
 
-const std::map<std::string, const Building *> &Player::getBuildings() const
+const std::unordered_map<std::string, const Building *> &Player::getBuildings() const
 {
 	return this->_loadedBuildings;
+}
+
+const std::unordered_map<std::string, const Unit *> &Player::getUnits() const
+{
+	return this->_loadedUnits;
 }
 
 const Faction &Player::getPrimaryFaction() const
@@ -162,24 +171,22 @@ HSLColor Player::getColor() const
 	return this->_color;
 }
 
-extern float guiScale;
-
 void Player::onMouseMoved(Vector2i pos)
 {
 	for (auto &ui : this->_uis)
-		ui->mouseMovedToTile(ui->map->absToTileCoord(pos));
+		ui->mouseMovedToTile(pos);
 }
 
 void Player::onLeftMouseClicked(Vector2i pos)
 {
 	for (auto &ui : this->_uis)
-		ui->tileClicked(ui->map->absToTileCoord(pos));
+		ui->tileClicked(pos);
 }
 
-void Player::onRightMouseClicked(Vector2i)
+void Player::onRightMouseClicked(Vector2i pos)
 {
 	for (auto &ui : this->_uis)
-		ui->onCancel();
+		ui->onCancel(pos);
 }
 
 void Player::mouseOnUi()
@@ -199,7 +206,7 @@ void Player::handleUiEvents()
 	for (auto &ui : this->_uis)
 		while (auto event = ui->pollEvent()) {
 			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event)) {
-				this->_parent.spawnBuilding(this->_index, place->position, place->queue, place->id, false);
+				this->_parent.spawnBuilding(this->state.index, place->position, place->queue, place->id, false);
 				this->resetQueue(place->queue);
 			} else if (auto startBuild = std::get_if<UI::StartBuildEvent>(&*event)) {
 				bool b = true;
@@ -225,8 +232,6 @@ void Player::handleUiEvents()
 
 				auto &sq = this->state.queues[cancelBuild->queue][cancelBuild->id];
 
-				for (auto &ui : this->_uis)
-					ui->onCancel();
 				if (sq.paused || sq.buildProgress == sq.buildTime) {
 					this->playEVA(UI::EVA_CANCEL, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
 					for (auto &p : sq.spent)
@@ -250,12 +255,11 @@ void Player::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int pri
 void Player::checkUnlocked(const Faction &faction)
 {
 	for (auto &[name, building] : faction.getBuildings()) {
-		if (building.getRequirements()(this->state.elementsOwned)) {
-			auto &bqueue = building.getBuildQueue();
+		auto &bqueue = building.getBuildQueue();
 
-			if (!bqueue)
-				continue;
-
+		if (!bqueue)
+			continue;
+		if (!this->state.queueBuildings[*bqueue].empty() && building.getRequirements()(this->state.elementsOwned)) {
 			auto &queue = this->state.queues[*bqueue][name];
 
 			if (queue.unlocked)

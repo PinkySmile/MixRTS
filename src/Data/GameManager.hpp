@@ -16,8 +16,10 @@
 #include "Color.hpp"
 #include "Vector.hpp"
 #include "Utils.hpp"
+#include "Unit.hpp"
 
 struct MapState {
+	// OPTIMIZE: Align line size to PAGE_SIZE, or a power of 2
 	std::vector<uint32_t> grid;
 	std::vector<std::vector<uint8_t>> placementGrid;
 	Vector2u tileSize;
@@ -32,9 +34,22 @@ struct MapState {
 		Vector2f pt4;
 	};
 
+	void clampedPosition(const Quad &abs, Vector2i &topLeft, Vector2i &bottomRight);
+	void updatePlacementGrid(const Vector2i &rel, unsigned player, int delta);
 	void updatePlacementGrid(const Quad &abs, unsigned player, int delta);
+	void resetGridBits(const Vector2i &rel, uint32_t bits);
 	void resetGridBits(const Quad &abs, uint32_t bits);
+	void setGridBits(const Vector2i &rel, uint32_t bits);
 	void setGridBits(const Quad &abs, uint32_t bits);
+	bool hasAnyGridBits(const Vector2i &rel, uint32_t bits);
+	bool hasAllGridBits(const Vector2i &rel, uint32_t bits);
+	bool hasSomeGridBits(const Vector2i &rel, uint32_t bits, uint32_t expectedBits);
+	bool anyHasAnyGridBits(const Quad &abs, uint32_t bits);
+	bool anyHasAllGridBits(const Quad &abs, uint32_t bits);
+	bool anyHasSomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected);
+	bool allHasAnyGridBits(const Quad &abs, uint32_t bits);
+	bool allHasAllGridBits(const Quad &abs, uint32_t bits);
+	bool allHasSomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected);
 	Vector2i absToTileCoord(const Vector2i &);
 	Vector2i topLeftCoordToAbs(const Vector2i &);
 	Quad tileCoordToAbs(const Vector2i &);
@@ -67,7 +82,7 @@ enum GridMask {
 };
 
 
-#define GRID_CAN_BUILD(i) ((i & (GRIDMASK_IS_FREE | GRIDMASK_BUILDABLE)) == (GRIDMASK_IS_FREE | GRIDMASK_BUILDABLE))
+#define GRIDMASK_CAN_BUILD (GRIDMASK_IS_FREE | GRIDMASK_BUILDABLE)
 #define GRID_CRATER_TYPE(i) ((i & GRIDMASK_CRATER_TYPE) >> 24)
 #define GRID_TERRAIN_TYPE(i) ((i & GRIDMASK_TERRAIN_TYPE) >> 0)
 
@@ -79,8 +94,9 @@ private:
 	std::vector<MapState> _mapStates;
 	std::vector<Player> _players;
 	std::vector<Faction> _factions;
+	std::list<Unit> _liveUnits;
 	std::list<Building> _liveBuildings;
-	std::map<unsigned, std::list<Building *>> _renderBuildings;
+	std::map<unsigned, std::list<GameObject *>> _renderObjects;
 
 	void _checkScroll();
 
@@ -94,7 +110,9 @@ public:
 	void renderAbove();
 	std::vector<Player> &getPlayers();
 	const std::vector<Faction> &getFactions() const;
-	void spawnBuilding(size_t owner, Vector2u pos, const std::string &buildQueue, const std::string &id, bool forceConcrete);
+	Unit *spawnUnit(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, bool forceConcrete);
+	Building *spawnBuilding(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, bool forceConcrete);
+	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id);
 	const LoadedMap &getLoadedMap() const;
 	void consumeEvent(const sf::Event &event);
 };

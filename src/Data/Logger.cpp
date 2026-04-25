@@ -81,7 +81,7 @@ Logger::~Logger() noexcept
 
 void Logger::msg(const std::string &content, int prio) noexcept
 {
-	__android_log_write(prio, "SoFGV", content.c_str());
+	__android_log_write(prio, "MIXRTS", content.c_str());
 }
 
 void Logger::verbose(const std::string &content) noexcept

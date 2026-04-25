@@ -2,8 +2,8 @@
 // Created by PinkySmile on 11/02/23.
 //
 
-#ifndef SOFGV_SCENEARGUMENT_HPP
-#define SOFGV_SCENEARGUMENT_HPP
+#ifndef MIXRTS_SCENEARGUMENT_HPP
+#define MIXRTS_SCENEARGUMENT_HPP
 
 
 #include <functional>
@@ -44,4 +44,4 @@ struct SpectatorArguments : public SceneArguments {
 };
 
 
-#endif //SOFGV_SCENEARGUMENT_HPP
+#endif //MIXRTS_SCENEARGUMENT_HPP

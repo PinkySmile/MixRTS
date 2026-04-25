@@ -2,8 +2,8 @@
 // Created by PinkySmile on 18/09/2021.
 //
 
-#ifndef SOFGV_TEXTUREMANAGER_HPP
-#define SOFGV_TEXTUREMANAGER_HPP
+#ifndef MIXRTS_TEXTUREMANAGER_HPP
+#define MIXRTS_TEXTUREMANAGER_HPP
 
 
 #include <filesystem>
@@ -55,4 +55,4 @@ public:
 };
 
 
-#endif //SOFGV_TEXTUREMANAGER_HPP
+#endif //MIXRTS_TEXTUREMANAGER_HPP

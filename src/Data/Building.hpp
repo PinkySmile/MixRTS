@@ -11,37 +11,23 @@
 #include <set>
 #include <vector>
 #include "ConditionalAnim.hpp"
-#include "Sound.hpp"
 #include "Sprite.hpp"
+#include "GameObject.hpp"
 #include "Data/Requirements/ReqAndCombinator.hpp"
 
-class Building {
+class Building : public GameObject {
 private:
-	const Faction &_base;
-	mutable Sound _buildSound;
+	const MultiSound *_buildSound;
 	std::optional<std::string> _buildQueue;
 	std::optional<std::string> _giveQueue;
-	std::vector<ConditionalAnim> _anims;
 	std::optional<ConditionalAnim> _buildAnim;
 	std::optional<ConditionalAnim> _producingAnim;
 	std::optional<ConditionalAnim> _producedAnim;
 	std::vector<std::vector<uint8_t>> _tiles;
-	std::shared_ptr<ReqAndCombinator> _requirements;
-	std::unordered_map<std::string, unsigned> _cost;
 	std::unordered_map<std::string, unsigned> _storage;
-	std::string _id;
-	std::string _group;
-	IntRect _selectBox;
-	Vector2u _size;
-	Vector2i _position;
 	std::set<Vector2i> _checkTiles;
 	std::optional<std::string> _proxy;
 	unsigned _showAfterBuild = 0;
-	unsigned _maxHp;
-	unsigned _hp;
-	unsigned _sight;
-	unsigned _buildSpeed;
-	unsigned _limit;
 	int _power;
 	unsigned char _buildMaxDistance;
 	bool _selectable;
@@ -50,10 +36,9 @@ private:
 	bool _building = false;
 	bool _producing = false;
 	bool _produced = false;
+	bool _isPrimary = false;
 	bool _lowerPowerWhenDamaged;
 	bool _fake;
-
-	void _displayAnim(Animation &anim);
 
 public:
 	enum BuildingMask {
@@ -63,53 +48,35 @@ public:
 		MASK_PLACEMENT_CONCRETE = 2 << 2,
 	};
 
-	struct AnimationState {
-		std::string storageKey;
-		float health;
-	};
-
-	AnimationState animationState;
-	PlayerState *playerState = nullptr;
-
 
 	Building(const Building &b);
-	Building(const Faction &base, const std::string &id, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &json);
-	void update();
-	void render(int layer);
+	Building(
+		const Faction &base,
+		const std::string &id,
+		const std::unordered_map<std::string, std::vector<Animation>> &animList,
+		const std::unordered_map<std::string, MultiSound> &sounds,
+		const nlohmann::json &json
+	);
+	void update() override;
+	void render(int layer) override;
+	void setColor(const HSLColor &color) override;
 	void built();
 	void playBuiltSound() const;
 	void produced();
 	void producing(bool producing);
-	unsigned getHealth() const;
-	void heal(unsigned amount);
-	void damage(unsigned amount);
-	void setPosition(const sf::Vector2i &pos);
-	void setColor(const HSLColor &color);
 	int getPower() const;
 	bool isFake() const;
-	bool isDead() const;
-	bool isDisposable() const;
 	unsigned char getBuildMaxDistance() const;
 	bool isSelectable() const;
 	bool isSellable() const;
 	bool isRepairable() const;
-	const Vector2u &getSize() const;
-	const Vector2i &getPosition() const;
-	const std::vector<ConditionalAnim> &getBaseAnims() const;
+	bool isPrimary() const;
+	void setPrimary(bool primary = true);
 	const std::optional<std::string> &getBuildQueue() const;
 	const std::optional<std::string> &getGivenQueue() const;
-	const std::string &getId() const;
-	const Mod &getBase() const;
-	const Faction &getFaction() const;
 	const std::vector<std::vector<uint8_t>> &getTileData() const;
 	const std::optional<std::string> &getProxy() const;
-	const std::unordered_map<std::string, unsigned> &getCost() const;
 	const std::unordered_map<std::string, unsigned> &getStorage() const;
-	const ReqAndCombinator &getRequirements() const;
-	unsigned getBuildSpeed() const;
-	const std::string &getGroup() const;
-	bool isObstructed() const;
-	unsigned getLimit() const;
 	const std::set<Vector2i> &getCheckTiles() const;
 };
 

@@ -125,6 +125,12 @@ add_executable(
 	src/Data/Upgrade.hpp
 	src/Data/Requirements/ReqConst.cpp
 	src/Data/Requirements/ReqConst.hpp
+	src/Data/Unit.cpp
+	src/Data/Unit.hpp
+	src/Data/GameObject.cpp
+	src/Data/GameObject.hpp
+	src/Data/MultiSound.cpp
+	src/Data/MultiSound.hpp
 )
 
 target_link_libraries(

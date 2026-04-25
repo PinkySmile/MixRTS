@@ -10,8 +10,9 @@
 #include <nlohmann/json.hpp>
 #include "forward.hpp"
 #include "Sprite.hpp"
+#include "Unit.hpp"
 
-struct StartBuilding {
+struct StartObject {
 	Vector2i offset = {0, 0};
 	std::string name;
 	std::string queue;
@@ -21,14 +22,19 @@ class Faction {
 private:
 	const Mod &_base;
 	mutable std::array<std::vector<Sprite>, 3> _placementCursors;
+	std::vector<std::string> _units;
+	std::vector<std::string> _sounds;
+	std::vector<std::string> _upgrades;
 	std::vector<std::string> _buildings;
 	std::vector<std::string> _animations;
-	std::vector<std::string> _upgrades;
+	std::unordered_map<std::string, Unit> _loadedUnits;
+	std::unordered_map<std::string, MultiSound> _loadedSounds;
 	std::unordered_map<std::string, Upgrade> _loadedUpgrades;
 	std::unordered_map<std::string, Building> _loadedBuildings;
 	std::unordered_map<std::string, std::vector<Animation>> _loadedAnimations;
 	std::unordered_map<std::string, unsigned> _startingMoney;
-	std::vector<StartBuilding> _startingBuildings;
+	std::vector<StartObject> _startingBuildings;
+	std::vector<StartObject> _startingUnits;
 	nlohmann::json _uiData;
 	std::string _name;
 	bool _regressTech;
@@ -44,10 +50,13 @@ public:
 
 	Faction(const Mod &base, const std::string &name, const nlohmann::json &data);
 	void load();
+	const std::unordered_map<std::string, Unit> &getUnits() const;
+	const std::unordered_map<std::string, MultiSound> &getSounds() const;
 	const std::unordered_map<std::string, Upgrade> &getUpgrades() const;
 	const std::unordered_map<std::string, Building> &getBuildings() const;
 	const std::unordered_map<std::string, unsigned> &getStartingMoney() const;
-	const std::vector<StartBuilding> &getStartingBuildings() const;
+	const std::vector<StartObject> &getStartingBuildings() const;
+	const std::vector<StartObject> &getStartingUnits() const;
 	UI *createUI() const;
 	const Mod &getBase() const;
 	std::array<std::vector<Sprite>, 3> &getPlacementCursors() const;

@@ -37,6 +37,7 @@ struct PlayerQueue {
 
 struct PlayerState {
 	size_t team = 0;
+	size_t index;
 	bool hasRadar = false;
 	unsigned consumedPower = 0;
 	unsigned producedPower = 0;
@@ -46,8 +47,8 @@ struct PlayerState {
 	std::unordered_map<std::string, unsigned> elementsOwned;
 	std::unordered_map<std::string, std::list<Building *>> queueBuildings;
 	std::unordered_map<std::string, Building *> primaryBuildings;
-	std::map<Vector2u, std::list<Building *>> buildingHitboxes;
-	std::list<Building *> myBuildings;
+	std::map<Vector2u, std::list<GameObject *>> objectHitboxes;
+	std::list<GameObject *> myObjects;
 	std::unordered_map<std::string, PlayerQueue *> buildQueues;
 	std::unordered_map<std::string, std::unordered_map<std::string, PlayerQueue>> queues;
 
@@ -57,7 +58,6 @@ struct PlayerState {
 
 class Player {
 private:
-	size_t _index;
 	GameManager &_parent;
 	MapState &_mapState;
 	bool _enabled = false;
@@ -66,7 +66,8 @@ private:
 	const Faction &_primaryFaction;
 	const std::vector<Faction> &_factions;
 	std::vector<std::unique_ptr<UI>> _uis;
-	std::map<std::string, const Building *> _loadedBuildings;
+	std::unordered_map<std::string, const Unit *> _loadedUnits;
+	std::unordered_map<std::string, const Building *> _loadedBuildings;
 
 	enum CreditStrategy {
 		CREDIT_SYSTEM,
@@ -91,7 +92,8 @@ public:
 	HSLColor getColor() const;
 	void mouseOnUi();
 	const Faction &getPrimaryFaction() const;
-	const std::map<std::string, const Building *> &getBuildings() const;
+	const std::unordered_map<std::string, const Unit *> &getUnits() const;
+	const std::unordered_map<std::string, const Building *> &getBuildings() const;
 	void playEVA(UI::EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
 	void checkUnlocked(const Faction &faction);
 	void resetQueue(const std::string &queueId);

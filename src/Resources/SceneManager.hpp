@@ -2,8 +2,8 @@
 // Created by PinkySmile on 11/02/23.
 //
 
-#ifndef SOFGV_SCENEMANAGER_HPP
-#define SOFGV_SCENEMANAGER_HPP
+#ifndef MIXRTS_SCENEMANAGER_HPP
+#define MIXRTS_SCENEMANAGER_HPP
 
 
 #include <functional>
@@ -59,4 +59,4 @@ public:
 };
 
 
-#endif //SOFGV_SCENEMANAGER_HPP
+#endif //MIXRTS_SCENEMANAGER_HPP

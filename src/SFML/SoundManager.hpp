@@ -2,8 +2,8 @@
 // Created by PinkySmile on 18/09/2021.
 //
 
-#ifndef SOFGV_SOUNDMANAGER_HPP
-#define SOFGV_SOUNDMANAGER_HPP
+#ifndef MIXRTS_SOUNDMANAGER_HPP
+#define MIXRTS_SOUNDMANAGER_HPP
 
 
 #include <unordered_map>
@@ -37,4 +37,4 @@ public:
 };
 
 
-#endif //SOFGV_SOUNDMANAGER_HPP
+#endif //MIXRTS_SOUNDMANAGER_HPP

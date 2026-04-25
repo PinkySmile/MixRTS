@@ -73,9 +73,9 @@ public:
 	virtual void updateRender();
 
 	virtual void mouseOnUi() = 0;
-	virtual void onCancel() = 0;
-	virtual void tileClicked(Vector2i pos) = 0;
-	virtual void mouseMovedToTile(Vector2i pos) = 0;
+	virtual void onCancel(Vector2i absPos) = 0;
+	virtual void tileClicked(Vector2i absPos) = 0;
+	virtual void mouseMovedToTile(Vector2i absPos) = 0;
 	virtual void update();
 	virtual void render() = 0;
 

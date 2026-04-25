@@ -3,6 +3,7 @@
 #include "Data/Animation.hpp"
 #include "Data/Upgrade.hpp"
 #include "Resources/Game.hpp"
+#include "Resources/Assert.hpp"
 #include "Data/Player.hpp"
 #include "Data/GameManager.hpp"
 #include "UI.hpp"
@@ -112,7 +113,7 @@ void debugInit(Player &player, const std::vector<Faction> &factions)
 
 int main()
 {
-#if !defined(_DEBUG) || !defined(__linux__)
+#ifndef PROPAGATE_CRASH
 	try {
 #endif
 	#ifdef _WIN32
@@ -175,7 +176,7 @@ int main()
 			game->screen->display();
 		}
 		return 0;
-#if !defined(_DEBUG) || !defined(__linux__)
+#ifndef PROPAGATE_CRASH
 	} catch (const std::exception &e) {
 		if (game)
 			game->logger.fatal(e.what());

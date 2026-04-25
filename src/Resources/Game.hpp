@@ -2,8 +2,8 @@
 // Created by PinkySmile on 18/09/2021.
 //
 
-#ifndef SOFGV_GAME_HPP
-#define SOFGV_GAME_HPP
+#ifndef MIXRTS_GAME_HPP
+#define MIXRTS_GAME_HPP
 
 
 #include <mutex>
@@ -23,7 +23,7 @@
 struct Game {
 	bool hosting = false;
 	std::random_device random;
-	RandomWrapper battleRandom;
+	RandomWrapper gameRandom;
 	Logger logger;
 	sf::Font font;
 	std::string locale = "en";
@@ -47,4 +47,4 @@ extern bool DEBUG_MODE;
 #define DEBUG_MODE false
 #endif
 
-#endif //SOFGV_GAME_HPP
+#endif //MIXRTS_GAME_HPP

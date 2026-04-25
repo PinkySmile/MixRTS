@@ -2,8 +2,8 @@
 // Created by PinkySmile on 17/12/22.
 //
 
-#ifndef SOFGV_RANDOMWRAPPER_HPP
-#define SOFGV_RANDOMWRAPPER_HPP
+#ifndef MIXRTS_RANDOMWRAPPER_HPP
+#define MIXRTS_RANDOMWRAPPER_HPP
 
 
 #include <random>
@@ -45,4 +45,4 @@ public:
 };
 
 
-#endif //SOFGV_RANDOMWRAPPER_HPP
+#endif //MIXRTS_RANDOMWRAPPER_HPP

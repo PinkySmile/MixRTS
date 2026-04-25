@@ -2,8 +2,8 @@
 // Created by PinkySmile on 18/09/2021.
 //
 
-#ifndef SOFGV_COLOR_HPP
-#define SOFGV_COLOR_HPP
+#ifndef MIXRTS_COLOR_HPP
+#define MIXRTS_COLOR_HPP
 
 
 #include <SFML/Graphics/Color.hpp>
@@ -57,4 +57,4 @@ union Color {
 };
 
 
-#endif //SOFGV_COLOR_HPP
+#endif //MIXRTS_COLOR_HPP

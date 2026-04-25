@@ -8,7 +8,6 @@
 _AssertionFailedException::_AssertionFailedException(const std::string &&msg) :
 	_msg(msg)
 {
-	game->logger.fatal("AssertionFailedException: " + msg);
 }
 
 const char *_AssertionFailedException::what() const noexcept
