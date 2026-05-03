@@ -12,31 +12,10 @@
 #include <windows.h>
 #endif
 
-#define GRID_SIZE 32
-
 float guiScale = 1.5f;
 #ifdef _DEBUG
 bool DEBUG_MODE = true;
 #endif
-
-void displayGrid()
-{
-	sf::RectangleShape shape;
-
-	shape.setOutlineThickness(1);
-	shape.setFillColor(sf::Color::Transparent);
-	shape.setOutlineColor(sf::Color::Black);
-	shape.setSize({GRID_SIZE, game->screen->getView().getSize().y});
-	for (size_t i = 0; i < game->screen->getView().getSize().x; i++) {
-		shape.setPosition({static_cast<float>(GRID_SIZE * 2 * i), 0});
-		game->screen->draw(shape);
-	}
-	shape.setSize({game->screen->getView().getSize().x, GRID_SIZE});
-	for (size_t i = 0; i < game->screen->getView().getSize().y; i++) {
-		shape.setPosition({0, static_cast<float>(GRID_SIZE * 2 * i)});
-		game->screen->draw(shape);
-	}
-}
 
 void reloadViews(Vector2u size)
 {

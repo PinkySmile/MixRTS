@@ -10,6 +10,7 @@
 #include <deque>
 #include <list>
 #include <map>
+#include <set>
 #include <SFML/Graphics/RenderTexture.hpp>
 #include <SFML/Window/Event.hpp>
 #include "forward.hpp"
@@ -17,10 +18,12 @@
 #include "Vector.hpp"
 #include "Utils.hpp"
 #include "Unit.hpp"
+#include "FindPath.hpp"
 
 struct MapState {
 	// OPTIMIZE: Align line size to PAGE_SIZE, or a power of 2
 	std::vector<uint32_t> grid;
+	PathFindingGrid pathFindingGrid;
 	std::vector<std::vector<uint8_t>> placementGrid;
 	Vector2u tileSize;
 	Vector2u gridSize;
@@ -34,32 +37,34 @@ struct MapState {
 		Vector2f pt4;
 	};
 
-	void clampedPosition(const Quad &abs, Vector2i &topLeft, Vector2i &bottomRight);
+	void clampedPosition(const Quad &abs, Vector2i &topLeft, Vector2i &bottomRight) const;
 	void updatePlacementGrid(const Vector2i &rel, unsigned player, int delta);
 	void updatePlacementGrid(const Quad &abs, unsigned player, int delta);
 	void resetGridBits(const Vector2i &rel, uint32_t bits);
 	void resetGridBits(const Quad &abs, uint32_t bits);
 	void setGridBits(const Vector2i &rel, uint32_t bits);
 	void setGridBits(const Quad &abs, uint32_t bits);
-	bool hasAnyGridBits(const Vector2i &rel, uint32_t bits);
-	bool hasAllGridBits(const Vector2i &rel, uint32_t bits);
-	bool hasSomeGridBits(const Vector2i &rel, uint32_t bits, uint32_t expectedBits);
-	bool anyHasAnyGridBits(const Quad &abs, uint32_t bits);
-	bool anyHasAllGridBits(const Quad &abs, uint32_t bits);
-	bool anyHasSomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected);
-	bool allHasAnyGridBits(const Quad &abs, uint32_t bits);
-	bool allHasAllGridBits(const Quad &abs, uint32_t bits);
-	bool allHasSomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected);
-	Vector2i absToTileCoord(const Vector2i &);
-	Vector2i topLeftCoordToAbs(const Vector2i &);
-	Quad tileCoordToAbs(const Vector2i &);
+	[[nodiscard]] bool hasAnyGridBits(const Vector2i &rel, uint32_t bits) const;
+	[[nodiscard]] bool hasAllGridBits(const Vector2i &rel, uint32_t bits) const;
+	[[nodiscard]] bool hasExactlySomeGridBits(const Vector2i &rel, uint32_t bits, uint32_t expectedBits) const;
+	[[nodiscard]] bool anyHasAnyGridBits(const Quad &abs, uint32_t bits) const;
+	[[nodiscard]] bool anyHasAllGridBits(const Quad &abs, uint32_t bits) const;
+	[[nodiscard]] bool anyHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const;
+	[[nodiscard]] bool allHasAnyGridBits(const Quad &abs, uint32_t bits) const;
+	[[nodiscard]] bool allHasAllGridBits(const Quad &abs, uint32_t bits) const;
+	[[nodiscard]] bool allHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const;
+	[[nodiscard]] Vector2i absToTileCoord(const Vector2i &) const;
+	[[nodiscard]] Vector2i topLeftCoordToAbs(const Vector2i &) const;
+	[[nodiscard]] Quad tileCoordToAbs(const Vector2i &) const;
 };
 
 struct LoadedMap {
 	MapState grid;
+	PathFindingGrid pathFindingGrid;
 	std::vector<uint32_t> originalIndices;
 	std::vector<uint32_t> displayedIndices;
-	//std::vector<std::unique_ptr<Object>> mapObjects;
+	//std::vector<std::set<GameObject *>> quadrants;
+	//std::vector<std::unique_ptr<GameObject>> mapObjects;
 	//std::vector<ResourcePatch> resources;
 	// ???? tileMeta
 
@@ -70,21 +75,8 @@ struct LoadedMap {
 	void buildCache();
 };
 
-enum GridMask {
-	GRIDMASK_HAS_CONCRETE      = 0x80000000,
-	GRIDMASK_IS_FREE           = 0x40000000,
-	GRIDMASK_INFANTRY_CAN_PASS = 0x20000000,
-	GRIDMASK_VEHICULES_CAN_PASS= 0x10000000,
-	GRIDMASK_WORM_CAN_PASS     = 0x08000000,
-	GRIDMASK_BUILDABLE         = 0x04000000,
-	GRIDMASK_CRATER_TYPE       = 0x03000000,
-	GRIDMASK_TERRAIN_TYPE      = 0x0000000F,
-};
-
-
-#define GRIDMASK_CAN_BUILD (GRIDMASK_IS_FREE | GRIDMASK_BUILDABLE)
-#define GRID_CRATER_TYPE(i) ((i & GRIDMASK_CRATER_TYPE) >> 24)
-#define GRID_TERRAIN_TYPE(i) ((i & GRIDMASK_TERRAIN_TYPE) >> 0)
+// #define QUADRANT_SIZE_X 128
+// #define QUADRANT_SIZE_Y 128
 
 class GameManager {
 private:
@@ -96,9 +88,17 @@ private:
 	std::vector<Faction> _factions;
 	std::list<Unit> _liveUnits;
 	std::list<Building> _liveBuildings;
+	unsigned _lastObjectId = 0;
+	std::unordered_map<unsigned, GameObject *> _objectMap;
 	std::map<unsigned, std::list<GameObject *>> _renderObjects;
+	unsigned char _debugGrid = 255;
 
+	bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size) const;
 	void _checkScroll();
+	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1});
+	void _onObjectSpawned(Vector2i pos, MapState &map, Player &owner, GameObject &obj, const std::string &id);
+	template<typename T>
+	T *_spawnObj(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, std::list<T> &out, const std::unordered_map<std::string, const T *> &in);
 
 public:
 	GameManager(const std::vector<Faction> &factions);
@@ -110,12 +110,19 @@ public:
 	void renderAbove();
 	std::vector<Player> &getPlayers();
 	const std::vector<Faction> &getFactions() const;
-	Unit *spawnUnit(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, bool forceConcrete);
-	Building *spawnBuilding(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, bool forceConcrete);
-	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id);
+	GameObject *getObjectById(unsigned index);
+	Unit *spawnUnit(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id);
+	Building *spawnBuilding(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id);
+	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePos);
 	const LoadedMap &getLoadedMap() const;
 	void consumeEvent(const sf::Event &event);
+	bool isAreaFree(const Vector2i &pos, const Vector2u &size);
+	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
+	void registerObject(GameObject *o);
+	void deregisterObject(GameObject *o);
 };
+
+#include "MapState.inl"
 
 
 #endif //MIXRTS_GAMEMANAGER_HPP

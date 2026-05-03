@@ -4,6 +4,7 @@
 
 #include "Faction.hpp"
 #include "GameObject.hpp"
+#include "GameManager.hpp"
 #include "Animation.hpp"
 #include "ConditionalAnim.hpp"
 #include "Resources/Assert.hpp"
@@ -29,9 +30,14 @@ void GameObject::_displayAnim(Animation &anim)
 
 GameObject::GameObject(const GameObject &g) :
 	_base(g._base),
+	_buildSound(g._buildSound),
 	_selectSound(g._selectSound),
+	_checkTiles(g._checkTiles),
+	_tiles(g._tiles),
 	_cost(g._cost),
 	_requirements(g._requirements),
+	_proxy(g._proxy),
+	_orderQueue(g._orderQueue),
 	_queue(g._queue),
 	_group(g._group),
 	_id(g._id),
@@ -45,6 +51,10 @@ GameObject::GameObject(const GameObject &g) :
 	_hp(g._hp),
 	_sight(g._sight),
 	_limit(g._limit),
+	_gpTimer(g._gpTimer),
+	_speed(g._speed),
+	_passFlags(g._passFlags),
+	_fake(g._fake),
 	animationState(g.animationState),
 	owner(g.owner)
 {
@@ -66,7 +76,16 @@ GameObject::GameObject(
 ) :
 	_base(faction)
 {
+	assert_exp(!json.contains("build") || json["build"].is_string());
+	assert_exp(!json.contains("speed") || json["speed"].is_number_unsigned());
 	assert_exp(!json.contains("limit") || json["limit"].is_number_unsigned());
+	assert_exp(!json.contains("tiles") || json["tiles"].is_array());
+	if (json.contains("tiles"))
+		for (size_t i = 0; i < json["tiles"].size(); i++) {
+			assert_msg(json["tiles"][i].is_array(), "json[\"tiles\"][" + std::to_string(i) + "]");
+			for (size_t j = 0; j < json["tiles"][i].size(); j++)
+				assert_msg(json["tiles"][i][j].is_number(), "json[\"tiles\"][" + std::to_string(i) + "][" + std::to_string(j) + "]");
+		}
 	assert_exp(json.contains("hp"));
 	assert_exp(json["hp"].is_number());
 	assert_exp(json.contains("cost"));
@@ -81,13 +100,16 @@ GameObject::GameObject(
 	assert_exp(json["size"].contains("y"));
 	assert_exp(json["size"]["y"].is_number());
 	assert_exp(!json.contains("directions") || json["directions"].is_number_unsigned());
-	assert_exp(!json.contains("speed") || json["speed"].is_number_unsigned());
+	assert_exp(!json.contains("build_speed") || json["build_speed"].is_number_unsigned());
 	assert_exp(!json.contains("group") || json["group"].is_string());
 	assert_exp(json.contains("anims"));
 	assert_exp(json["anims"].is_array());
 	assert_exp(!json.contains("sight") || json["sight"].is_number());
 	assert_exp(!json.contains("turn_speed") || json["turn_speed"].is_number());
 	assert_exp(!json.contains("select_sound") || json["select_sound"].is_string());
+	assert_exp(!json.contains("pass_flags") || json["pass_flags"].is_string() || json["pass_flags"].is_number_unsigned());
+	assert_exp(!json.contains("fake") || json["fake"].is_boolean());
+	assert_exp(!json.contains("proxy") || json["proxy"].is_string());
 
 	auto &base = faction.getBase();
 	unsigned directions = json.contains("directions") ? json["directions"].get<unsigned>() : 1;
@@ -99,8 +121,34 @@ GameObject::GameObject(
 	this->_cost = json["cost"];
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
-	this->_buildSpeed = json.contains("speed") ? json["speed"].get<unsigned>() : -1;
+	this->_buildSpeed = json.contains("build_speed") ? json["build_speed"].get<unsigned>() : -1;
 
+	if (json.contains("tiles"))
+		this->_tiles = json["tiles"];
+	if (json.contains("fake"))
+		this->_fake = json["fake"];
+	if (json.contains("proxy"))
+		this->_proxy = json["proxy"];
+	if (json.contains("build")) {
+		auto buildSound = RESOURCE(base.getName(), json["build"]);
+
+		assert_msg(sounds.contains(buildSound), buildSound);
+		this->_buildSound = &sounds.at(buildSound);
+	}
+	if (json.contains("pass_flags")) {
+		if (json["pass_flags"].is_string()) {
+			std::string str = json["pass_flags"];
+
+			try {
+				this->_passFlags = std::stoul(str, nullptr, 16);
+			} catch (std::exception &) {
+				assert_not_reached_msg("Invalid flag hex \"pass_flags\"");
+			}
+		} else
+			this->_passFlags = json["pass_flags"];
+	}
+	if (json.contains("speed"))
+		this->_speed = json["speed"];
 	if (json.contains("group"))
 		this->_group = RESOURCE(base.getName(), "group." + json["group"].get<std::string>());
 	else
@@ -152,9 +200,11 @@ GameObject::GameObject(
 	this->animationState.health = 1;
 }
 
+GameObject::~GameObject() = default;
+
 bool GameObject::_handleOrder(const Order &o)
 {
-	if (auto turn = std::get_if<TurnOrder>(&this->_orderQueue.front())) {
+	if (auto turn = std::get_if<TurnOrder>(&o)) {
 		if (this->_currentDir == turn->resultDir)
 			return true;
 		this->_gpTimer++;
@@ -168,8 +218,43 @@ bool GameObject::_handleOrder(const Order &o)
 				this->_currentDir = (this->_currentDir - 1 + this->_anims.size()) % this->_anims.size();
 		}
 		return false;
+	} else if (auto move = std::get_if<MoveOrder>(&o)) {
+		if (!this->_pathCached) {
+			this->_pathCache.emplace_back(move->destination);
+			this->_pathCached = true;
+		}
+
+		float a = this->_position.angle(move->destination);
+		unsigned angle = round((a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+
+		angle %= this->_anims.size();
+		if (angle != this->_currentDir && !this->_handleOrder(TurnOrder{angle}))
+			return false;
+
+		auto pos = this->_position;
+		auto diff = move->destination - pos;
+
+		diff.normalize();
+		diff *= this->_speed / 32.f;
+		pos += diff;
+
+		auto diff2 = move->destination - pos;
+
+		if (pos == move->destination || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
+			this->setPosition(move->destination);
+			return true;
+		} else {
+			this->setPosition(pos);
+			return false;
+		}
 	}
 	return true;
+}
+
+void GameObject::playBuiltSound() const
+{
+	if (this->_buildSound)
+		this->_buildSound->play();
 }
 
 void GameObject::update()
@@ -189,9 +274,13 @@ void GameObject::render(int layer)
 			this->_displayAnim(anim.getAnim());
 }
 
-void GameObject::setPosition(const sf::Vector2i &pos)
+void GameObject::setPosition(const sf::Vector2f &pos)
 {
-	this->_position = pos;
+	// OPTIMIZE: Diff instead of undoing it and redoing it
+	this->deinitGlobalGrid();
+	this->_position.x = pos.x;
+	this->_position.y = pos.y;
+	this->initGlobalGrid();
 }
 
 void GameObject::setColor(const HSLColor &color)
@@ -248,9 +337,9 @@ const Vector2u& GameObject::getSize() const
 	return this->_size;
 }
 
-const Vector2i &GameObject::getPosition() const
+Vector2i GameObject::getPosition() const
 {
-	return this->_position;
+	return Vector2i(round(this->_position.x), round(this->_position.y));
 }
 
 const std::vector<ConditionalAnim> &GameObject::getBaseAnims() const
@@ -293,6 +382,11 @@ unsigned GameObject::getLimit() const
 	return this->_limit;
 }
 
+unsigned GameObject::getPassFlags() const
+{
+	return this->_passFlags;
+}
+
 const std::unordered_map<std::string, unsigned> &GameObject::getCost() const
 {
 	return this->_cost;
@@ -310,12 +404,163 @@ void GameObject::select() const
 		this->_selectSound->play();
 }
 
-bool GameObject::deploy()
+void GameObject::deploy()
 {
-	return false;
 }
 
 bool GameObject::canDeploy() const
 {
 	return false;
+}
+
+bool GameObject::canMove() const
+{
+	return this->_speed;
+}
+
+void GameObject::moveTo(const Vector2i &pos)
+{
+	if (!this->canMove())
+		return;
+	this->_orderQueue.emplace_back(MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos))});
+	//this->_orderQueue.emplace_back(MoveOrder{pos + this->_size / 2});
+}
+
+void GameObject::clearOrders()
+{
+	this->_orderQueue.clear();
+}
+
+void GameObject::initGlobalGrid()
+{
+	if (this->_initGrid)
+		return;
+	if (this->_tiles) {
+		for (size_t y = 0; y < this->_tiles->size() * this->map->tileSize.y; y++) {
+			if (this->_position.y + static_cast<int>(y) < 0)
+				continue;
+			if (this->_position.y + y >= this->pfGrid->gridSize.y)
+				break;
+
+			auto &line = (*this->_tiles)[y / this->map->tileSize.y];
+
+			for (size_t x = 0; x < line.size() * this->map->tileSize.x; x++) {
+				if (!(line[x / this->map->tileSize.x] & MASK_SOLID)) {
+					x += this->map->tileSize.x - 1;
+					continue;
+				}
+				if (this->_position.x + static_cast<int>(x) < 0)
+					continue;
+				if (this->_position.x + x >= this->pfGrid->gridSize.x)
+					break;
+				PFGRIDMASK_ADD_UNIT(*this->pfGrid, this->_position.x + x, this->_position.y + y, this->_tileCount);
+			}
+		}
+	} else {
+		for (size_t y = 0; y < this->_size.y; y++) {
+			if (this->_position.y + static_cast<int>(y) < 0)
+				continue;
+			if (this->_position.y + y >= this->pfGrid->gridSize.y)
+				break;
+			for (size_t x = 0; x < this->_size.x; x++) {
+				if (this->_position.x + static_cast<int>(x) < 0)
+					continue;
+				if (this->_position.x + x >= this->pfGrid->gridSize.x)
+					break;
+				PFGRIDMASK_ADD_UNIT(*this->pfGrid, this->_position.x + x, this->_position.y + y, this->_tileCount);
+			}
+		}
+	}
+	this->manager->registerObject(this);
+	this->_initGrid = true;
+}
+
+void GameObject::deinitGlobalGrid()
+{
+	if (!this->_initGrid)
+		return;
+	if (this->_tiles) {
+		for (size_t y = 0; y < this->_tiles->size() * this->map->tileSize.y; y++) {
+			if (this->_position.y + static_cast<int>(y) < 0)
+				continue;
+			if (this->_position.y + y >= this->pfGrid->gridSize.y)
+				break;
+
+			auto &line = (*this->_tiles)[y / this->map->tileSize.y];
+
+			for (size_t x = 0; x < line.size() * this->map->tileSize.x; x++) {
+				if (!(line[x / this->map->tileSize.x] & MASK_SOLID)) {
+					x += this->map->tileSize.x - 1;
+					continue;
+				}
+				if (this->_position.x + static_cast<int>(x) < 0)
+					continue;
+				if (this->_position.x + x >= this->pfGrid->gridSize.x)
+					break;
+				PFGRIDMASK_DEL_UNIT(*this->pfGrid, this->_position.x + x, this->_position.y + y, this->_tileCount);
+			}
+		}
+	} else {
+		for (size_t y = 0; y < this->_size.y; y++) {
+			if (this->_position.y + static_cast<int>(y) < 0)
+				continue;
+			if (this->_position.y + y >= this->pfGrid->gridSize.y)
+				break;
+			for (size_t x = 0; x < this->_size.x; x++) {
+				if (this->_position.x + static_cast<int>(x) < 0)
+					continue;
+				if (this->_position.x + x >= this->pfGrid->gridSize.x)
+					break;
+				PFGRIDMASK_DEL_UNIT(*this->pfGrid, this->_position.x + x, this->_position.y + y, this->_tileCount);
+			}
+		}
+	}
+	this->manager->deregisterObject(this);
+	this->_initGrid = false;
+}
+
+bool GameObject::isSolid() const
+{
+	return this->_solid;
+}
+
+void GameObject::setIndex(unsigned int index)
+{
+	this->_index = index;
+}
+
+unsigned GameObject::getIndex() const
+{
+	return this->_index;
+}
+
+bool GameObject::isFake() const
+{
+	return this->_fake;
+}
+
+const std::optional<std::string> &GameObject::getProxy() const
+{
+	return this->_proxy;
+}
+
+const std::optional<std::vector<std::vector<uint8_t>>> &GameObject::getTileData() const
+{
+	return this->_tiles;
+}
+
+unsigned GameObject::getBottom() const
+{
+	if (this->_tiles)
+		return this->_position.y + this->map->tileSize.y * this->_tiles->size() - 1;
+	return this->_position.y + this->_size.y - 1;
+}
+
+const std::set<Vector2i> &GameObject::getCheckTiles() const
+{
+	return this->_checkTiles;
+}
+
+void GameObject::built()
+{
 }

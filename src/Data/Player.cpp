@@ -35,6 +35,7 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 		auto &f = factions[i];
 
 		this->_uis.emplace_back(f.createUI());
+		this->_uis.back()->manager = &parent;
 		this->_uis.back()->state = &this->state;
 		this->_uis.back()->map = &mapState[i];
 		game->gui.add(this->_uis.back()->getPanel());
@@ -60,15 +61,6 @@ void PlayerState::clean()
 			it = this->myObjects.erase(it);
 		else
 			++it;
-
-	for (auto &list : this->objectHitboxes | std::ranges::views::values) {
-		it = list.begin();
-		while (it != list.end())
-			if ((*it)->isDisposable())
-				it = list.erase(it);
-			else
-				++it;
-	}
 
 	for (auto &list : this->queueBuildings | std::ranges::views::values) {
 		auto it_ = list.begin();
@@ -206,7 +198,7 @@ void Player::handleUiEvents()
 	for (auto &ui : this->_uis)
 		while (auto event = ui->pollEvent()) {
 			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event)) {
-				this->_parent.spawnBuilding(this->state.index, place->position, place->queue, place->id, false);
+				this->_parent.spawnBuilding(this->state.index, place->position, place->queue, place->id);
 				this->resetQueue(place->queue);
 			} else if (auto startBuild = std::get_if<UI::StartBuildEvent>(&*event)) {
 				bool b = true;
@@ -240,6 +232,18 @@ void Player::handleUiEvents()
 				} else {
 					this->playEVA(UI::EVA_HOLD_QUEUE, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
 					sq.paused = true;
+				}
+			} else if (auto deploy = std::get_if<UI::DeployUnitEvent>(&*event)) {
+				auto obj = this->_parent.getObjectById(deploy->index);
+
+				obj->clearOrders();
+				obj->deploy();
+			} else if (auto move = std::get_if<UI::MoveUnitEvent>(&*event)) {
+				for (auto i : move->indices) {
+					auto obj = this->_parent.getObjectById(i);
+
+					obj->clearOrders();
+					obj->moveTo(move->position);
 				}
 			} else
 				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));

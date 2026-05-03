@@ -3,6 +3,7 @@
 //
 
 #include "UI.hpp"
+#include "../Data/GameManager.hpp"
 #include "../Data/Player.hpp"
 #include "../Resources/Game.hpp"
 #include "Resources/Assert.hpp"
@@ -99,5 +100,6 @@ void UI::renderAbove()
 
 void UI::updateRender()
 {
-	this->getCurrentCursor().update();
+	for (auto &c : this->_cursors)
+		c.second.update();
 }

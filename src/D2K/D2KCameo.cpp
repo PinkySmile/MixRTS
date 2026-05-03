@@ -176,12 +176,11 @@ void D2KCameo::_computeFillVertices()
 
 void D2KCameo::draw(tgui::BackendRenderTarget &target, tgui::RenderStates states) const
 {
+	checked_cast(sfmlTarget, tgui::BackendRenderTargetSFML, &target);
 	target.drawSprite(states, this->_sprite);
-
-	auto &sfmlTarget = dynamic_cast<tgui::BackendRenderTargetSFML &>(target);
 	const std::array<float, 16> &transformMatrix = states.transform.getMatrix();
 	sf::RenderStates statesSFML;
-	auto realTarget = sfmlTarget.getTarget();
+	auto realTarget = sfmlTarget->getTarget();
 
 	statesSFML.transform = sf::Transform(
 		transformMatrix[0], transformMatrix[4], transformMatrix[12],

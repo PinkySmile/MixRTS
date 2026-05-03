@@ -28,7 +28,6 @@ void CursorAnimation::update()
 
 void CursorAnimation::render() const
 {
-
 	sf::View old = game->screen->getView();
 	sf::View v = sf::View{sf::FloatRect{
 		{0, 0},

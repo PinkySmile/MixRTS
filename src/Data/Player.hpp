@@ -47,7 +47,6 @@ struct PlayerState {
 	std::unordered_map<std::string, unsigned> elementsOwned;
 	std::unordered_map<std::string, std::list<Building *>> queueBuildings;
 	std::unordered_map<std::string, Building *> primaryBuildings;
-	std::map<Vector2u, std::list<GameObject *>> objectHitboxes;
 	std::list<GameObject *> myObjects;
 	std::unordered_map<std::string, PlayerQueue *> buildQueues;
 	std::unordered_map<std::string, std::unordered_map<std::string, PlayerQueue>> queues;

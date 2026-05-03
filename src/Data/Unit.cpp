@@ -14,8 +14,7 @@
 
 Unit::Unit(const Unit &u) :
 	GameObject(u),
-	_onDeploy(u._onDeploy),
-	_speed(u._speed)
+	_onDeploy(u._onDeploy)
 {
 }
 
@@ -28,11 +27,8 @@ Unit::Unit(
 ) :
 	GameObject(base, id, animList, sounds, json)
 {
-	assert_exp(json.contains("speed"));
-	assert_exp(json["speed"].is_number());
 	assert_exp(!json.contains("deploy") || json["deploy"].is_object());
 
-	this->_speed = json["speed"];
 	if (json.contains("deploy")) {
 		assert_exp(!json["deploy"].contains("direction") || json["deploy"]["direction"].is_number());
 		assert_exp(!json["deploy"].contains("spawn_building") || json["deploy"]["spawn_building"].is_object());
@@ -77,14 +73,14 @@ bool Unit::isDeployable() const
 	return GameObject::isDeployable();
 }
 
-bool Unit::deploy()
+void Unit::deploy()
 {
 	if (this->_onDeploy) {
 		if (this->_onDeploy->direction)
 			this->_orderQueue.emplace_back(TurnOrder{*this->_onDeploy->direction});
 		this->_orderQueue.emplace_back(DeployOrder{});
 	}
-	return GameObject::deploy();
+	GameObject::deploy();
 }
 
 bool Unit::_handleOrder(const Order &o)
@@ -94,8 +90,10 @@ bool Unit::_handleOrder(const Order &o)
 		if (this->_onDeploy->spawnBuilding) {
 			auto &s = *this->_onDeploy->spawnBuilding;
 
-			if (this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building)) {
-				this->manager->spawnBuilding(this->owner->state.index, this->_position + s.offset, s.queue, s.building, false);
+			if (this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position)) {
+				this->deinitGlobalGrid();
+				this->_solid = false;
+				this->manager->spawnBuilding(this->owner->state.index, this->_position + s.offset, s.queue, s.building);
 				this->_disposable = true;
 			} else
 				this->owner->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300);
@@ -111,7 +109,7 @@ bool Unit::canDeploy() const
 		if (this->_onDeploy->spawnBuilding) {
 			auto &s = *this->_onDeploy->spawnBuilding;
 
-			return this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building);
+			return this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position);
 		}
 	}
 	return GameObject::canDeploy();

@@ -56,8 +56,24 @@ public:
 		Vector2u position;
 	};
 
-	typedef std::variant<StartBuildEvent, PlaceBuildEvent, CancelBuildEvent> Event;
+	struct DeployUnitEvent {
+		unsigned index;
+	};
 
+	struct MoveUnitEvent {
+		std::vector<unsigned> indices;
+		Vector2u position;
+	};
+
+	typedef std::variant<
+		StartBuildEvent,
+		PlaceBuildEvent,
+		CancelBuildEvent,
+		DeployUnitEvent,
+		MoveUnitEvent
+	> Event;
+
+	GameManager *manager;
 	PlayerState *state;
 	MapState *map;
 	std::optional<std::string> forcedCursor;
@@ -93,6 +109,7 @@ protected:
 	std::deque<EVAQueue> _evaQueue;
 	std::array<unsigned, EVA_COUNT> _evaCooldown{0};
 	std::array<std::unique_ptr<sf::SoundBuffer>, EVA_COUNT> _evaSounds{nullptr};
+	std::vector<GameObject *> _objectBuffer;
 	sf::Sound _evaSound;
 	std::deque<Event> _eventQueue;
 	tgui::Panel::Ptr _panel = tgui::Panel::create();

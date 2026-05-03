@@ -581,7 +581,7 @@ void D2KUI::_displaySelectedObjectUI(const GameObject &object)
 	));
 	game->screen->draw(sprite);
 
-	// FIXME:
+	// FIXME: Dynamic cast
 	auto *building = dynamic_cast<const Building *>(&object);
 
 	if (building) {
@@ -620,6 +620,8 @@ bool D2KUI::_isSelectionTooFar() const
 	auto &placementGrid = this->map->placementGrid[this->state->team];
 	auto gridPos = this->map->absToTileCoord(this->_placementPos);
 
+	if (okTiles.empty())
+		return false;
 	for (auto &pos : okTiles) {
 		auto result = pos + gridPos;
 
@@ -637,7 +639,6 @@ void D2KUI::render()
 		return;
 	if (this->_placementBuilding != nullptr)
 		this->_displayPlacementPreview();
-
 	for (auto &b : this->_selectedObjects)
 		this->_displaySelectedObjectUI(*b);
 }
@@ -653,13 +654,14 @@ void D2KUI::_displayPlacementPreview()
 	bool tooFar = this->_isSelectionTooFar();
 	auto gridPos = this->map->absToTileCoord(this->_placementPos);
 
-	for (size_t y = 0; y < tileData.size(); y++) {
-		auto &line = tileData[y];
+	assert_exp(tileData);
+	for (size_t y = 0; y < tileData->size(); y++) {
+		auto &line = (*tileData)[y];
 
 		for (size_t x = 0; x < line.size(); x++) {
 			uint8_t buildingMask = line[x];
 
-			if ((buildingMask & (Building::MASK_PLACEMENT_REQUIRED | Building::MASK_PLACEMENT_CONCRETE)) == 0)
+			if ((buildingMask & (GameObject::MASK_PLACEMENT_REQUIRED | GameObject::MASK_PLACEMENT_CONCRETE)) == 0)
 				continue;
 
 			Sprite *sprite = &placement[2][this->_placementAnimation[2]];
@@ -674,11 +676,11 @@ void D2KUI::_displayPlacementPreview()
 			) {
 				if (tooFar || !this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD) || (
 					this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE) &&
-					(buildingMask & Building::MASK_PLACEMENT_CONCRETE) &&
-					!(buildingMask & Building::MASK_PLACEMENT_REQUIRED)
-				))
+					(buildingMask & GameObject::MASK_PLACEMENT_CONCRETE) &&
+					!(buildingMask & GameObject::MASK_PLACEMENT_REQUIRED)
+				) || !this->manager->isAreaFree(this->map->topLeftCoordToAbs(full), this->map->tileSize))
 					sprite = &placement[2][this->_placementAnimation[2]];
-				else if (this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE) || (buildingMask & Building::MASK_PLACEMENT_CONCRETE))
+				else if (this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE) || (buildingMask & GameObject::MASK_PLACEMENT_CONCRETE))
 					sprite = &placement[0][this->_placementAnimation[0]];
 				else
 					sprite = &placement[1][this->_placementAnimation[1]];
@@ -697,14 +699,15 @@ void D2KUI::_updateCursor()
 		this->_cursor = "normal";
 		return;
 	}
+	this->_objectBuffer.clear();
+	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
 
-	auto it = this->state->objectHitboxes.find(pos.to<unsigned>());
-
-	if (it != this->state->objectHitboxes.end() && !it->second.empty()) {
+	if (!this->_objectBuffer.empty()) {
+		// TODO: Handle non snap-to-grid units/buildings
 		if (this->_selectedObjects.size() == 1) {
 			auto obj = *this->_selectedObjects.begin();
 
-			if (obj->isDeployable() && std::find(it->second.begin(), it->second.end(), obj) != it->second.end()) {
+			if (obj->isDeployable() && std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()) {
 				if (obj->canDeploy())
 					this->_cursor = "deploy";
 				else
@@ -713,8 +716,42 @@ void D2KUI::_updateCursor()
 			}
 		}
 		this->_cursor = "select";
-	} else
+		return;
+	}
+
+	bool canMove = !this->_selectedObjects.empty();
+
+	for (auto o : this->_selectedObjects) {
+		if (!o->canMove())
+			canMove = false;
+	}
+
+	if (!canMove)
 		this->_cursor = "normal";
+	else {
+		auto obj = *this->_selectedObjects.begin();
+		auto map = obj->map;
+		auto relPos = map->absToTileCoord(this->_placementPos);
+		auto tl = this->map->topLeftCoordToAbs(pos);
+		auto passFlags = obj->getPassFlags();
+
+		// TODO: Handle non snap-to-grid units
+		if (
+			!this->manager->isAreaFree(tl, this->map->tileSize) ||
+			!map->hasAnyGridBits(relPos, passFlags)
+		)
+			this->_cursor = "no_move";
+		else if (
+			map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_INFANTRY_CAN_PASS) ||
+			map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_VEHICULES_CAN_PASS) || (
+				map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_SHIP_CAN_PASS) &&
+				passFlags != GRIDMASK_SHIP_CAN_PASS
+			)
+		)
+			this->_cursor = "move_inf";
+		else
+			this->_cursor = "move";
+	}
 }
 
 void D2KUI::_handleTryPlace()
@@ -732,13 +769,14 @@ void D2KUI::_handleTryPlace()
 
 	auto gridPos = this->map->absToTileCoord(this->_placementPos);
 
-	for (size_t y = 0; y < tileData.size(); y++) {
-		auto &line = tileData[y];
+	assert_exp(tileData);
+	for (size_t y = 0; y < tileData->size(); y++) {
+		auto &line = (*tileData)[y];
 
 		for (size_t x = 0; x < line.size(); x++) {
 			uint8_t buildingMask = line[x];
 
-			if ((buildingMask & (Building::MASK_PLACEMENT_REQUIRED | Building::MASK_PLACEMENT_CONCRETE)) == 0)
+			if ((buildingMask & (GameObject::MASK_PLACEMENT_REQUIRED | GameObject::MASK_PLACEMENT_CONCRETE)) == 0)
 				continue;
 
 			Vector2i full = {
@@ -748,13 +786,16 @@ void D2KUI::_handleTryPlace()
 
 			if (full.x < 0 || full.y < 0 || static_cast<size_t>(full.x) >= this->map->gridSize.x || static_cast<size_t>(full.y) >+ this->map->gridSize.y)
 				continue;
-			if (buildingMask & Building::MASK_PLACEMENT_REQUIRED) {
-				if (!this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD)) {
+			if (buildingMask & GameObject::MASK_PLACEMENT_REQUIRED) {
+				if (
+					!this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD) ||
+					!this->manager->isAreaFree(this->map->topLeftCoordToAbs(full), this->map->tileSize)
+				) {
 					this->playEVA(EVA_CANNOT_BUILD, 600, 2, 60, "");
 					return;
 				}
 				foundGood = true;
-			} else if (buildingMask & Building::MASK_PLACEMENT_CONCRETE) {
+			} else if (buildingMask & GameObject::MASK_PLACEMENT_CONCRETE) {
 				if (this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD) && !this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE))
 					foundGood = true;
 			}
@@ -784,30 +825,42 @@ void D2KUI::onCancel(Vector2i absPos)
 
 void D2KUI::tileClicked(Vector2i absPos)
 {
-	Vector2i pos = this->map->absToTileCoord(absPos);
-
 	this->_placementPos = absPos;
 	if (this->_placementBuilding != nullptr)
 		return this->_handleTryPlace();
+	this->_objectBuffer.clear();
+	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
 	// TODO: Hardcoded key
 	if (!this->_selectedObjects.empty() && !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)) {
-		auto &o = this->state->objectHitboxes[pos.to<unsigned>()];
-
 		if (this->_selectedObjects.size() == 1) {
 			auto obj = *this->_selectedObjects.begin();
 
-			if (obj->isDeployable() && std::find(o.begin(), o.end(), obj) != o.end()) {
-				obj->deploy();
+			if (obj->isDeployable() && std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()) {
+				if (!obj->canDeploy())
+					this->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300, "");
+				else
+					this->_eventQueue.emplace_back(DeployUnitEvent{obj->getIndex()});
 				return;
 			}
 		}
-		this->_selectedObjects.clear();
-		for (auto b : this->state->objectHitboxes[pos.to<unsigned>()]) {
-			this->_selectedObjects.emplace(b);
-			b->select();
+
+		if (!this->_objectBuffer.empty()) {
+			this->_selectedObjects.clear();
+			for (auto b : this->_objectBuffer) {
+				this->_selectedObjects.emplace(b);
+				b->select();
+			}
+		} else if (!this->_selectedObjects.empty()) {
+			MoveUnitEvent event;
+
+			event.position = this->_placementPos;
+			event.indices.reserve(this->_selectedObjects.size());
+			for (auto s : this->_selectedObjects)
+				event.indices.push_back(s->getIndex());
+			this->_eventQueue.emplace_back(event);
 		}
 	} else {
-		for (auto b : this->state->objectHitboxes[pos.to<unsigned>()]) {
+		for (auto b : this->_objectBuffer) {
 			auto it = this->_selectedObjects.find(b);
 
 			if (it == this->_selectedObjects.end()) {
@@ -817,7 +870,6 @@ void D2KUI::tileClicked(Vector2i absPos)
 				this->_selectedObjects.erase(it);
 		}
 	}
-	this->mouseMovedToTile(absPos);
 }
 
 void D2KUI::mouseMovedToTile(Vector2i absPos)

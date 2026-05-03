@@ -50,19 +50,20 @@ public:
 
 	Faction(const Mod &base, const std::string &name, const nlohmann::json &data);
 	void load();
-	const std::unordered_map<std::string, Unit> &getUnits() const;
-	const std::unordered_map<std::string, MultiSound> &getSounds() const;
-	const std::unordered_map<std::string, Upgrade> &getUpgrades() const;
-	const std::unordered_map<std::string, Building> &getBuildings() const;
-	const std::unordered_map<std::string, unsigned> &getStartingMoney() const;
-	const std::vector<StartObject> &getStartingBuildings() const;
-	const std::vector<StartObject> &getStartingUnits() const;
-	UI *createUI() const;
-	const Mod &getBase() const;
-	std::array<std::vector<Sprite>, 3> &getPlacementCursors() const;
-	bool canSell() const;
-	bool canRepair() const;
-	bool regressTech() const;
+	[[nodiscard]] const std::unordered_map<std::string, Unit> &getUnits() const;
+	[[nodiscard]] const std::unordered_map<std::string, MultiSound> &getSounds() const;
+	[[nodiscard]] const std::unordered_map<std::string, Upgrade> &getUpgrades() const;
+	[[nodiscard]] const std::unordered_map<std::string, Building> &getBuildings() const;
+	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getStartingMoney() const;
+	[[nodiscard]] const std::vector<StartObject> &getStartingBuildings() const;
+	[[nodiscard]] const std::vector<StartObject> &getStartingUnits() const;
+	[[nodiscard]] UI *createUI() const;
+	[[nodiscard]] const Mod &getBase() const;
+	[[nodiscard]] std::array<std::vector<Sprite>, 3> &getPlacementCursors() const;
+	[[nodiscard]] bool canSell() const;
+	[[nodiscard]] bool canRepair() const;
+	[[nodiscard]] bool regressTech() const;
+	[[nodiscard]] const std::string &getName() const;
 };
 
 

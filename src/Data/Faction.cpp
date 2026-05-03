@@ -222,3 +222,8 @@ bool Faction::regressTech() const
 	return this->_regressTech;
 }
 
+const std::string &Faction::getName() const
+{
+	return this->_name;
+}
+

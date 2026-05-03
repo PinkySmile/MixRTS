@@ -26,7 +26,6 @@ struct UnitDeployParams {
 class Unit : public GameObject {
 private:
 	std::optional<UnitDeployParams> _onDeploy;
-	unsigned _speed;
 
 protected:
 	bool _handleOrder(const Order &o) override;
@@ -43,11 +42,10 @@ public:
 
 	bool canDeploy() const override;
 	bool isDeployable() const override;
+	void deploy() override;
 
 	const std::optional<UnitDeployParams> &getOnDeploy() const;
 	unsigned getSpeed() const;
-
-	bool deploy() override;
 };
 
 

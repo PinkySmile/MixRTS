@@ -3,28 +3,24 @@
 //
 
 #include "nlohmann/json.hpp"
-#include "Building.hpp"
+#include "GameManager.hpp"
 #include "Animation.hpp"
+#include "Building.hpp"
 #include "Utils.hpp"
 #include "../Resources/Assert.hpp"
 #include "../Resources/Game.hpp"
 
 Building::Building(const Building &b) :
 	GameObject(b),
-	_buildSound(b._buildSound),
 	_buildQueue(b._buildQueue),
 	_giveQueue(b._giveQueue),
-	_tiles(b._tiles),
 	_storage(b._storage),
-	_checkTiles(b._checkTiles),
-	_proxy(b._proxy),
 	_showAfterBuild(b._showAfterBuild),
 	_power(b._power),
 	_building(b._building),
 	_producing(b._producing),
 	_produced(b._produced),
-	_lowerPowerWhenDamaged(b._lowerPowerWhenDamaged),
-	_fake(b._fake)
+	_lowerPowerWhenDamaged(b._lowerPowerWhenDamaged)
 {
 	if (b._buildAnim)
 		this->_buildAnim.emplace(*this, *b._buildAnim);
@@ -43,15 +39,6 @@ Building::Building(
 ) :
 	GameObject(faction, id, animList, sounds, json)
 {
-	assert_exp(json.contains("build"));
-	assert_exp(json["build"].is_string());
-	assert_exp(json.contains("tiles"));
-	assert_exp(json["tiles"].is_array());
-	for (size_t i = 0; i < json["tiles"].size(); i++) {
-		assert_msg(json["tiles"][i].is_array(), "json[\"tiles\"][" + std::to_string(i) + "]");
-		for (size_t j = 0; j < json["tiles"][i].size(); j++)
-			assert_msg(json["tiles"][i][j].is_number(), "json[\"tiles\"][" + std::to_string(i) + "][" + std::to_string(j) + "]");
-	}
 	assert_exp(json.contains("build_max_distance"));
 	assert_exp(json["build_max_distance"].is_number());
 	assert_exp(json.contains("selectable"));
@@ -66,21 +53,15 @@ Building::Building(
 	if (json.contains("storage"))
 		for (auto &[key, value] : json["storage"].items())
 			assert_msg(value.is_number(), "json[\"storage\"][\"" + key + "\"]");
-	assert_exp(!json.contains("proxy") || json["proxy"].is_string());
 	assert_exp(!json.contains("build_anim") || json["build_anim"].is_null() || json["build_anim"].is_object());
 	assert_exp(!json.contains("producing_anim") || json["producing_anim"].is_null() || json["producing_anim"].is_object());
 	assert_exp(!json.contains("produced_anim") || json["produced_anim"].is_null() || json["produced_anim"].is_object());
 	assert_exp(!json.contains("show_after_build") || json["show_after_build"].is_number());
 	assert_exp(!json.contains("power") || json["power"].is_number());
-	assert_exp(!json.contains("fake") || json["fake"].is_boolean());
 	assert_exp(!json.contains("lower_power_when_damaged") || json["lower_power_when_damaged"].is_boolean());
 
 	auto &base = faction.getBase();
-	auto buildSound = RESOURCE(base.getName(), json["build"]);
 
-	assert_msg(sounds.contains(buildSound), buildSound);
-	this->_buildSound = &sounds.at(buildSound);
-	this->_tiles = json["tiles"];
 	this->_buildMaxDistance = json["build_max_distance"];
 	this->_selectable = json["selectable"];
 	this->_sellable = json["sellable"];
@@ -93,8 +74,6 @@ Building::Building(
 
 	if (json.contains("storage"))
 		this->_storage = json["storage"];
-	if (json.contains("proxy"))
-		this->_proxy = json["proxy"];
 	if (json.contains("build_anim") && !json["build_anim"].is_null())
 		this->_buildAnim.emplace(*this, animList, json["build_anim"]);
 	if (json.contains("producing_anim") && !json["producing_anim"].is_null())
@@ -111,20 +90,21 @@ Building::Building(
 	if (this->_storage.size() == 1)
 		this->animationState.storageKey = this->_storage.begin()->first;
 
-	for (size_t y = 0; y < this->_tiles.size(); y++) {
-		auto &line = this->_tiles[y];
+	if (this->_tiles && this->_buildMaxDistance)
+		for (size_t y = 0; y < this->_tiles->size(); y++) {
+			auto &line = (*this->_tiles)[y];
 
-		for (size_t x = 0; x < line.size(); x++) {
-			uint8_t buildingMask = line[x];
+			for (size_t x = 0; x < line.size(); x++) {
+				uint8_t buildingMask = line[x];
 
-			if ((buildingMask & (Building::MASK_PLACEMENT_REQUIRED | Building::MASK_PLACEMENT_CONCRETE)) == 0)
-				continue;
+				if ((buildingMask & (GameObject::MASK_PLACEMENT_REQUIRED | GameObject::MASK_PLACEMENT_CONCRETE)) == 0)
+					continue;
 
-			for (int i1 = -this->_buildMaxDistance - 1; i1 <= this->_buildMaxDistance + 1; i1++)
-				for (int i2 = -this->_buildMaxDistance - 1; i2 <= this->_buildMaxDistance + 1; i2++)
-					this->_checkTiles.emplace(i1 + x, i2 + y);
+				for (int i1 = -this->_buildMaxDistance - 1; i1 <= this->_buildMaxDistance + 1; i1++)
+					for (int i2 = -this->_buildMaxDistance - 1; i2 <= this->_buildMaxDistance + 1; i2++)
+						this->_checkTiles.emplace(i1 + x, i2 + y);
+			}
 		}
-	}
 }
 
 void Building::update()
@@ -163,11 +143,6 @@ void Building::built()
 		this->_buildAnim->reset();
 }
 
-void Building::playBuiltSound() const
-{
-	this->_buildSound->play();
-}
-
 void Building::produced()
 {
 	this->_produced = true;
@@ -196,21 +171,6 @@ int Building::getPower() const
 	if (!this->_lowerPowerWhenDamaged)
 		return this->_power;
 	return this->_power * static_cast<int>(this->_hp) / static_cast<int>(this->_maxHp);
-}
-
-const std::vector<std::vector<uint8_t>> &Building::getTileData() const
-{
-	return this->_tiles;
-}
-
-const std::optional<std::string> &Building::getProxy() const
-{
-	return this->_proxy;
-}
-
-bool Building::isFake() const
-{
-	return this->_fake;
 }
 
 const std::unordered_map<std::string, unsigned> &Building::getStorage() const
@@ -246,11 +206,6 @@ bool Building::isSellable() const
 bool Building::isRepairable() const
 {
 	return this->_repairable;
-}
-
-const std::set<Vector2i> &Building::getCheckTiles() const
-{
-	return this->_checkTiles;
 }
 
 bool Building::isPrimary() const
