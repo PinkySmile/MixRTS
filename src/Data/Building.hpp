@@ -17,7 +17,6 @@
 
 class Building : public GameObject {
 private:
-	std::optional<std::string> _buildQueue;
 	std::optional<std::string> _giveQueue;
 	std::optional<ConditionalAnim> _buildAnim;
 	std::optional<ConditionalAnim> _producingAnim;
@@ -57,7 +56,6 @@ public:
 	[[nodiscard]] bool isSellable() const;
 	[[nodiscard]] bool isRepairable() const;
 	[[nodiscard]] bool isPrimary() const;
-	[[nodiscard]] const std::optional<std::string> &getBuildQueue() const;
 	[[nodiscard]] const std::optional<std::string> &getGivenQueue() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getStorage() const;
 };

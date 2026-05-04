@@ -38,58 +38,6 @@ void reloadViews(Vector2u size)
 	game->gui.setAbsoluteView(viewGui);
 }
 
-void debugInit(Player &player, const std::vector<Faction> &factions)
-{
-	auto &state = player.state;
-
-	for (auto &f : factions) {
-		for (auto &[name, b] : f.getBuildings()) {
-			auto &bqueue = b.getBuildQueue();
-
-			if (!bqueue)
-				continue;
-
-			auto &queue = state.queues[*bqueue][name];
-
-			queue.unlocked = true;
-			queue.limit = b.getLimit();
-			queue.buildable = true;
-			queue.paused = false;
-			queue.buildProgress = 0;
-			queue.buildTime = 1;
-			queue.faction = &f;
-			queue.building = &b;
-			queue.upgrade = nullptr;
-			queue.unit = nullptr;
-			queue.elementId = &name;
-			queue.queueId = &*bqueue;
-			player.playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
-		}
-		for (auto &[name, u] : f.getUpgrades()) {
-			auto &bqueue = u.getBuildQueue();
-
-			if (!bqueue)
-				continue;
-
-			auto &queue = state.queues[*bqueue][name];
-
-			queue.unlocked = true;
-			queue.limit = u.getLimit();
-			queue.buildable = true;
-			queue.paused = false;
-			queue.buildProgress = 0;
-			queue.buildTime = 1;
-			queue.faction = &f;
-			queue.building = nullptr;
-			queue.upgrade = &u;
-			queue.unit = nullptr;
-			queue.elementId = &name;
-			queue.queueId = &*bqueue;
-			player.playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
-		}
-	}
-}
-
 int main()
 {
 #ifndef PROPAGATE_CRASH
@@ -107,7 +55,7 @@ int main()
 
 		Mod &mod = game->modManager.get("d2k");
 		std::unordered_map<std::string, Faction> factions;
-		sf::Music music{"mods/dune2000mm/music/AMBUSH.ogg"};
+		sf::Music music{"mods/dune2000/music/AMBUSH.ogg"};
 
 		mod.loadFactions("factions.json", factions);
 
@@ -126,8 +74,6 @@ int main()
 		//manager.addPlayer(0, HSLColor{0, 800, 750}); // Harkonen's red
 		//manager.addPlayer(0, HSLColor{145, 250, 900}); // Ordos's green
 		players[0].setEnabled(true);
-		if (DEBUG_MODE)
-			debugInit(players[0], manager.getFactions());
 
 		music.play();
 		reloadViews(game->screen->getSize());

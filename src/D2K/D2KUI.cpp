@@ -269,7 +269,7 @@ bool D2KUI::_hasUpgrades()
 	if (it == this->state->queues.end())
 		return false;
 	return std::ranges::any_of(it->second | std::ranges::views::values, [](const PlayerQueue &q){
-		return q.buildable;
+		return q.buildable && q.unlocked;
 	});
 }
 

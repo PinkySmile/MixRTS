@@ -43,10 +43,10 @@ protected:
 	std::vector<std::vector<ConditionalAnim>> _anims;
 	std::unordered_map<std::string, unsigned> _cost;
 	std::shared_ptr<ReqAndCombinator> _requirements;
+	std::optional<std::string> _buildQueue;
 	std::optional<std::string> _proxy;
 	std::vector<Vector2i> _pathCache;
 	std::deque<Order> _orderQueue;
-	std::string _queue;
 	std::string _group;
 	std::string _id;
 	IntRect _selectBox;
@@ -64,6 +64,7 @@ protected:
 	unsigned _passFlags = 0;
 	unsigned _index;
 	unsigned char _tileCount = 5;
+	bool _requiresQueueBuilding = true;
 	bool _disposable = false;
 	bool _pathCached = false;
 	bool _initGrid = false;
@@ -125,6 +126,7 @@ public:
 	void clearOrders();
 
 	[[nodiscard]] bool isFake() const;
+	[[nodiscard]] bool requiresQueueBuilding() const;
 	[[nodiscard]] const std::optional<std::string> &getProxy() const;
 	[[nodiscard]] const std::optional<std::vector<std::vector<uint8_t>>> &getTileData() const;
 	[[nodiscard]] unsigned getIndex() const;
@@ -147,6 +149,7 @@ public:
 	[[nodiscard]] bool isSolid() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getCost() const;
 	[[nodiscard]] const std::set<Vector2i> &getCheckTiles() const;
+	[[nodiscard]] const std::optional<std::string> &getBuildQueue() const;
 };
 
 

@@ -22,7 +22,7 @@
 struct PlayerQueue {
 	const Faction *faction;
 	const Upgrade *upgrade;
-	const void *unit; // TODO:
+	const Unit *unit;
 	const Building *building;
 	const std::string *queueId;
 	const std::string *elementId;
@@ -68,18 +68,16 @@ private:
 	std::unordered_map<std::string, const Unit *> _loadedUnits;
 	std::unordered_map<std::string, const Building *> _loadedBuildings;
 
+	void _tryEndBuild(PlayerQueue &queue);
+
+public:
+	PlayerState state;
+
 	enum CreditStrategy {
 		CREDIT_SYSTEM,
 		CREDIT_SPILL,
 		CREDIT_STRICT
 	};
-
-	void _tryEndBuild(PlayerQueue &queue);
-	bool _credit(const std::string &type, unsigned amount, CreditStrategy strategy);
-	bool _consume(const std::string &type, unsigned amount);
-
-public:
-	PlayerState state;
 
 	Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &state);
 	void update();
@@ -100,6 +98,11 @@ public:
 	void onMouseMoved(Vector2i pos);
 	void onLeftMouseClicked(Vector2i pos);
 	void onRightMouseClicked(Vector2i pos);
+	bool credit(const std::string &type, unsigned amount, CreditStrategy strategy);
+	bool consume(const std::string &type, unsigned amount);
+
+	template<typename T>
+	void unlockObject(const Faction &f, const std::string &name, T &object, bool debugTime = false);
 };
 
 

@@ -36,9 +36,10 @@ GameObject::GameObject(const GameObject &g) :
 	_tiles(g._tiles),
 	_cost(g._cost),
 	_requirements(g._requirements),
+	_buildQueue(g._buildQueue),
 	_proxy(g._proxy),
+	_pathCache(g._pathCache),
 	_orderQueue(g._orderQueue),
-	_queue(g._queue),
 	_group(g._group),
 	_id(g._id),
 	_selectBox(g._selectBox),
@@ -54,8 +55,18 @@ GameObject::GameObject(const GameObject &g) :
 	_gpTimer(g._gpTimer),
 	_speed(g._speed),
 	_passFlags(g._passFlags),
+	_index(g._index),
+	_tileCount(g._tileCount),
+	_requiresQueueBuilding(g._requiresQueueBuilding),
+	_disposable(g._disposable),
+	_pathCached(g._pathCached),
+	_initGrid(g._initGrid),
+	_solid(g._solid),
 	_fake(g._fake),
 	animationState(g.animationState),
+	pfGrid(g.pfGrid),
+	manager(g.manager),
+	map(g.map),
 	owner(g.owner)
 {
 	this->_anims.reserve(g._anims.size());
@@ -76,6 +87,8 @@ GameObject::GameObject(
 ) :
 	_base(faction)
 {
+	assert_exp(!json.contains("requires_queue_building") || json["requires_queue_building"].is_boolean());
+	assert_exp(!json.contains("queue") || json["queue"].is_string());
 	assert_exp(!json.contains("build") || json["build"].is_string());
 	assert_exp(!json.contains("speed") || json["speed"].is_number_unsigned());
 	assert_exp(!json.contains("limit") || json["limit"].is_number_unsigned());
@@ -102,6 +115,8 @@ GameObject::GameObject(
 	assert_exp(!json.contains("directions") || json["directions"].is_number_unsigned());
 	assert_exp(!json.contains("build_speed") || json["build_speed"].is_number_unsigned());
 	assert_exp(!json.contains("group") || json["group"].is_string());
+	assert_exp(json.contains("requirements"));
+	assert_exp(json["requirements"].is_array());
 	assert_exp(json.contains("anims"));
 	assert_exp(json["anims"].is_array());
 	assert_exp(!json.contains("sight") || json["sight"].is_number());
@@ -123,6 +138,10 @@ GameObject::GameObject(
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 	this->_buildSpeed = json.contains("build_speed") ? json["build_speed"].get<unsigned>() : -1;
 
+	if (json.contains("requires_queue_building"))
+		this->_requiresQueueBuilding = json["requires_queue_building"];
+	if (json.contains("queue"))
+		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);
 	if (json.contains("tiles"))
 		this->_tiles = json["tiles"];
 	if (json.contains("fake"))
@@ -539,6 +558,11 @@ bool GameObject::isFake() const
 	return this->_fake;
 }
 
+bool GameObject::requiresQueueBuilding() const
+{
+	return this->_requiresQueueBuilding;
+}
+
 const std::optional<std::string> &GameObject::getProxy() const
 {
 	return this->_proxy;
@@ -563,4 +587,9 @@ const std::set<Vector2i> &GameObject::getCheckTiles() const
 
 void GameObject::built()
 {
+}
+
+const std::optional<std::string> &GameObject::getBuildQueue() const
+{
+	return this->_buildQueue;
 }

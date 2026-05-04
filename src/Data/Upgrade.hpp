@@ -21,19 +21,21 @@ public:
 	std::string _group;
 	unsigned _buildSpeed;
 	unsigned _limit;
+	bool _requiresQueueBuilding = true;
 	std::unordered_map<std::string, unsigned> _cost;
 	std::shared_ptr<ReqAndCombinator> _requirements;
 
 public:
 	Upgrade(const Faction &base, const std::string &id, const nlohmann::json &data);
-	const std::optional<std::string> &getBuildQueue() const;
-	const std::optional<std::string> &getGivenQueue() const;
-	const std::string &getId() const;
-	const std::string &getGroup() const;
-	unsigned getBuildSpeed() const;
-	const ReqAndCombinator &getRequirements() const;
-	const std::unordered_map<std::string, unsigned> &getCost() const;
-	unsigned getLimit() const;
+	[[nodiscard]] const std::optional<std::string> &getBuildQueue() const;
+	[[nodiscard]] const std::optional<std::string> &getGivenQueue() const;
+	[[nodiscard]] const std::string &getId() const;
+	[[nodiscard]] const std::string &getGroup() const;
+	[[nodiscard]] unsigned getBuildSpeed() const;
+	[[nodiscard]] const ReqAndCombinator &getRequirements() const;
+	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getCost() const;
+	[[nodiscard]] unsigned getLimit() const;
+	[[nodiscard]] bool requiresQueueBuilding() const;
 };
 
 

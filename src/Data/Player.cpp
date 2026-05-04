@@ -114,7 +114,7 @@ void Player::update()
 				continue;
 
 			for (auto &p : extra)
-				this->_consume(p.first, p.second);
+				this->consume(p.first, p.second);
 			q->buildProgress++;
 			q->spent = expected;
 			if (q->buildProgress == q->buildTime)
@@ -198,7 +198,10 @@ void Player::handleUiEvents()
 	for (auto &ui : this->_uis)
 		while (auto event = ui->pollEvent()) {
 			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event)) {
+				auto &sq = this->state.queues[place->queue][place->id];
+
 				this->_parent.spawnBuilding(this->state.index, place->position, place->queue, place->id);
+				sq.spent.clear();
 				this->resetQueue(place->queue);
 			} else if (auto startBuild = std::get_if<UI::StartBuildEvent>(&*event)) {
 				bool b = true;
@@ -226,8 +229,6 @@ void Player::handleUiEvents()
 
 				if (sq.paused || sq.buildProgress == sq.buildTime) {
 					this->playEVA(UI::EVA_CANCEL, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
-					for (auto &p : sq.spent)
-						this->_credit(p.first, p.second, CREDIT_SYSTEM);
 					this->resetQueue(cancelBuild->queue);
 				} else {
 					this->playEVA(UI::EVA_HOLD_QUEUE, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
@@ -258,57 +259,12 @@ void Player::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int pri
 
 void Player::checkUnlocked(const Faction &faction)
 {
-	for (auto &[name, building] : faction.getBuildings()) {
-		auto &bqueue = building.getBuildQueue();
-
-		if (!bqueue)
-			continue;
-		if (!this->state.queueBuildings[*bqueue].empty() && building.getRequirements()(this->state.elementsOwned)) {
-			auto &queue = this->state.queues[*bqueue][name];
-
-			if (queue.unlocked)
-				continue;
-			queue.unlocked = true;
-			queue.limit = building.getLimit();
-			queue.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < queue.limit;
-			queue.paused = false;
-			queue.buildProgress = 0;
-			queue.buildTime = building.getBuildSpeed();
-			queue.faction = &faction;
-			queue.building = &building;
-			queue.upgrade = nullptr;
-			queue.unit = nullptr;
-			queue.elementId = &name;
-			queue.queueId = &*bqueue;
-			this->playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
-		}
-	}
-	for (auto &[name, upgrade] : faction.getUpgrades()) {
-		if (upgrade.getRequirements()(this->state.elementsOwned)) {
-			auto &bqueue = upgrade.getBuildQueue();
-
-			if (!bqueue)
-				continue;
-
-			auto &queue = this->state.queues[*bqueue][name];
-
-			if (queue.unlocked)
-				continue;
-			queue.unlocked = true;
-			queue.limit = upgrade.getLimit();
-			queue.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < queue.limit;
-			queue.paused = false;
-			queue.buildProgress = 0;
-			queue.buildTime = upgrade.getBuildSpeed();
-			queue.faction = &faction;
-			queue.building = nullptr;
-			queue.upgrade = &upgrade;
-			queue.unit = nullptr;
-			queue.elementId = &name;
-			queue.queueId = &*bqueue;
-			this->playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
-		}
-	}
+	for (auto &[name, building] : faction.getBuildings())
+		this->unlockObject(faction, name, building);
+	for (auto &[name, upgrade] : faction.getUpgrades())
+		this->unlockObject(faction, name, upgrade);
+	for (auto &[name, units] : faction.getUnits())
+		this->unlockObject(faction, name, units);
 }
 
 void Player::_tryEndBuild(PlayerQueue &queue)
@@ -331,11 +287,13 @@ void Player::resetQueue(const std::string &queueId)
 		q.buildable = this->state.elementsOwned[name] < q.limit;
 		q.paused = false;
 		q.buildProgress = 0;
+		for (auto &p : q.spent)
+			this->credit(p.first, p.second, CREDIT_SYSTEM);
 		q.spent.clear();
 	}
 }
 
-bool Player::_credit(const std::string &type, unsigned int amount, CreditStrategy strategy)
+bool Player::credit(const std::string &type, unsigned int amount, CreditStrategy strategy)
 {
 	switch (strategy) {
 	case CREDIT_SYSTEM:
@@ -358,7 +316,7 @@ bool Player::_credit(const std::string &type, unsigned int amount, CreditStrateg
 	}
 }
 
-bool Player::_consume(const std::string &type, unsigned int amount)
+bool Player::consume(const std::string &type, unsigned int amount)
 {
 	auto &stored = this->state.money[type];
 
@@ -382,3 +340,53 @@ std::vector<std::unique_ptr<UI>> &Player::getUIs()
 {
 	return this->_uis;
 }
+
+template<typename T>
+void Player::unlockObject(const Faction &f, const std::string &name, T &object, bool debugTime)
+{
+	auto &bqueue = object.getBuildQueue();
+
+	if (!bqueue)
+		return;
+
+	if (!debugTime) {
+		if (this->state.queueBuildings[*bqueue].empty() && object.requiresQueueBuilding())
+			return;
+		if (!object.getRequirements()(this->state.elementsOwned))
+			return;
+	}
+
+	auto &queue = this->state.queues[*bqueue][name];
+
+	if (!debugTime && queue.unlocked)
+		return;
+
+	queue.unlocked = true;
+	queue.limit = object.getLimit();
+	queue.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < queue.limit;
+	queue.paused = false;
+	queue.buildProgress = 0;
+	queue.buildTime = debugTime ? 1 : object.getBuildSpeed();
+	queue.faction = &f;
+	if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*queue.building)>>) {
+		queue.building = &object;
+		queue.upgrade = nullptr;
+		queue.unit = nullptr;
+	} else if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*queue.upgrade)>>) {
+		queue.building = nullptr;
+		queue.upgrade = &object;
+		queue.unit = nullptr;
+	} else if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*queue.unit)>>) {
+		queue.building = nullptr;
+		queue.upgrade = nullptr;
+		queue.unit = &object;
+	} else
+		static_assert(false);
+	queue.elementId = &name;
+	queue.queueId = &*bqueue;
+	this->playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
+}
+
+template void Player::unlockObject(const Faction &f, const std::string &name, Unit &object, bool debugTime);
+template void Player::unlockObject(const Faction &f, const std::string &name, Upgrade &object, bool debugTime);
+template void Player::unlockObject(const Faction &f, const std::string &name, Building &object, bool debugTime);

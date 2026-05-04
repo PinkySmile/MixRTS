@@ -12,7 +12,6 @@
 
 Building::Building(const Building &b) :
 	GameObject(b),
-	_buildQueue(b._buildQueue),
 	_giveQueue(b._giveQueue),
 	_storage(b._storage),
 	_showAfterBuild(b._showAfterBuild),
@@ -47,7 +46,6 @@ Building::Building(
 	assert_exp(json["sellable"].is_boolean());
 	assert_exp(json.contains("repairable"));
 	assert_exp(json["repairable"].is_boolean());
-	assert_exp(!json.contains("queue") || json["queue"].is_string());
 	assert_exp(!json.contains("gives_queue") || json["gives_queue"].is_string());
 	assert_exp(!json.contains("storage") || json["storage"].is_object());
 	if (json.contains("storage"))
@@ -67,8 +65,6 @@ Building::Building(
 	this->_sellable = json["sellable"];
 	this->_repairable = json["repairable"];
 
-	if (json.contains("queue"))
-		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);
 	if (json.contains("gives_queue"))
 		this->_giveQueue = RESOURCE(base.getName(), json["gives_queue"]);
 
@@ -181,11 +177,6 @@ const std::unordered_map<std::string, unsigned> &Building::getStorage() const
 const std::optional<std::string> &Building::getGivenQueue() const
 {
 	return this->_giveQueue;
-}
-
-const std::optional<std::string> &Building::getBuildQueue() const
-{
-	return this->_buildQueue;
 }
 
 unsigned char Building::getBuildMaxDistance() const

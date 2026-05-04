@@ -397,6 +397,60 @@ std::vector<Player> &GameManager::getPlayers()
 	return this->_players;
 }
 
+void GameManager::_unlockAll()
+{
+	for (auto &player : this->_players) {
+		for (auto &f : this->_factions) {
+			for (auto &[name, b] : f.getBuildings())
+				player.unlockObject(f, name, b, true);
+			for (auto &[name, u] : f.getUpgrades())
+				player.unlockObject(f, name, u, true);
+			for (auto &[name, u] : f.getUnits())
+				player.unlockObject(f, name, u, true);
+		}
+		for (auto &[name, q] : player.state.buildQueues)
+			player.resetQueue(name);
+	}
+}
+
+template<typename T>
+void GameManager::_checkObjectLocked(const std::string &name, T &object, Player &owner)
+{
+	auto &bqueue = object.getBuildQueue();
+
+	if (!bqueue)
+		return;
+
+	auto &q = owner.state.queues[*bqueue][name];
+	auto &req = object.getRequirements();
+
+	if (
+		(object.requiresQueueBuilding() && owner.state.queueBuildings[*bqueue].empty()) ||
+		!req(owner.state.elementsOwned)
+	) {
+		q.unlocked = false;
+		if (q.buildTime != 0) {
+			for (auto &p : q.spent)
+				owner.credit(p.first, p.second, Player::CREDIT_SYSTEM);
+			owner.resetQueue(*bqueue);
+		}
+	}
+	q.buildTime = object.getBuildSpeed();
+}
+
+void GameManager::_recomputeLocked()
+{
+	for (auto &player : this->_players)
+		for (auto &f : this->_factions) {
+			for (auto &[name, b] : f.getBuildings())
+				this->_checkObjectLocked(name, b, player);
+			for (auto &[name, u] : f.getUpgrades())
+				this->_checkObjectLocked(name, u, player);
+			for (auto &[name, u] : f.getUnits())
+				this->_checkObjectLocked(name, u, player);
+		}
+}
+
 void GameManager::consumeEvent(const Event &event)
 {
 	if (auto keyPressed = event.getIf<sf::Event::KeyPressed>()) {
@@ -411,6 +465,12 @@ void GameManager::consumeEvent(const Event &event)
 				this->_debugGrid = this->_mapStates.size() * 2 + 3 - 1;
 			else
 				this->_debugGrid--;
+		} else if (keyPressed->code == sf::Keyboard::Key::F3) {
+			if (this->_isDebugUnlocked)
+				this->_recomputeLocked();
+			else
+				this->_unlockAll();
+			this->_isDebugUnlocked = !this->_isDebugUnlocked;
 		}
 	#endif
 	} else if (auto mouseMove = event.getIf<sf::Event::MouseMoved>()) {
@@ -506,7 +566,6 @@ void GameManager::_onObjectSpawned(Vector2i pos, MapState &map, Player &owner, G
 	this->_map.grid.updatePlacementGrid(fullPosAbs, owner.state.team, 1);
 	for (auto &m : this->_mapStates)
 		m.updatePlacementGrid(fullPosAbs, owner.state.team, 1);
-	owner.checkUnlocked(obj.getFaction());
 
 	// FIXME: Dynamic cast
 	auto b = dynamic_cast<Building *>(&obj);
@@ -516,6 +575,7 @@ void GameManager::_onObjectSpawned(Vector2i pos, MapState &map, Player &owner, G
 		if (gqueue)
 			owner.state.queueBuildings[*gqueue].push_back(b);
 	}
+	owner.checkUnlocked(obj.getFaction());
 }
 
 template<typename T>

@@ -9,14 +9,29 @@
 Upgrade::Upgrade(const Faction &faction, const std::string &id, const nlohmann::json &json) :
 	_base(faction)
 {
+	assert_exp(json.contains("cost"));
+	assert_exp(json["cost"].is_object());
+	for (auto &[key, value] : json["cost"].items())
+		assert_msg(value.is_number(), "json[\"cost\"][\"" + key + "\"]");
+	assert_exp(!json.contains("limit") || json["limit"].is_number_unsigned());
+	assert_exp(!json.contains("group") || json["group"].is_string());
+	assert_exp(json.contains("requirements"));
+	assert_exp(json["requirements"].is_array());
+	assert_exp(!json.contains("build_speed") || json["build_speed"].is_number_unsigned());
+	assert_exp(!json.contains("requires_queue_building") || json["requires_queue_building"].is_boolean());
+	assert_exp(!json.contains("gives_queue") || json["gives_queue"].is_string());
+	assert_exp(!json.contains("queue") || json["queue"].is_string());
+
 	auto &base = faction.getBase();
 
 	this->_id = id;
 	this->_cost = json["cost"];
 	this->_limit = json.contains("limit") ? json["limit"].get<unsigned>() : UINT32_MAX;
-	this->_buildSpeed = json.contains("speed") ? json["speed"].get<unsigned>() : 0;
+	this->_buildSpeed = json.contains("build_speed") ? json["build_speed"].get<unsigned>() : 0;
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
+	if (json.contains("requires_queue_building"))
+		this->_requiresQueueBuilding = json["requires_queue_building"];
 	if (json.contains("queue"))
 		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);
 	if (json.contains("gives_queue"))
@@ -65,4 +80,9 @@ unsigned Upgrade::getLimit() const
 const std::unordered_map<std::string, unsigned> &Upgrade::getCost() const
 {
 	return this->_cost;
+}
+
+bool Upgrade::requiresQueueBuilding() const
+{
+	return this->_requiresQueueBuilding;
 }
