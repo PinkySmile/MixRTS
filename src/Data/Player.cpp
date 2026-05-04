@@ -101,6 +101,8 @@ void Player::update()
 				expected = q->building->getCost();
 			else if (q->upgrade)
 				expected = q->upgrade->getCost();
+			else if (q->unit)
+				expected = q->unit->getCost();
 			for (auto &f : expected | std::ranges::views::values)
 				f *= percent;
 			for (auto &[n, f] : expected)

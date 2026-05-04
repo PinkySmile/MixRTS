@@ -329,6 +329,7 @@ static void updateList(
 			r->setTexture(cameos[b]);
 			panel->add(pic, "cameo" + b);
 			added.push_back(b);
+			printf("ADD %s\n", b.c_str());
 		}
 		panel->getVerticalScrollbar()->setValue(scroll);
 	}
@@ -434,6 +435,117 @@ static void updateList2(
 	}
 }
 
+static void updateList3(
+	const std::filesystem::path &base,
+	const std::vector<std::unordered_map<std::string, PlayerQueue> *> &&list,
+	const std::vector<std::string> &order,
+	tgui::ScrollablePanel::Ptr panel,
+	std::vector<std::string> &added,
+	std::unordered_map<std::string, tgui::Texture> &cameos,
+	const std::function<void (const std::string &id, size_t i, bool rightClick)> &&queueCb
+)
+{
+	bool needGenerate = false;
+
+	for (auto &b : order) {
+		size_t i = 0;
+		bool mustBeAdded = false;
+		std::unordered_map<std::string, PlayerQueue>::iterator it;
+
+		while (i != list.size()) {
+			it = list[i]->find(b);
+			if (it != list[i]->end() && it->second.unlocked)
+				break;
+			i++;
+		}
+		if (i == list.size())
+			mustBeAdded = false;
+		else if (it->second.unlocked)
+			mustBeAdded = true;
+
+		bool wasAdded = std::ranges::find(added, b) != added.end();
+
+		if (wasAdded != mustBeAdded) {
+			needGenerate = true;
+			break;
+		}
+	}
+	if (needGenerate) {
+		unsigned scroll = panel->getVerticalScrollbar()->getValue();
+		std::string last;
+
+		panel->removeAllWidgets();
+		added.clear();
+		for (auto &b : order) {
+			size_t i = 0;
+
+			while (i != list.size()) {
+				auto it = list[i]->find(b);
+
+				if (it != list[i]->end() && it->second.unlocked)
+					break;
+				i++;
+			}
+			if (i == list.size())
+				continue;
+
+			auto pic = D2KCameo::create(base);
+			auto r = pic->getRenderer();
+			auto size = cameos[b].getImageSize();
+
+			if (!last.empty()) {
+				std::string pos;
+
+				pos.reserve(21 + 6);
+				pos += "cameo";
+				pos += last;
+				pos += ".y + cameo";
+				pos += last;
+				pos += ".h - 1"; // "cameo" + last + ".y + cameo" + last + ".h - 1"
+				pic->setPosition({0, tgui::Layout{pos}});
+			}
+			last = b;
+			pic->setSize("&.w", size.y + 1);
+			pic->onMousePress([queueCb, b, i]{ queueCb(b, i, false); });
+			pic->onRightMousePress([queueCb, b, i]{ queueCb(b, i, true); });
+			r->setTexture(cameos[b]);
+			panel->add(pic, "cameo" + b);
+			added.push_back(b);
+		}
+		panel->getVerticalScrollbar()->setValue(scroll);
+	}
+
+	for (auto &b : order) {
+		size_t i = 0;
+		std::unordered_map<std::string, PlayerQueue>::iterator it;
+
+		while (i != list.size()) {
+			it = list[i]->find(b);
+			if (it != list[i]->end() && it->second.unlocked)
+				break;
+			i++;
+		}
+		if (i == list.size())
+			continue;
+
+		auto w = panel->get<D2KCameo>("cameo" + std::string(b));
+
+		w->setOnHold(it->second.paused);
+		if (!it->second.buildable) {
+			w->setFill(0);
+			w->setReady(false);
+			continue;
+		}
+		if (it->second.buildProgress == 0) {
+			w->setFill(1);
+			w->setReady(false);
+		} else {
+			w->setFill(it->second.buildProgress / static_cast<float>(it->second.buildTime));
+			w->setReady(it->second.buildProgress == it->second.buildTime);
+		}
+	}
+}
+
 void D2KUI::update()
 {
 	auto it = this->_selectedObjects.begin();
@@ -449,8 +561,10 @@ void D2KUI::update()
 	unsigned i = 0;
 	unsigned credits = std::min(99999999U, this->state->getCombinedMoney("base:credits"));
 	auto &bQueue = this->state->queues[this->_faction.getBase().getName() + ":building"];
-	auto &uQueue = this->state->queues[this->_faction.getBase().getName() + ":units"];
 	auto &pQueue = this->state->queues[this->_faction.getBase().getName() + ":upgrade"];
+	auto &iQueue = this->state->queues[this->_faction.getBase().getName() + ":infantry"];
+	auto &lvQueue = this->state->queues[this->_faction.getBase().getName() + ":light_vehicule"];
+	auto &hvQueue = this->state->queues[this->_faction.getBase().getName() + ":heavy_vehicule"];
 	auto &placement = this->_faction.getPlacementCursors();
 	auto &anim = this->_placementAnimation;
 
@@ -496,14 +610,23 @@ void D2KUI::update()
 				});
 		}
 	);
-	updateList(
+	updateList3(
 		this->_faction.getBase().getBase(),
-		uQueue, this->_unitsOrder,
+		{&iQueue, &lvQueue, &hvQueue}, this->_unitsOrder,
 		this->_unitsQueue, this->_unitsQueueAdded,
 		this->_cameos,
-		[&uQueue](const std::string &id, bool rightClick){
-			if (!uQueue[id].buildable)
+		[&iQueue, &lvQueue, &hvQueue, this](const std::string &id, size_t i, bool rightClick){
+			auto queue = i == 0 ? iQueue : i == 1 ? lvQueue : hvQueue;
+
+			if (!queue[id].buildable)
 				return;
+
+			auto queueId = this->_faction.getBase().getName() + (i == 0 ? ":infantry" : i == 1 ? ":light_vehicule" : ":heavy_vehicule");
+
+			if (rightClick)
+				this->_eventQueue.emplace_back(CancelBuildEvent{id, queueId});
+			else
+				this->_eventQueue.emplace_back(StartBuildEvent{id, queueId});
 		}
 	);
 	updateList2(
