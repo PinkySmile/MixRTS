@@ -96,8 +96,6 @@ private:
 
 	template<typename T>
 	void _checkObjectLocked(const std::string &name, T &object, Player &owner);
-	template<typename T>
-	void _unlockObject(Faction &f, const std::string &&name, T &object, Player &owner) = delete;
 	void _unlockAll();
 	void _recomputeLocked();
 	bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size) const;

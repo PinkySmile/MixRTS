@@ -471,6 +471,7 @@ void GameManager::consumeEvent(const Event &event)
 			else
 				this->_unlockAll();
 			this->_isDebugUnlocked = !this->_isDebugUnlocked;
+			DEBUG_MODE = this->_isDebugUnlocked;
 		}
 	#endif
 	} else if (auto mouseMove = event.getIf<sf::Event::MouseMoved>()) {
@@ -650,20 +651,43 @@ noGrid:
 
 		auto &obj = out.back();
 
-		this->_onObjectSpawned(pos, map, player, obj, id);
 		if (nbTiles != nbConcreteTiles)
 			obj.damage(obj.getHealth() * (nbTiles - nbConcreteTiles) / (nbTiles * 2));
 
-		auto &parent = player.state.primaryBuildings[buildQueue];
+		auto parent = player.state.primaryBuildings[buildQueue];
 
 		if (parent)
 			parent->produced();
 		else if (player.state.queueBuildings.contains(buildQueue))
-			for (auto &p: player.state.queueBuildings[buildQueue])
+			for (auto p: player.state.queueBuildings[buildQueue])
 				if (!p->isObstructed()) {
 					p->produced();
+					parent = p;
 					break;
 				}
+		if (parent) {
+			auto exit = parent->getExitOffset();
+			auto spawn = parent->getSpawnOffset();
+
+			if (spawn) {
+				this->_onObjectSpawned(map.absToTileCoord(*spawn + parent->getPosition()), map, player, obj, id);
+				if (exit) {
+					auto next = *exit + parent->getPosition();
+
+					obj.moveTo(next);
+					obj.setDirection(obj.getPosition().angle(next));
+				}
+				return &obj;
+			}
+		}
+		this->_onObjectSpawned(pos, map, player, obj, id);
+		if constexpr (std::is_same_v<T, Building>) {
+			auto &gqueue = obj.getGivenQueue();
+			auto &bqueue = obj.getBuildQueue();
+
+			if (gqueue && bqueue && !parent && *gqueue == *bqueue)
+				obj.produced();
+		}
 		return &obj;
 	}
 	return nullptr;

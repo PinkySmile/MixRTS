@@ -969,10 +969,8 @@ void D2KUI::tileClicked(Vector2i absPos)
 
 		if (!this->_objectBuffer.empty()) {
 			this->_selectedObjects.clear();
-			for (auto b : this->_objectBuffer) {
-				this->_selectedObjects.emplace(b);
-				b->select();
-			}
+			this->_selectedObjects.emplace(this->_objectBuffer.back());
+			this->_objectBuffer.back()->select();
 		} else if (!this->_selectedObjects.empty()) {
 			MoveUnitEvent event;
 
@@ -982,16 +980,15 @@ void D2KUI::tileClicked(Vector2i absPos)
 				event.indices.push_back(s->getIndex());
 			this->_eventQueue.emplace_back(event);
 		}
-	} else {
-		for (auto b : this->_objectBuffer) {
-			auto it = this->_selectedObjects.find(b);
+	} else if (!this->_objectBuffer.empty()) {
+		auto b = this->_objectBuffer.back();
+		auto it = this->_selectedObjects.find(b);
 
-			if (it == this->_selectedObjects.end()) {
-				this->_selectedObjects.emplace(b);
-				b->select();
-			} else
-				this->_selectedObjects.erase(it);
-		}
+		if (it == this->_selectedObjects.end()) {
+			this->_selectedObjects.emplace(b);
+			b->select();
+		} else
+			this->_selectedObjects.erase(it);
 	}
 }
 

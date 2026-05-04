@@ -14,7 +14,7 @@
 
 float guiScale = 1.5f;
 #ifdef _DEBUG
-bool DEBUG_MODE = true;
+bool DEBUG_MODE = false;
 #endif
 
 void reloadViews(Vector2u size)

@@ -45,6 +45,8 @@ GameObject::GameObject(const GameObject &g) :
 	_selectBox(g._selectBox),
 	_size(g._size),
 	_position(g._position),
+	_spawnOffset(g._spawnOffset),
+	_exitOffset(g._exitOffset),
 	_currentDir(g._currentDir),
 	_turnSpeed(g._turnSpeed),
 	_buildSpeed(g._buildSpeed),
@@ -112,6 +114,20 @@ GameObject::GameObject(
 	assert_exp(json["size"]["x"].is_number());
 	assert_exp(json["size"].contains("y"));
 	assert_exp(json["size"]["y"].is_number());
+	if (json.contains("exit_offset")) {
+		assert_exp(json["exit_offset"].is_object());
+		assert_exp(json["exit_offset"].contains("x"));
+		assert_exp(json["exit_offset"]["x"].is_number());
+		assert_exp(json["exit_offset"].contains("y"));
+		assert_exp(json["exit_offset"]["y"].is_number());
+	}
+	if (json.contains("spawn_offset")) {
+		assert_exp(json["spawn_offset"].is_object());
+		assert_exp(json["spawn_offset"].contains("x"));
+		assert_exp(json["spawn_offset"]["x"].is_number());
+		assert_exp(json["spawn_offset"].contains("y"));
+		assert_exp(json["spawn_offset"]["y"].is_number());
+	}
 	assert_exp(!json.contains("directions") || json["directions"].is_number_unsigned());
 	assert_exp(!json.contains("build_speed") || json["build_speed"].is_number_unsigned());
 	assert_exp(!json.contains("group") || json["group"].is_string());
@@ -138,6 +154,10 @@ GameObject::GameObject(
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 	this->_buildSpeed = json.contains("build_speed") ? json["build_speed"].get<unsigned>() : -1;
 
+	if (json.contains("exit_offset"))
+		this->_exitOffset = {json["exit_offset"]["x"], json["exit_offset"]["y"]};
+	if (json.contains("spawn_offset"))
+		this->_spawnOffset = {json["spawn_offset"]["x"], json["spawn_offset"]["y"]};
 	if (json.contains("requires_queue_building"))
 		this->_requiresQueueBuilding = json["requires_queue_building"];
 	if (json.contains("queue"))
@@ -351,7 +371,7 @@ const IntRect &GameObject::getSelectBox() const
 	return this->_selectBox;
 }
 
-const Vector2u& GameObject::getSize() const
+const Vector2u &GameObject::getSize() const
 {
 	return this->_size;
 }
@@ -359,6 +379,16 @@ const Vector2u& GameObject::getSize() const
 Vector2i GameObject::getPosition() const
 {
 	return Vector2i(round(this->_position.x), round(this->_position.y));
+}
+
+const std::optional<Vector2i> &GameObject::getSpawnOffset() const
+{
+	return this->_spawnOffset;
+}
+
+const std::optional<Vector2i> &GameObject::getExitOffset() const
+{
+	return this->_exitOffset;
 }
 
 const std::vector<ConditionalAnim> &GameObject::getBaseAnims() const
@@ -592,4 +622,10 @@ void GameObject::built()
 const std::optional<std::string> &GameObject::getBuildQueue() const
 {
 	return this->_buildQueue;
+}
+
+void GameObject::setDirection(float angle)
+{
+	this->_currentDir = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+	this->_currentDir %= this->_anims.size();
 }

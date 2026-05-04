@@ -52,6 +52,8 @@ protected:
 	IntRect _selectBox;
 	Vector2u _size;
 	Vector2f _position;
+	std::optional<Vector2i> _spawnOffset;
+	std::optional<Vector2i> _exitOffset;
 	unsigned _currentDir = 0;
 	unsigned _turnSpeed = 0;
 	unsigned _buildSpeed;
@@ -117,6 +119,7 @@ public:
 
 	unsigned getBottom() const;
 	void setIndex(unsigned index);
+	void setDirection(float angle);
 	void setPosition(const sf::Vector2f &pos);
 	void heal(unsigned amount);
 	void damage(unsigned amount);
@@ -137,6 +140,8 @@ public:
 	[[nodiscard]] const IntRect &getSelectBox() const;
 	[[nodiscard]] const Vector2u &getSize() const;
 	[[nodiscard]] Vector2i getPosition() const;
+	[[nodiscard]] const std::optional<Vector2i> &getSpawnOffset() const;
+	[[nodiscard]] const std::optional<Vector2i> &getExitOffset() const;
 	[[nodiscard]] const std::vector<ConditionalAnim>& getBaseAnims() const;
 	[[nodiscard]] const ReqAndCombinator &getRequirements() const;
 	[[nodiscard]] const Mod &getBase() const;

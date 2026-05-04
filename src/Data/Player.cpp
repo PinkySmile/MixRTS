@@ -275,10 +275,14 @@ void Player::_tryEndBuild(PlayerQueue &queue)
 		// TODO: For place-first-build-later factions
 	} else if (queue.upgrade) {
 		this->state.elementsOwned[*queue.elementId]++;
+		queue.spent.clear();
 		this->resetQueue(*queue.queueId);
 		this->checkUnlocked(*queue.faction);
 	} else if (queue.unit) {
-		// TODO: Units
+		this->_parent.spawnUnit(this->state.index, this->_parent.getLoadedMap().pathFindingGrid.gridSize / 2, *queue.queueId, *queue.elementId);
+		queue.spent.clear();
+		this->resetQueue(*queue.queueId);
+		this->checkUnlocked(*queue.faction);
 	} else
 		assert_not_reached();
 }
