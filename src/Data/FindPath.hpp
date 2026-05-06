@@ -14,7 +14,25 @@
 #include "Resources/Assert.hpp"
 #include "GridMask.hpp"
 
-inline Color __getPFDebugColor(uint8_t tile)
+#define PATHFINDINGGRID_TYPE uint16_t
+struct PathFindingGrid {
+	bool textureOutOfSync;
+	sf::Image gridImage;
+	sf::Texture gridImageTexture;
+	std::vector<PATHFINDINGGRID_TYPE> grid;
+	Vector2u gridSize;
+};
+
+#define NB_PATHFINDING_BITS 6
+#define NB_PATHFINDING_OFFSET ((sizeof(PATHFINDINGGRID_TYPE) * 8) - NB_PATHFINDING_BITS)
+#define NB_PATHFINDING_MAX ((1 << NB_PATHFINDING_BITS) - 1)
+
+
+inline unsigned char PFGRIDMASK_NB_UNITS(PATHFINDINGGRID_TYPE tile)
+{
+	return tile >> NB_PATHFINDING_OFFSET;
+}
+inline Color __getPFDebugColor(PATHFINDINGGRID_TYPE tile)
 {
 	Color color;
 
@@ -22,20 +40,20 @@ inline Color __getPFDebugColor(uint8_t tile)
 	color.g = 0;
 	color.b = 0;
 	color.a = 128;
-	if ((tile >> 5) > 5) {
+	if (PFGRIDMASK_NB_UNITS(tile) > 5) {
 		color.a = 255;
 		return color;
 	}
-	if ((tile >> 5) == 5) {
+	if (PFGRIDMASK_NB_UNITS(tile) == 5) {
 		color.r = 255;
 		return color;
 	}
-	if ((tile >> 5) != 0) {
+	if (PFGRIDMASK_NB_UNITS(tile) != 0) {
 		color.r = 255;
 		color.g = 128;
 		return color;
 	}
-	if ((tile & 0x1F) == 0) {
+	if ((tile & ((1 << NB_PATHFINDING_OFFSET) - 1)) == 0) {
 		color.r = 255;
 		return color;
 	}
@@ -53,29 +71,18 @@ inline Color __getPFDebugColor(uint8_t tile)
 	return color;
 }
 
-#define PATHFINDINGGRID_TYPE uint16_t
-struct PathFindingGrid {
-	bool textureOutOfSync;
-	sf::Image gridImage;
-	sf::Texture gridImageTexture;
-	std::vector<PATHFINDINGGRID_TYPE> grid;
-	Vector2u gridSize;
-};
-
-#define NB_PATHFINDING_BITS 6
-#define NB_PATHFINDING_OFFSET ((sizeof(PATHFINDINGGRID_TYPE) * 8) - NB_PATHFINDING_BITS)
-#define NB_PATHFINDING_MAX ((1 << NB_PATHFINDING_BITS) - 1)
 inline unsigned char PFGRIDMASK_NB_UNITS(PathFindingGrid &g, unsigned x, unsigned y)
 {
-	return g.grid[x + y * g.gridSize.x] >> NB_PATHFINDING_OFFSET;
+	return PFGRIDMASK_NB_UNITS(g.grid[x + y * g.gridSize.x]);
 }
 inline void PFGRIDMASK_ADD_UNIT(PathFindingGrid &g, unsigned x, unsigned y, unsigned count)
 {
 	assert_exp(PFGRIDMASK_NB_UNITS(g, x, y) + count <= NB_PATHFINDING_MAX);
 	g.grid[x + y * g.gridSize.x] += (count << NB_PATHFINDING_OFFSET);
-	if (PFGRIDMASK_NB_UNITS(g, x, y) == count) {
-		auto color = __getPFDebugColor(g.grid[x + y * g.gridSize.x]);
 
+	sf::Color color = __getPFDebugColor(g.grid[x + y * g.gridSize.x]);
+
+	if (color != g.gridImage.getPixel({x, y})) {
 		g.gridImage.setPixel({x, y}, color);
 		g.textureOutOfSync = true;
 	}
@@ -84,9 +91,10 @@ inline void PFGRIDMASK_DEL_UNIT(PathFindingGrid &g, unsigned x, unsigned y, unsi
 {
 	assert_exp(PFGRIDMASK_NB_UNITS(g, x, y) >= count);
 	g.grid[x + y * g.gridSize.x] -= (count << NB_PATHFINDING_OFFSET);
-	if (PFGRIDMASK_NB_UNITS(g, x, y) == 0) {
-		auto color = __getPFDebugColor(g.grid[x + y * g.gridSize.x]);
 
+	sf::Color color = __getPFDebugColor(g.grid[x + y * g.gridSize.x]);
+
+	if (color != g.gridImage.getPixel({x, y})) {
 		g.gridImage.setPixel({x, y}, color);
 		g.textureOutOfSync = true;
 	}
