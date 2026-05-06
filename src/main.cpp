@@ -38,6 +38,21 @@ void reloadViews(Vector2u size)
 	game->gui.setAbsoluteView(viewGui);
 }
 
+void dispFPS(float frameTime)
+{
+	auto old = game->screen->getView();
+	auto str = sf::String(std::to_string(static_cast<unsigned>(round(1 / frameTime))) + "FPS");
+	Vector2u size = game->screen->getSize();
+	sf::View view{sf::FloatRect{
+		{0, 0},
+		size.to<float>()
+	}};
+
+	game->screen->setView(view);
+	game->screen->displayElement(str, {0, size.y - 30.f}, size.x, Screen::ALIGN_RIGHT);
+	game->screen->setView(old);
+}
+
 int main()
 {
 #ifndef PROPAGATE_CRASH
@@ -53,6 +68,8 @@ int main()
 		game->screen->setMouseCursorGrabbed(true);
 		game->locale = "fr";
 
+		sf::Clock clock;
+		sf::Text text{game->font};
 		Mod &mod = game->modManager.get("d2k");
 		std::unordered_map<std::string, Faction> factions;
 		sf::Music music{"mods/dune2000/music/AMBUSH.ogg"};
@@ -98,6 +115,7 @@ int main()
 			//displayGrid();
 			game->gui.draw();
 			manager.renderAbove();
+			dispFPS(clock.restart().asSeconds());
 			game->screen->display();
 		}
 		return 0;

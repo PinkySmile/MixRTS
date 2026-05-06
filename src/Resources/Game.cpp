@@ -15,6 +15,7 @@ Game::Game(const std::filesystem::path &fontPath, const std::filesystem::path &l
 	gui(*this->screen)
 {
 	this->screen->setFramerateLimit(150);
+	this->screen->setFont(this->font);
 	assert_exp(!game);
 	game = this;
 }
