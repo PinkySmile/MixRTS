@@ -64,8 +64,8 @@ int main()
 		new Game("/usr/share/fonts/noto/NotoSans-Regular.ttf");
 	#endif
 		game->modManager.loadMod("mods/dune2000/");
-		game->screen->setMouseCursorVisible(false);
-		game->screen->setMouseCursorGrabbed(true);
+		//game->screen->setMouseCursorVisible(false);
+		//game->screen->setMouseCursorGrabbed(true);
 		game->locale = "fr";
 
 		sf::Clock clock;
@@ -79,9 +79,9 @@ int main()
 		std::vector<Faction> allFactions{factions.at("d2k:atreides")};
 		GameManager manager{allFactions};
 		auto &players = manager.getPlayers();
-		float timer = 0;
 		auto &map = manager.getLoadedMap();
 		size_t spawn = 0;
+		bool b = false;
 
 		manager.loadMap(mod, "mods/dune2000/maps/8PLAY1");
 		for (size_t i = 1; i < map.grid.startAreas.size(); i++)
@@ -92,7 +92,7 @@ int main()
 		//manager.addPlayer(0, HSLColor{145, 250, 900}); // Ordos's green
 		players[0].setEnabled(true);
 
-		music.play();
+		//music.play();
 		reloadViews(game->screen->getSize());
 		while (game->screen->isOpen()) {
 			while (auto event = game->screen->pollEvent()) {
@@ -105,11 +105,11 @@ int main()
 			}
 
 			manager.update();
-			timer++;
-			if (timer >= 2.5) {
-				manager.updateRender();
-				timer -= 2.5;
-			}
+			manager.update();
+			if (b)
+				manager.update();
+			b = !b;
+			manager.updateRender();
 			game->screen->clear(sf::Color{0x80, 0xFF, 0x40});
 			manager.render();
 			//displayGrid();

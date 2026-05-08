@@ -228,6 +228,10 @@ void GameManager::_renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale)
 
 	sprite.setScale(scale);
 	game->screen->draw(sprite);
+	for (auto &b : this->_liveBuildings)
+		b.renderPathFindingPath();
+	for (auto &b : this->_liveUnits)
+		b.renderPathFindingPath();
 }
 
 static void displayTile(uint32_t tile, sf::RectangleShape &shape)
@@ -821,6 +825,47 @@ void GameManager::deregisterObject(GameObject *o)
 
 	if (it != l.end())
 		l.erase(it);
+}
+
+void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, int count)
+{
+	// TODO: Handle non-square grids
+	Vector2i minv = {
+		static_cast<int>(floor(std::min(std::min(quad.pt1.x, quad.pt2.x), std::min(quad.pt3.x, quad.pt4.x)) / tileSize.x)),
+		static_cast<int>(floor(std::min(std::min(quad.pt1.y, quad.pt2.y), std::min(quad.pt3.y, quad.pt4.y)) / tileSize.y))
+	};
+	Vector2i maxv = {
+		static_cast<int>(ceil(std::max(std::max(quad.pt1.x, quad.pt2.x), std::max(quad.pt3.x, quad.pt4.x)) / tileSize.x)),
+		static_cast<int>(ceil(std::max(std::max(quad.pt1.y, quad.pt2.y), std::max(quad.pt3.y, quad.pt4.y)) / tileSize.y))
+	};
+
+	for (int y = std::max(minv.y, 0); y < std::min<int>(maxv.y, state.gridSize.y); y++)
+		for (int x = std::max(minv.x, 0); x < std::min<int>(maxv.x, state.gridSize.x); x++)
+			if (count < 0)
+				PFGRIDMASK_DEL_UNIT(state, x, y, -count);
+			else
+				PFGRIDMASK_ADD_UNIT(state, x, y, count);
+}
+
+void GameManager::modUnitInArea(const MapState::Quad &quad, int count)
+{
+	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, count);
+	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, count);
+	for (auto &map : this->_mapStates)
+		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, count);
+}
+
+void GameManager::modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, int count)
+{
+	if (count < 0)
+		PFGRIDMASK_DEL_UNIT(special, rel.x, rel.y, -count);
+	else
+		PFGRIDMASK_ADD_UNIT(special, rel.x, rel.y, count);
+	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, count);
+	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, count);
+	for (auto &map : this->_mapStates)
+		if (&map.pathFindingGrid != &special)
+			this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, count);
 }
 
 GameObject *GameManager::getObjectById(unsigned int index)

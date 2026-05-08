@@ -45,6 +45,7 @@ GameObject::GameObject(const GameObject &g) :
 	_selectBox(g._selectBox),
 	_size(g._size),
 	_position(g._position),
+	_gridPos(g._gridPos),
 	_spawnOffset(g._spawnOffset),
 	_exitOffset(g._exitOffset),
 	_currentDir(g._currentDir),
@@ -60,6 +61,7 @@ GameObject::GameObject(const GameObject &g) :
 	_index(g._index),
 	_tileCount(g._tileCount),
 	_requiresQueueBuilding(g._requiresQueueBuilding),
+	_boundToGrid(g._boundToGrid),
 	_disposable(g._disposable),
 	_pathCached(g._pathCached),
 	_initGrid(g._initGrid),
@@ -90,9 +92,10 @@ GameObject::GameObject(
 	_base(faction)
 {
 	assert_exp(!json.contains("requires_queue_building") || json["requires_queue_building"].is_boolean());
+	assert_exp(!json.contains("grid_bound") || json["grid_bound"].is_boolean());
 	assert_exp(!json.contains("queue") || json["queue"].is_string());
 	assert_exp(!json.contains("build") || json["build"].is_string());
-	assert_exp(!json.contains("speed") || json["speed"].is_number_unsigned());
+	assert_exp(!json.contains("speed") || json["speed"].is_number());
 	assert_exp(!json.contains("limit") || json["limit"].is_number_unsigned());
 	assert_exp(!json.contains("tiles") || json["tiles"].is_array());
 	if (json.contains("tiles"))
@@ -101,40 +104,29 @@ GameObject::GameObject(
 			for (size_t j = 0; j < json["tiles"][i].size(); j++)
 				assert_msg(json["tiles"][i][j].is_number(), "json[\"tiles\"][" + std::to_string(i) + "][" + std::to_string(j) + "]");
 		}
-	assert_exp(json.contains("hp"));
-	assert_exp(json["hp"].is_number());
-	assert_exp(json.contains("cost"));
-	assert_exp(json["cost"].is_object());
+	assert_exp(json.contains("hp") && json["hp"].is_number());
+	assert_exp(json.contains("cost") && json["cost"].is_object());
 	for (auto &[key, value] : json["cost"].items())
 		assert_msg(value.is_number(), "json[\"cost\"][\"" + key + "\"]");
 	assert_exp(!json.contains("select") || json["select"].is_object());
-	assert_exp(json.contains("size"));
-	assert_exp(json["size"].is_object());
-	assert_exp(json["size"].contains("x"));
-	assert_exp(json["size"]["x"].is_number());
-	assert_exp(json["size"].contains("y"));
-	assert_exp(json["size"]["y"].is_number());
+	assert_exp(json.contains("size") && json["size"].is_object());
+	assert_exp(json["size"].contains("x") && json["size"]["x"].is_number());
+	assert_exp(json["size"].contains("y") && json["size"]["y"].is_number());
 	if (json.contains("exit_offset")) {
 		assert_exp(json["exit_offset"].is_object());
-		assert_exp(json["exit_offset"].contains("x"));
-		assert_exp(json["exit_offset"]["x"].is_number());
-		assert_exp(json["exit_offset"].contains("y"));
-		assert_exp(json["exit_offset"]["y"].is_number());
+		assert_exp(json["exit_offset"].contains("x") && json["exit_offset"]["x"].is_number());
+		assert_exp(json["exit_offset"].contains("y") && json["exit_offset"]["y"].is_number());
 	}
 	if (json.contains("spawn_offset")) {
 		assert_exp(json["spawn_offset"].is_object());
-		assert_exp(json["spawn_offset"].contains("x"));
-		assert_exp(json["spawn_offset"]["x"].is_number());
-		assert_exp(json["spawn_offset"].contains("y"));
-		assert_exp(json["spawn_offset"]["y"].is_number());
+		assert_exp(json["spawn_offset"].contains("x") && json["spawn_offset"]["x"].is_number());
+		assert_exp(json["spawn_offset"].contains("y") && json["spawn_offset"]["y"].is_number());
 	}
 	assert_exp(!json.contains("directions") || json["directions"].is_number_unsigned());
 	assert_exp(!json.contains("build_speed") || json["build_speed"].is_number_unsigned());
 	assert_exp(!json.contains("group") || json["group"].is_string());
-	assert_exp(json.contains("requirements"));
-	assert_exp(json["requirements"].is_array());
-	assert_exp(json.contains("anims"));
-	assert_exp(json["anims"].is_array());
+	assert_exp(json.contains("requirements") && json["requirements"].is_array());
+	assert_exp(json.contains("anims") && json["anims"].is_array());
 	assert_exp(!json.contains("sight") || json["sight"].is_number());
 	assert_exp(!json.contains("turn_speed") || json["turn_speed"].is_number());
 	assert_exp(!json.contains("select_sound") || json["select_sound"].is_string());
@@ -143,17 +135,20 @@ GameObject::GameObject(
 	assert_exp(!json.contains("proxy") || json["proxy"].is_string());
 
 	auto &base = faction.getBase();
-	unsigned directions = json.contains("directions") ? json["directions"].get<unsigned>() : 1;
 
 	this->_id = id;
-	this->_limit = json.contains("limit") ? json["limit"].get<unsigned>() : UINT32_MAX;
 	this->_hp = json["hp"];
 	this->_maxHp = this->_hp;
 	this->_cost = json["cost"];
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
-	this->_buildSpeed = json.contains("build_speed") ? json["build_speed"].get<unsigned>() : -1;
 
+	if (json.contains("limit"))
+		this->_limit = json["limit"];
+	if (json.contains("build_speed"))
+		this->_buildSpeed = json["build_speed"];
+	if (json.contains("grid_bound"))
+		this->_boundToGrid = json["grid_bound"];
 	if (json.contains("exit_offset"))
 		this->_exitOffset = {json["exit_offset"]["x"], json["exit_offset"]["y"]};
 	if (json.contains("spawn_offset"))
@@ -181,7 +176,7 @@ GameObject::GameObject(
 			try {
 				this->_passFlags = std::stoul(str, nullptr, 16);
 			} catch (std::exception &) {
-				assert_not_reached_msg("Invalid flag hex \"pass_flags\"");
+				assert_not_reached_msg("Invalid flag hex \"pass_flags\": '" + str + "'");
 			}
 		} else
 			this->_passFlags = json["pass_flags"];
@@ -202,6 +197,8 @@ GameObject::GameObject(
 		this->_selectSound = &sounds.at(selectSound);
 	}
 	if (json.contains("directions")) {
+		unsigned directions = json["directions"];
+
 		this->_anims.resize(directions);
 		for (auto &anim: json["anims"])
 			for (size_t i = 0; i < directions; i++)
@@ -259,11 +256,12 @@ bool GameObject::_handleOrder(const Order &o)
 		return false;
 	} else if (auto move = std::get_if<MoveOrder>(&o)) {
 		if (!this->_pathCached) {
-			this->_pathCache.emplace_back(move->destination);
+			CrashAndTurn::computePath(*this->pfGrid, this->_position, move->destination, this->_passFlags, this->_pathCache);
 			this->_pathCached = true;
 		}
 
-		float a = this->_position.angle(move->destination);
+		auto &dest = this->_pathCache.front();
+		float a = this->_position.angle(dest);
 		unsigned angle = round((a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
 
 		angle %= this->_anims.size();
@@ -271,16 +269,16 @@ bool GameObject::_handleOrder(const Order &o)
 			return false;
 
 		auto pos = this->_position;
-		auto diff = move->destination - pos;
+		auto diff = dest - pos;
 
 		diff.normalize();
-		diff *= this->_speed / 32.f;
+		diff *= this->_speed;
 		pos += diff;
 
-		auto diff2 = move->destination - pos;
+		auto diff2 = dest - pos;
 
-		if (pos == move->destination || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
-			this->setPosition(move->destination);
+		if (pos == dest || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
+			this->setPosition(dest);
 			return true;
 		} else {
 			this->setPosition(pos);
@@ -313,12 +311,12 @@ void GameObject::render(int layer)
 			this->_displayAnim(anim.getAnim());
 }
 
-void GameObject::setPosition(const sf::Vector2f &pos)
+void GameObject::setPosition(const Vector2f &pos)
 {
 	// OPTIMIZE: Diff instead of undoing it and redoing it
 	this->deinitGlobalGrid();
-	this->_position.x = pos.x;
-	this->_position.y = pos.y;
+	this->_position = pos;
+	this->_gridPos = this->map->absToTileCoord(pos + this->_size / 2);
 	this->initGlobalGrid();
 }
 
@@ -471,13 +469,16 @@ void GameObject::moveTo(const Vector2i &pos)
 {
 	if (!this->canMove())
 		return;
-	this->_orderQueue.emplace_back(MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos))});
-	//this->_orderQueue.emplace_back(MoveOrder{pos + this->_size / 2});
+	if (this->_boundToGrid)
+		this->_orderQueue.emplace_back(MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos))});
+	else
+		this->_orderQueue.emplace_back(MoveOrder{pos + this->_size / 2});
 }
 
 void GameObject::clearOrders()
 {
 	this->_orderQueue.clear();
+	this->_pathCached = false;
 }
 
 void GameObject::initGlobalGrid()
@@ -485,39 +486,42 @@ void GameObject::initGlobalGrid()
 	if (this->_initGrid)
 		return;
 	if (this->_tiles) {
-		for (size_t y = 0; y < this->_tiles->size() * this->map->tileSize.y; y++) {
-			if (this->_position.y + static_cast<int>(y) < 0)
-				continue;
-			if (this->_position.y + y >= this->pfGrid->gridSize.y)
-				break;
+		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
+			auto &line = (*this->_tiles)[gy];
 
-			auto &line = (*this->_tiles)[y / this->map->tileSize.y];
-
-			for (size_t x = 0; x < line.size() * this->map->tileSize.x; x++) {
-				if (!(line[x / this->map->tileSize.x] & MASK_SOLID)) {
-					x += this->map->tileSize.x - 1;
+			for (size_t gx = 0; gx < line.size(); gx++) {
+				if (!(line[gx] & MASK_SOLID))
 					continue;
-				}
-				if (this->_position.x + static_cast<int>(x) < 0)
-					continue;
-				if (this->_position.x + x >= this->pfGrid->gridSize.x)
-					break;
-				PFGRIDMASK_ADD_UNIT(*this->pfGrid, this->_position.x + x, this->_position.y + y, this->_tileCount);
+				this->manager->modUnitInArea(
+					this->map->tileCoordToAbs({this->_gridPos.x + gx, this->_gridPos.y + gy}),
+					this->_tileCount
+				);
 			}
 		}
 	} else {
-		for (size_t y = 0; y < this->_size.y; y++) {
-			if (this->_position.y + static_cast<int>(y) < 0)
-				continue;
-			if (this->_position.y + y >= this->pfGrid->gridSize.y)
-				break;
-			for (size_t x = 0; x < this->_size.x; x++) {
-				if (this->_position.x + static_cast<int>(x) < 0)
-					continue;
-				if (this->_position.x + x >= this->pfGrid->gridSize.x)
-					break;
-				PFGRIDMASK_ADD_UNIT(*this->pfGrid, this->_position.x + x, this->_position.y + y, this->_tileCount);
-			}
+		if (this->_boundToGrid) {
+			this->manager->modUnitInArea(
+				{
+					this->_position,
+					{this->_position.x + this->_size.x, this->_position.y},
+					{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
+					{this->_position.x, this->_position.y + this->_size.y},
+				},
+				this->map->pathFindingGrid,
+				this->_gridPos,
+				this->map->tileSize,
+				this->_tileCount
+			);
+		} else {
+			this->manager->modUnitInArea(
+				{
+					this->_position,
+					{this->_position.x + this->_size.x, this->_position.y},
+					{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
+					{this->_position.x, this->_position.y + this->_size.y},
+				},
+				this->_tileCount
+			);
 		}
 	}
 	this->manager->registerObject(this);
@@ -529,39 +533,42 @@ void GameObject::deinitGlobalGrid()
 	if (!this->_initGrid)
 		return;
 	if (this->_tiles) {
-		for (size_t y = 0; y < this->_tiles->size() * this->map->tileSize.y; y++) {
-			if (this->_position.y + static_cast<int>(y) < 0)
-				continue;
-			if (this->_position.y + y >= this->pfGrid->gridSize.y)
-				break;
+		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
+			auto &line = (*this->_tiles)[gy];
 
-			auto &line = (*this->_tiles)[y / this->map->tileSize.y];
-
-			for (size_t x = 0; x < line.size() * this->map->tileSize.x; x++) {
-				if (!(line[x / this->map->tileSize.x] & MASK_SOLID)) {
-					x += this->map->tileSize.x - 1;
+			for (size_t gx = 0; gx < line.size(); gx++) {
+				if (!(line[gx] & MASK_SOLID))
 					continue;
-				}
-				if (this->_position.x + static_cast<int>(x) < 0)
-					continue;
-				if (this->_position.x + x >= this->pfGrid->gridSize.x)
-					break;
-				PFGRIDMASK_DEL_UNIT(*this->pfGrid, this->_position.x + x, this->_position.y + y, this->_tileCount);
+				this->manager->modUnitInArea(
+					this->map->tileCoordToAbs({this->_gridPos.x + gx, this->_gridPos.y + gy}),
+					-this->_tileCount
+				);
 			}
 		}
 	} else {
-		for (size_t y = 0; y < this->_size.y; y++) {
-			if (this->_position.y + static_cast<int>(y) < 0)
-				continue;
-			if (this->_position.y + y >= this->pfGrid->gridSize.y)
-				break;
-			for (size_t x = 0; x < this->_size.x; x++) {
-				if (this->_position.x + static_cast<int>(x) < 0)
-					continue;
-				if (this->_position.x + x >= this->pfGrid->gridSize.x)
-					break;
-				PFGRIDMASK_DEL_UNIT(*this->pfGrid, this->_position.x + x, this->_position.y + y, this->_tileCount);
-			}
+		if (this->_boundToGrid) {
+			this->manager->modUnitInArea(
+				{
+					this->_position,
+					{this->_position.x + this->_size.x, this->_position.y},
+					{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
+					{this->_position.x, this->_position.y + this->_size.y},
+				},
+				this->map->pathFindingGrid,
+				this->_gridPos,
+				this->map->tileSize,
+				-this->_tileCount
+			);
+		} else {
+			this->manager->modUnitInArea(
+				{
+					this->_position,
+					{this->_position.x + this->_size.x, this->_position.y},
+					{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
+					{this->_position.x, this->_position.y + this->_size.y},
+				},
+				-this->_tileCount
+			);
 		}
 	}
 	this->manager->deregisterObject(this);
@@ -628,4 +635,20 @@ void GameObject::setDirection(float angle)
 {
 	this->_currentDir = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
 	this->_currentDir %= this->_anims.size();
+}
+
+void GameObject::renderPathFindingPath()
+{
+	if (!this->_pathCached)
+		return;
+
+	sf::VertexArray arr{sf::PrimitiveType::LineStrip, this->_pathCache.size() + 1};
+
+	arr[0].position = this->_position + this->_size / 2;
+	arr[0].color = sf::Color::Blue;
+	for (size_t i = 0; i < this->_pathCache.size(); i++) {
+		arr[i + 1].position = this->_pathCache[i] + this->_size / 2;
+		arr[i + 1].color = sf::Color::Blue;
+	}
+	game->screen->draw(arr);
 }

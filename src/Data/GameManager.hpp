@@ -54,7 +54,9 @@ struct MapState {
 	[[nodiscard]] bool allHasAllGridBits(const Quad &abs, uint32_t bits) const;
 	[[nodiscard]] bool allHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const;
 	[[nodiscard]] Vector2i absToTileCoord(const Vector2i &) const;
+	[[nodiscard]] Vector2f absToRelCoord(const Vector2i &) const;
 	[[nodiscard]] Vector2i topLeftCoordToAbs(const Vector2i &) const;
+	[[nodiscard]] Vector2i relCoordToAbs(const Vector2f &) const;
 	[[nodiscard]] Quad tileCoordToAbs(const Vector2i &) const;
 };
 
@@ -104,6 +106,7 @@ private:
 	void _onObjectSpawned(Vector2i pos, MapState &map, Player &owner, GameObject &obj, const std::string &id);
 	template<typename T>
 	T *_spawnObj(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, std::list<T> &out, const std::unordered_map<std::string, const T *> &in);
+	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, int count);
 
 public:
 	GameManager(const std::vector<Faction> &factions);
@@ -125,6 +128,8 @@ public:
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
 	void registerObject(GameObject *o);
 	void deregisterObject(GameObject *o);
+	void modUnitInArea(const MapState::Quad &quad, int count);
+	void modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, int count);
 };
 
 #include "MapState.inl"

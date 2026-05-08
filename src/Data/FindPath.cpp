@@ -18,10 +18,11 @@ void AStar::computePath(
 void CrashAndTurn::computePath(
 	const PathFindingGrid &,
 	Vector2i,
-	Vector2i,
+	Vector2i dest,
 	uint16_t,
 	std::vector<Vector2i> &buffer
 )
 {
 	buffer.clear();
+	buffer.push_back(dest);
 }

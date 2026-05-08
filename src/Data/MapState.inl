@@ -10,6 +10,7 @@
 #include "Resources/Assert.hpp"
 #include "GameManager.hpp"
 
+
 inline Vector2i MapState::absToTileCoord(const Vector2i &p) const
 {
 	return {
@@ -18,7 +19,20 @@ inline Vector2i MapState::absToTileCoord(const Vector2i &p) const
 	};
 }
 
+inline Vector2f MapState::absToRelCoord(const Vector2i &p) const
+{
+	return {
+		p.x / static_cast<float>(this->tileSize.x),
+		p.y / static_cast<float>(this->tileSize.y)
+	};
+}
+
 inline Vector2i MapState::topLeftCoordToAbs(const Vector2i &p) const
+{
+	return {static_cast<int>(p.x * this->tileSize.x), static_cast<int>(p.y * this->tileSize.y)};
+}
+
+inline Vector2i MapState::relCoordToAbs(const Vector2f &p) const
 {
 	return {static_cast<int>(p.x * this->tileSize.x), static_cast<int>(p.y * this->tileSize.y)};
 }
