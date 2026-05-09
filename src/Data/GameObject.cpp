@@ -256,11 +256,40 @@ bool GameObject::_handleOrder(const Order &o)
 		return false;
 	} else if (auto move = std::get_if<MoveOrder>(&o)) {
 		if (!this->_pathCached) {
-			CrashAndTurn::computePath(*this->pfGrid, this->_position, move->destination, this->_passFlags, this->_pathCache);
+			this->_cachedDest = move->destination;
+			if (this->_boundToGrid) {
+				AStar::computePath(
+					this->map->pathFindingGrid,
+					this->_gridPos,
+					this->map->absToTileCoord(move->destination),
+					{1, 1},
+					{1, 1},
+					this->_passFlags,
+					this->_pathCache
+				);
+				for (auto &p : this->_pathCache)
+					p = this->map->topLeftCoordToAbs(p);
+			} else
+				AStar::computePath(
+					*this->pfGrid,
+					this->_position,
+					move->destination,
+					this->_size,
+					{1, 1},
+					this->_passFlags,
+					this->_pathCache
+				);
+			while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
+				this->_pathCache.pop_back();
+			this->_cachedDebug = AStar::getDebugImage();
+			this->_cachedDebugTexLoaded = false;
 			this->_pathCached = true;
 		}
 
-		auto &dest = this->_pathCache.front();
+		if (this->_pathCache.empty())
+			return true;
+
+		auto &dest = this->_pathCache.back();
 		float a = this->_position.angle(dest);
 		unsigned angle = round((a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
 
@@ -279,11 +308,10 @@ bool GameObject::_handleOrder(const Order &o)
 
 		if (pos == dest || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
 			this->setPosition(dest);
-			return true;
-		} else {
+			this->_pathCache.pop_back();
+		} else
 			this->setPosition(pos);
-			return false;
-		}
+		return false;
 	}
 	return true;
 }
@@ -299,9 +327,15 @@ void GameObject::update()
 	for (auto &anim : this->_anims[this->_currentDir])
 		if (anim())
 			anim.update();
-	if (!this->_orderQueue.empty())
-		if (this->_handleOrder(this->_orderQueue.front()))
+	if (!this->_orderQueue.empty()) {
+		if (this->_firstEvent)
+			this->_pathCached = false;
+		if (this->_handleOrder(this->_orderQueue.front())) {
 			this->_orderQueue.pop_front();
+			this->_firstEvent = true;
+		} else
+			this->_firstEvent = false;
+	}
 }
 
 void GameObject::render(int layer)
@@ -478,7 +512,7 @@ void GameObject::moveTo(const Vector2i &pos)
 void GameObject::clearOrders()
 {
 	this->_orderQueue.clear();
-	this->_pathCached = false;
+	this->_firstEvent = true;
 }
 
 void GameObject::initGlobalGrid()
@@ -493,7 +527,10 @@ void GameObject::initGlobalGrid()
 				if (!(line[gx] & MASK_SOLID))
 					continue;
 				this->manager->modUnitInArea(
-					this->map->tileCoordToAbs({this->_gridPos.x + gx, this->_gridPos.y + gy}),
+					this->map->tileCoordToAbs({
+						static_cast<int>(this->_gridPos.x + gx),
+						static_cast<int>(this->_gridPos.y + gy)
+					}),
 					this->_tileCount
 				);
 			}
@@ -540,7 +577,10 @@ void GameObject::deinitGlobalGrid()
 				if (!(line[gx] & MASK_SOLID))
 					continue;
 				this->manager->modUnitInArea(
-					this->map->tileCoordToAbs({this->_gridPos.x + gx, this->_gridPos.y + gy}),
+					this->map->tileCoordToAbs({
+						static_cast<int>(this->_gridPos.x + gx),
+						static_cast<int>(this->_gridPos.y + gy)
+					}),
 					-this->_tileCount
 				);
 			}
@@ -642,13 +682,34 @@ void GameObject::renderPathFindingPath()
 	if (!this->_pathCached)
 		return;
 
+	if (!this->_cachedDebugTexLoaded) {
+		assert_exp(this->_cachedDebugTex.loadFromImage(this->_cachedDebug));
+		this->_cachedDebugTexLoaded = true;
+	}
+
 	sf::VertexArray arr{sf::PrimitiveType::LineStrip, this->_pathCache.size() + 1};
+	sf::VertexArray arr2{sf::PrimitiveType::LineStrip, 2};
 
 	arr[0].position = this->_position + this->_size / 2;
 	arr[0].color = sf::Color::Blue;
-	for (size_t i = 0; i < this->_pathCache.size(); i++) {
-		arr[i + 1].position = this->_pathCache[i] + this->_size / 2;
-		arr[i + 1].color = sf::Color::Blue;
+	for (size_t i = this->_pathCache.size(); i > 0; i--) {
+		arr[i].position = this->_pathCache[i - 1] + this->_size / 2;
+		arr[i].color = sf::Color::Blue;
 	}
 	game->screen->draw(arr);
+
+	arr2[0].position = this->_position + this->_size / 2;
+	arr2[0].color = sf::Color::Green;
+	arr2[1].position = this->_cachedDest + this->_size / 2;
+	arr2[1].color = sf::Color::Green;
+	game->screen->draw(arr2);
+
+	sf::Sprite sprite{this->_cachedDebugTex};
+	auto scale = this->pfGrid->gridSize;
+
+	scale.x /= this->_cachedDebugTex.getSize().x;
+	scale.y /= this->_cachedDebugTex.getSize().y;
+	sprite.setPosition({0, 0});
+	sprite.setScale(scale);
+	game->screen->draw(sprite);
 }

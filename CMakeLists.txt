@@ -131,7 +131,8 @@ add_executable(
 	src/Data/GameObject.hpp
 	src/Data/MultiSound.cpp
 	src/Data/MultiSound.hpp
-	src/Data/FindPath.cpp
+	src/Data/FindPathAStar.cpp
+	src/Data/FindPathCrashAndTurn.cpp
 	src/Data/FindPath.hpp
 	src/Data/MapState.inl
 	src/Data/GridMask.hpp

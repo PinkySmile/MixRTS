@@ -106,9 +106,12 @@ namespace AStar
 		const PathFindingGrid &grid,
 		Vector2i currentPos,
 		Vector2i dest,
+		Vector2u hitBoxSize,
+		Vector2u step,
 		uint16_t mask,
 		std::vector<Vector2i> &buffer
 	);
+	sf::Image getDebugImage();
 }
 namespace CrashAndTurn
 {
@@ -116,9 +119,12 @@ namespace CrashAndTurn
 		const PathFindingGrid &grid,
 		Vector2i currentPos,
 		Vector2i dest,
+		Vector2u hitBoxSize,
+		Vector2u step,
 		uint16_t mask,
 		std::vector<Vector2i> &buffer
 	);
+	sf::Image getDebugImage();
 }
 
 

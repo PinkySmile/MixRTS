@@ -46,6 +46,9 @@ protected:
 	std::optional<std::string> _buildQueue;
 	std::optional<std::string> _proxy;
 	std::vector<Vector2i> _pathCache;
+	Vector2i _cachedDest;
+	sf::Image _cachedDebug;
+	sf::Texture _cachedDebugTex;
 	std::deque<Order> _orderQueue;
 	std::string _group;
 	std::string _id;
@@ -68,9 +71,11 @@ protected:
 	unsigned _index;
 	unsigned char _tileCount = 5;
 	bool _requiresQueueBuilding = true;
+	bool _cachedDebugTexLoaded = false;
 	bool _boundToGrid = false;
 	bool _disposable = false;
 	bool _pathCached = false;
+	bool _firstEvent = true;
 	bool _initGrid = false;
 	bool _solid = true;
 	bool _fake;
