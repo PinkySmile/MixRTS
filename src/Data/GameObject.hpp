@@ -37,6 +37,7 @@ class GameObject {
 protected:
 	const Faction &_base;
 	const MultiSound *_buildSound = nullptr;
+	const MultiSound *_doSound = nullptr;
 	const MultiSound *_selectSound = nullptr;
 	std::set<Vector2i> _checkTiles;
 	std::optional<std::vector<std::vector<uint8_t>>> _tiles;

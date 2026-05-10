@@ -31,6 +31,7 @@ void GameObject::_displayAnim(Animation &anim)
 GameObject::GameObject(const GameObject &g) :
 	_base(g._base),
 	_buildSound(g._buildSound),
+	_doSound(g._doSound),
 	_selectSound(g._selectSound),
 	_checkTiles(g._checkTiles),
 	_tiles(g._tiles),
@@ -129,6 +130,7 @@ GameObject::GameObject(
 	assert_exp(json.contains("anims") && json["anims"].is_array());
 	assert_exp(!json.contains("sight") || json["sight"].is_number());
 	assert_exp(!json.contains("turn_speed") || json["turn_speed"].is_number());
+	assert_exp(!json.contains("do_sound") || json["do_sound"].is_string());
 	assert_exp(!json.contains("select_sound") || json["select_sound"].is_string());
 	assert_exp(!json.contains("pass_flags") || json["pass_flags"].is_string() || json["pass_flags"].is_number_unsigned());
 	assert_exp(!json.contains("fake") || json["fake"].is_boolean());
@@ -195,6 +197,12 @@ GameObject::GameObject(
 
 		assert_msg(sounds.contains(selectSound), selectSound);
 		this->_selectSound = &sounds.at(selectSound);
+	}
+	if (json.contains("do_sound")) {
+		std::string doSound = RESOURCE(base.getName(), json["do_sound"]);
+
+		assert_msg(sounds.contains(doSound), doSound);
+		this->_doSound = &sounds.at(doSound);
 	}
 	if (json.contains("directions")) {
 		unsigned directions = json["directions"];
@@ -487,6 +495,8 @@ void GameObject::select() const
 
 void GameObject::deploy()
 {
+	if (this->_doSound)
+		this->_doSound->play();
 }
 
 bool GameObject::canDeploy() const
@@ -507,6 +517,8 @@ void GameObject::moveTo(const Vector2i &pos)
 		this->_orderQueue.emplace_back(MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos))});
 	else
 		this->_orderQueue.emplace_back(MoveOrder{pos + this->_size / 2});
+	if (this->_doSound)
+		this->_doSound->play();
 }
 
 void GameObject::clearOrders()
