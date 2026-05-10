@@ -11,71 +11,13 @@
 #include <list>
 #include <map>
 #include <set>
-#include <SFML/Graphics/RenderTexture.hpp>
 #include <SFML/Window/Event.hpp>
 #include "forward.hpp"
 #include "Color.hpp"
 #include "Vector.hpp"
 #include "Utils.hpp"
 #include "Unit.hpp"
-#include "FindPath.hpp"
-
-struct MapState {
-	// OPTIMIZE: Align line size to PAGE_SIZE, or a power of 2
-	std::vector<uint32_t> grid;
-	PathFindingGrid pathFindingGrid;
-	std::vector<std::vector<uint8_t>> placementGrid;
-	Vector2u tileSize;
-	Vector2u gridSize;
-	Vector2i translate;
-	std::vector<Vector2u> startAreas;
-
-	struct Quad {
-		Vector2f pt1;
-		Vector2f pt2;
-		Vector2f pt3;
-		Vector2f pt4;
-	};
-
-	void clampedPosition(const Quad &abs, Vector2i &topLeft, Vector2i &bottomRight) const;
-	void updatePlacementGrid(const Vector2i &rel, unsigned player, int delta);
-	void updatePlacementGrid(const Quad &abs, unsigned player, int delta);
-	void resetGridBits(const Vector2i &rel, uint32_t bits);
-	void resetGridBits(const Quad &abs, uint32_t bits);
-	void setGridBits(const Vector2i &rel, uint32_t bits);
-	void setGridBits(const Quad &abs, uint32_t bits);
-	[[nodiscard]] bool hasAnyGridBits(const Vector2i &rel, uint32_t bits) const;
-	[[nodiscard]] bool hasAllGridBits(const Vector2i &rel, uint32_t bits) const;
-	[[nodiscard]] bool hasExactlySomeGridBits(const Vector2i &rel, uint32_t bits, uint32_t expectedBits) const;
-	[[nodiscard]] bool anyHasAnyGridBits(const Quad &abs, uint32_t bits) const;
-	[[nodiscard]] bool anyHasAllGridBits(const Quad &abs, uint32_t bits) const;
-	[[nodiscard]] bool anyHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const;
-	[[nodiscard]] bool allHasAnyGridBits(const Quad &abs, uint32_t bits) const;
-	[[nodiscard]] bool allHasAllGridBits(const Quad &abs, uint32_t bits) const;
-	[[nodiscard]] bool allHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const;
-	[[nodiscard]] Vector2i absToTileCoord(const Vector2i &) const;
-	[[nodiscard]] Vector2f absToRelCoord(const Vector2i &) const;
-	[[nodiscard]] Vector2i topLeftCoordToAbs(const Vector2i &) const;
-	[[nodiscard]] Vector2i relCoordToAbs(const Vector2f &) const;
-	[[nodiscard]] Quad tileCoordToAbs(const Vector2i &) const;
-};
-
-struct LoadedMap {
-	MapState grid;
-	PathFindingGrid pathFindingGrid;
-	std::vector<uint32_t> originalIndices;
-	std::vector<uint32_t> displayedIndices;
-	//std::vector<std::set<GameObject *>> quadrants;
-	//std::vector<std::unique_ptr<GameObject>> mapObjects;
-	//std::vector<ResourcePatch> resources;
-	// ???? tileMeta
-
-	sf::Texture tileSet;
-	sf::RenderTexture renderCache;
-
-	void load(const std::filesystem::path &path);
-	void buildCache();
-};
+#include "Map.hpp"
 
 // #define QUADRANT_SIZE_X 128
 // #define QUADRANT_SIZE_Y 128

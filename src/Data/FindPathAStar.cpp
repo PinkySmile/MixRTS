@@ -34,6 +34,7 @@ static void reconstructPath(const std::map<Vector2i, Vector2i> &cameFrom, Vector
 		old = current;
 		totalPath.push_back(current);
 	}
+	totalPath.pop_back();
 }
 
 // A* finds a path from start to goal.
@@ -126,12 +127,15 @@ void AStar::computePath(
 	diff.y -= diff.y % step.y;
 	buffer.clear();
 	aStar(currentPos, dest, [&grid, mask, dest, hitBoxSize](Vector2i p) -> float {
-		if (p.x < 0 || p.y < 0 || p.x >= grid.gridSize.x || p.x >= grid.gridSize.y)
+		if (p.x < 0 || p.y < 0 || p.x + hitBoxSize.x >= grid.gridSize.x || p.y + hitBoxSize.y >= grid.gridSize.y)
 			return true;
 		for (size_t y = 0; y < hitBoxSize.y; y++)
-			for (size_t x = 0; x < hitBoxSize.x; x++)
-				if ((grid.grid[(p.x + x) + (p.y + y) * grid.gridSize.x] & mask) != mask)
+			for (size_t x = 0; x < hitBoxSize.x; x++) {
+				auto attrs = grid.grid[(p.x + x) + (p.y + y) * grid.gridSize.x];
+
+				if ((attrs & mask) != mask || PFGRIDMASK_NB_UNITS(attrs) != 0)
 					return true;
+			}
 		return false;
 	}, grid.gridSize, step, buffer);
 }

@@ -109,8 +109,8 @@ void Building::update()
 		if (this->_buildAnim->update())
 			this->_building = false;
 	} else {
-		if (this->_producing && this->_producingAnim && (*this->_producingAnim)() && this->_producingAnim->update())
-			this->_producing = false;
+		if (this->_producing && this->_producingAnim && (*this->_producingAnim)())
+			this->_producingAnim->update();
 		if (this->_produced  && this->_producedAnim  && (*this->_producedAnim)()  && this->_producedAnim->update())
 			this->_produced = false;
 	}

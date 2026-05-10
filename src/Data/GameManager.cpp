@@ -44,7 +44,15 @@ GameManager::GameManager(const std::vector<Faction> &factions) :
 
 void GameManager::loadMap(Mod &mod, const std::filesystem::path &path)
 {
-	this->_map.load(path);
+#ifndef PROPAGATE_CRASH
+	try {
+#endif
+		this->_map.load(mod, path);
+#ifndef PROPAGATE_CRASH
+	} catch (std::exception &e) {
+		throw _AssertionFailedException("While loading map \"" + path.string() + "\"\n" + e.what());
+	}
+#endif
 
 	// TODO: Properly convert
 	for (auto &state : this->_mapStates)
@@ -658,17 +666,8 @@ noGrid:
 		if (nbTiles != nbConcreteTiles)
 			obj.damage(obj.getHealth() * (nbTiles - nbConcreteTiles) / (nbTiles * 2));
 
-		auto parent = player.state.primaryBuildings[buildQueue];
+		auto parent = player.getSpawnBuilding(buildQueue);
 
-		if (parent)
-			parent->produced();
-		else if (player.state.queueBuildings.contains(buildQueue))
-			for (auto p: player.state.queueBuildings[buildQueue])
-				if (!p->isObstructed()) {
-					p->produced();
-					parent = p;
-					break;
-				}
 		if (parent) {
 			auto exit = parent->getExitOffset();
 			auto spawn = parent->getSpawnOffset();
@@ -678,7 +677,7 @@ noGrid:
 				if (exit) {
 					auto next = *exit + parent->getPosition();
 
-					obj.moveTo(next);
+					obj.moveTo(next, true);
 					obj.setDirection(obj.getPosition().angle(next));
 				}
 				return &obj;
@@ -872,108 +871,4 @@ GameObject *GameManager::getObjectById(unsigned int index)
 {
 	assert_exp(this->_objectMap.contains(index));
 	return this->_objectMap[index];
-}
-
-void LoadedMap::load(const std::filesystem::path &path)
-{
-	std::ifstream streamMap{path / "map.json"};
-	nlohmann::json json;
-
-	streamMap >> json;
-	this->grid.gridSize.x = json["size"]["x"];
-	this->grid.gridSize.y = json["size"]["y"];
-	this->grid.tileSize.x = json["grid"]["x"];
-	this->grid.tileSize.y = json["grid"]["y"];
-	this->grid.translate.x = json["translate"]["x"];
-	this->grid.translate.y = json["translate"]["y"];
-	for (auto &v : json["starts"])
-		this->grid.startAreas.emplace_back(v["x"].get<unsigned>(), v["y"].get<unsigned>());
-	this->grid.grid.resize(this->grid.gridSize.x * this->grid.gridSize.y);
-	this->originalIndices.resize(this->grid.gridSize.x * this->grid.gridSize.y);
-	assert_exp(this->renderCache.resize({
-		this->grid.tileSize.x * this->grid.gridSize.x,
-		this->grid.tileSize.y * this->grid.gridSize.y
-	}));
-	assert_exp(this->tileSet.loadFromFile(path / json["tilesheet"].get<std::string>()));
-
-	std::filesystem::path attributesPath = path / json["tileattrs"].get<std::string>();
-	size_t attributesSize = std::filesystem::file_size(attributesPath);
-	auto tileSetSize = this->tileSet.getSize();
-
-	assert_exp(tileSetSize.x % this->grid.tileSize.x == 0);
-	assert_exp(tileSetSize.y % this->grid.tileSize.y == 0);
-	assert_exp(attributesSize / 4 == (tileSetSize.x / this->grid.tileSize.x) * (tileSetSize.y / this->grid.tileSize.y));
-
-	std::ifstream streamTiles{path / "tiles.dat", std::fstream::binary};
-
-	assert_exp(streamTiles);
-	assert_exp(streamTiles.read(reinterpret_cast<char *>(this->originalIndices.data()), this->originalIndices.size() * sizeof(*this->originalIndices.data())));
-	this->displayedIndices = this->originalIndices;
-
-	std::ifstream streamAttributes{attributesPath, std::fstream::binary};
-	std::vector<uint32_t> attributes;
-
-	attributes.resize(attributesSize / 4);
-	assert_exp(streamAttributes);
-	assert_exp(streamAttributes.read(reinterpret_cast<char *>(attributes.data()), attributes.size() * sizeof(*attributes.data())));
-
-	for (size_t i = 0; i < this->grid.grid.size(); i++)
-		this->grid.grid[i] = attributes[this->originalIndices[i] & 0xFFFFFF];
-	this->buildCache();
-
-
-	this->grid.pathFindingGrid.gridSize = this->grid.gridSize;
-	this->grid.pathFindingGrid.grid.resize(this->grid.pathFindingGrid.gridSize.x * this->grid.pathFindingGrid.gridSize.y);
-	for (size_t i = 0; i < this->grid.grid.size(); i++)
-		this->grid.pathFindingGrid.grid[i] = this->grid.grid[i] & 0x3FF;
-	this->grid.pathFindingGrid.gridImage.resize(this->grid.pathFindingGrid.gridSize, Color::Transparent);
-	for (unsigned y = 0; y < this->grid.pathFindingGrid.gridSize.y; y++)
-		for (unsigned x = 0; x < this->grid.pathFindingGrid.gridSize.x; x++)
-			this->grid.pathFindingGrid.gridImage.setPixel({x, y}, __getPFDebugColor(this->grid.pathFindingGrid.grid[x + y * this->grid.pathFindingGrid.gridSize.x]));
-	this->grid.pathFindingGrid.textureOutOfSync = true;
-
-
-	this->pathFindingGrid.gridSize = {
-		this->grid.gridSize.x * this->grid.tileSize.x,
-		this->grid.gridSize.y * this->grid.tileSize.y
-	};
-	this->pathFindingGrid.grid.resize(this->pathFindingGrid.gridSize.x * this->pathFindingGrid.gridSize.y);
-	for (size_t i = 0; i < this->pathFindingGrid.gridSize.x * this->pathFindingGrid.gridSize.y; i++) {
-		size_t x = i % this->pathFindingGrid.gridSize.x / this->grid.tileSize.x;
-		size_t y = i / this->pathFindingGrid.gridSize.x / this->grid.tileSize.y;
-
-		this->pathFindingGrid.grid[i] = this->grid.grid[x + y * this->grid.gridSize.x] & 0x3FF;
-	}
-	this->pathFindingGrid.gridImage.resize(this->pathFindingGrid.gridSize, Color::Transparent);
-	for (unsigned y = 0; y < this->pathFindingGrid.gridSize.y; y++)
-		for (unsigned x = 0; x < this->pathFindingGrid.gridSize.x; x++)
-			this->pathFindingGrid.gridImage.setPixel({x, y}, __getPFDebugColor(this->pathFindingGrid.grid[x + y * this->pathFindingGrid.gridSize.x]));
-	this->pathFindingGrid.textureOutOfSync = true;
-}
-
-void LoadedMap::buildCache()
-{
-	sf::Sprite sprite{this->tileSet};
-	auto textureSize = this->tileSet.getSize();
-
-	textureSize.x /= this->grid.tileSize.x;
-	this->renderCache.clear(sf::Color::Transparent);
-	for (unsigned y = 0; y < this->grid.gridSize.y; y++)
-		for (unsigned x = 0; x < this->grid.gridSize.x; x++) {
-			size_t index = this->displayedIndices[x + y * this->grid.gridSize.x] & 0xFFFFFF;
-
-			sprite.setPosition({
-				static_cast<float>(x * this->grid.tileSize.x),
-				static_cast<float>(y * this->grid.tileSize.y)
-			});
-			sprite.setTextureRect({
-				sf::Vector2i(
-					index % textureSize.x * this->grid.tileSize.x,
-					index / textureSize.x * this->grid.tileSize.y
-				),
-				sf::Vector2i(this->grid.tileSize)
-			});
-			this->renderCache.draw(sprite);
-		}
-	this->renderCache.display();
 }

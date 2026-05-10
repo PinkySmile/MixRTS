@@ -222,6 +222,11 @@ void Player::handleUiEvents()
 					this->state.queues[startBuild->queue][startBuild->id].buildProgress = 1;
 					this->state.buildQueues[startBuild->queue] = &this->state.queues[startBuild->queue][startBuild->id];
 				}
+
+				Building *building = this->getPrimaryBuilding(startBuild->queue);
+
+				if (building)
+					building->producing(true);
 				this->playEVA(UI::EVA_BUILDING, EXPIRE_BUILD, PRIORITY_BUILD, 0, startBuild->queue);
 			} else if (auto cancelBuild = std::get_if<UI::CancelBuildEvent>(&*event)) {
 				if (this->state.buildQueues[cancelBuild->queue] == nullptr)
@@ -289,6 +294,10 @@ void Player::_tryEndBuild(PlayerQueue &queue)
 
 void Player::resetQueue(const std::string &queueId)
 {
+	Building *building = this->getPrimaryBuilding(queueId);
+
+	if (building)
+		building->producing(false);
 	for (auto &[name, q] : this->state.queues[queueId]) {
 		q.buildable = this->state.elementsOwned[name] < q.limit;
 		q.paused = false;
@@ -345,6 +354,31 @@ bool Player::consume(const std::string &type, unsigned int amount)
 std::vector<std::unique_ptr<UI>> &Player::getUIs()
 {
 	return this->_uis;
+}
+
+Building *Player::getPrimaryBuilding(const std::string &queue)
+{
+	auto parent = this->state.primaryBuildings[queue];
+
+	if (parent)
+		return parent;
+	if (this->state.queueBuildings.contains(queue))
+		for (auto p: this->state.queueBuildings[queue])
+			return p;
+	return nullptr;
+}
+
+Building *Player::getSpawnBuilding(const std::string &queue)
+{
+	auto parent = this->state.primaryBuildings[queue];
+
+	if (parent)
+		return parent;
+	if (this->state.queueBuildings.contains(queue))
+		for (auto p: this->state.queueBuildings[queue])
+			if (!p->isObstructed())
+				return p;
+	return nullptr;
 }
 
 template<typename T>

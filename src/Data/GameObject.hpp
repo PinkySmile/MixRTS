@@ -24,6 +24,7 @@ struct TurnOrder {
 };
 struct MoveOrder {
 	Vector2i destination;
+	bool force;
 };
 struct DeployOrder {};
 
@@ -131,7 +132,7 @@ public:
 	void setPosition(const Vector2f &pos);
 	void heal(unsigned amount);
 	void damage(unsigned amount);
-	void moveTo(const Vector2i &pos);
+	void moveTo(const Vector2i &pos, bool force = false);
 	void select() const;
 	void playBuiltSound() const;
 	void clearOrders();
@@ -143,6 +144,7 @@ public:
 	[[nodiscard]] const std::optional<std::vector<std::vector<uint8_t>>> &getTileData() const;
 	[[nodiscard]] unsigned getIndex() const;
 	[[nodiscard]] const std::string &getId() const;
+	[[nodiscard]] unsigned getMaxHealth() const;
 	[[nodiscard]] unsigned getHealth() const;
 	[[nodiscard]] bool isDead() const;
 	[[nodiscard]] bool isDisposable() const;

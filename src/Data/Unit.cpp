@@ -93,8 +93,11 @@ bool Unit::_handleOrder(const Order &o)
 			if (this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position)) {
 				this->deinitGlobalGrid();
 				this->_solid = false;
-				this->manager->spawnBuilding(this->owner->state.index, this->_position + s.offset, s.queue, s.building);
 				this->_disposable = true;
+
+				Building *result = this->manager->spawnBuilding(this->owner->state.index, this->_position + s.offset, s.queue, s.building);
+
+				result->damage((this->_maxHp - this->_hp) * result->getMaxHealth() / this->_maxHp);
 			} else
 				this->owner->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300);
 		}

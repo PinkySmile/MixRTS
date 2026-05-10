@@ -136,6 +136,8 @@ add_executable(
 	src/Data/FindPath.hpp
 	src/Data/MapState.inl
 	src/Data/GridMask.hpp
+	src/Data/Map.cpp
+	src/Data/Map.hpp
 )
 
 target_link_libraries(

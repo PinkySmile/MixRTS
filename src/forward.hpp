@@ -22,6 +22,8 @@ class Unit;
 class UI;
 class GameManager;
 struct MapState;
+struct MapMetadata;
+struct LoadedMap;
 struct PlayerState;
 struct PlayerQueue;
 struct Game;

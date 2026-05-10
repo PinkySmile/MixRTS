@@ -398,8 +398,7 @@ static void updateList2(
 			auto r = pic->getRenderer();
 			auto &cameo = cameos[pos == std::string::npos ? b : b.substr(0, pos)];
 
-			if (!last.empty())
-				pic->setPosition({i % 2 * 60, i / 2 * 47});
+			pic->setPosition({i % 2 * 60, i / 2 * 47});
 			last = b;
 			pic->setSize(60, 48);
 			pic->onMousePress([queueCb, b]{ queueCb(b, false); });

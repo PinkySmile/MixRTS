@@ -265,32 +265,37 @@ bool GameObject::_handleOrder(const Order &o)
 	} else if (auto move = std::get_if<MoveOrder>(&o)) {
 		if (!this->_pathCached) {
 			this->_cachedDest = move->destination;
-			if (this->_boundToGrid) {
-				AStar::computePath(
-					this->map->pathFindingGrid,
-					this->_gridPos,
-					this->map->absToTileCoord(move->destination),
-					{1, 1},
-					{1, 1},
-					this->_passFlags,
-					this->_pathCache
-				);
-				for (auto &p : this->_pathCache)
-					p = this->map->topLeftCoordToAbs(p);
-			} else
-				AStar::computePath(
-					*this->pfGrid,
-					this->_position,
-					move->destination,
-					this->_size,
-					{1, 1},
-					this->_passFlags,
-					this->_pathCache
-				);
-			while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
-				this->_pathCache.pop_back();
-			this->_cachedDebug = AStar::getDebugImage();
-			this->_cachedDebugTexLoaded = false;
+			if (move->force) {
+				this->_pathCache.clear();
+				this->_pathCache.emplace_back(move->destination);
+			} else {
+				if (this->_boundToGrid) {
+					AStar::computePath(
+						this->map->pathFindingGrid,
+						this->_gridPos,
+						this->map->absToTileCoord(move->destination),
+						{1, 1},
+						{1, 1},
+						this->_passFlags,
+						this->_pathCache
+					);
+					for (auto &p : this->_pathCache)
+						p = this->map->topLeftCoordToAbs(p);
+				} else
+					AStar::computePath(
+						*this->pfGrid,
+						this->_position,
+						move->destination,
+						this->_size,
+						{1, 1},
+						this->_passFlags,
+						this->_pathCache
+					);
+				while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
+					this->_pathCache.pop_back();
+				this->_cachedDebug = AStar::getDebugImage();
+				this->_cachedDebugTexLoaded = false;
+			}
 			this->_pathCached = true;
 		}
 
@@ -358,7 +363,10 @@ void GameObject::setPosition(const Vector2f &pos)
 	// OPTIMIZE: Diff instead of undoing it and redoing it
 	this->deinitGlobalGrid();
 	this->_position = pos;
-	this->_gridPos = this->map->absToTileCoord(pos + this->_size / 2);
+	if (this->_tiles)
+		this->_gridPos = this->map->absToTileCoord(pos);
+	else
+		this->_gridPos = this->map->absToTileCoord(pos + this->_size / 2);
 	this->initGlobalGrid();
 }
 
@@ -377,6 +385,11 @@ const std::string &GameObject::getId() const
 unsigned GameObject::getHealth() const
 {
 	return this->_hp;
+}
+
+unsigned GameObject::getMaxHealth() const
+{
+	return this->_maxHp;
 }
 
 void GameObject::heal(unsigned int amount)
@@ -509,16 +522,26 @@ bool GameObject::canMove() const
 	return this->_speed;
 }
 
-void GameObject::moveTo(const Vector2i &pos)
+void GameObject::moveTo(const Vector2i &pos, bool force)
 {
-	if (!this->canMove())
-		return;
-	if (this->_boundToGrid)
-		this->_orderQueue.emplace_back(MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos))});
-	else
-		this->_orderQueue.emplace_back(MoveOrder{pos + this->_size / 2});
-	if (this->_doSound)
-		this->_doSound->play();
+	if (!force) {
+		if (!this->canMove())
+			return;
+		if (this->_boundToGrid)
+			this->_orderQueue.emplace_back(MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), false});
+		else
+			this->_orderQueue.emplace_back(MoveOrder{pos + this->_size / 2, false});
+		if (this->_doSound)
+			this->_doSound->play();
+	} else {
+		MoveOrder order;
+
+		if (this->_boundToGrid)
+			order = MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), true};
+		else
+			order = MoveOrder{pos + this->_size / 2, true};
+		this->_orderQueue.emplace_back(order);
+	}
 }
 
 void GameObject::clearOrders()
@@ -694,11 +717,6 @@ void GameObject::renderPathFindingPath()
 	if (!this->_pathCached)
 		return;
 
-	if (!this->_cachedDebugTexLoaded) {
-		assert_exp(this->_cachedDebugTex.loadFromImage(this->_cachedDebug));
-		this->_cachedDebugTexLoaded = true;
-	}
-
 	sf::VertexArray arr{sf::PrimitiveType::LineStrip, this->_pathCache.size() + 1};
 	sf::VertexArray arr2{sf::PrimitiveType::LineStrip, 2};
 
@@ -716,12 +734,19 @@ void GameObject::renderPathFindingPath()
 	arr2[1].color = sf::Color::Green;
 	game->screen->draw(arr2);
 
-	sf::Sprite sprite{this->_cachedDebugTex};
-	auto scale = this->pfGrid->gridSize;
+	if (this->_cachedDebug.getSize().x != 0 && this->_cachedDebug.getSize().y != 0) {
+		if (!this->_cachedDebugTexLoaded) {
+			assert_exp(this->_cachedDebugTex.loadFromImage(this->_cachedDebug));
+			this->_cachedDebugTexLoaded = true;
+		}
 
-	scale.x /= this->_cachedDebugTex.getSize().x;
-	scale.y /= this->_cachedDebugTex.getSize().y;
-	sprite.setPosition({0, 0});
-	sprite.setScale(scale);
-	game->screen->draw(sprite);
+		sf::Sprite sprite{this->_cachedDebugTex};
+		auto scale = this->pfGrid->gridSize;
+
+		scale.x /= this->_cachedDebugTex.getSize().x;
+		scale.y /= this->_cachedDebugTex.getSize().y;
+		sprite.setPosition({0, 0});
+		sprite.setScale(scale);
+		game->screen->draw(sprite);
+	}
 }

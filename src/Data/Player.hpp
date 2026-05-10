@@ -100,6 +100,8 @@ public:
 	void onRightMouseClicked(Vector2i pos);
 	bool credit(const std::string &type, unsigned amount, CreditStrategy strategy);
 	bool consume(const std::string &type, unsigned amount);
+	Building *getPrimaryBuilding(const std::string &queue);
+	Building *getSpawnBuilding(const std::string &queue);
 
 	template<typename T>
 	void unlockObject(const Faction &f, const std::string &name, T &object, bool debugTime = false);
