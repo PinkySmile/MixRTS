@@ -127,7 +127,7 @@ void AStar::computePath(
 	diff.y -= diff.y % step.y;
 	buffer.clear();
 	aStar(currentPos, dest, [&grid, mask, dest, hitBoxSize](Vector2i p) -> float {
-		if (p.x < 0 || p.y < 0 || p.x + hitBoxSize.x >= grid.gridSize.x || p.y + hitBoxSize.y >= grid.gridSize.y)
+		if (p.x < 0 || p.y < 0 || p.x + hitBoxSize.x > grid.gridSize.x || p.y + hitBoxSize.y > grid.gridSize.y)
 			return true;
 		for (size_t y = 0; y < hitBoxSize.y; y++)
 			for (size_t x = 0; x < hitBoxSize.x; x++) {

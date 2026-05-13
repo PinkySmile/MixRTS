@@ -10,6 +10,33 @@
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
 
+#define turnTimer _gpTimer[0]
+#define harvestTimer _gpTimer[0]
+#define cancel _gpTimer[1]
+#define harvestDelaying _gpTimer[2]
+
+bool GameObject::_shortenOrder(Order &o)
+{
+	if (std::holds_alternative<MoveOrder>(o)) {
+		if (!this->_boundToGrid)
+			return true;
+		this->_pathCache.erase(this->_pathCache.begin() + 1, this->_pathCache.end());
+
+		auto &f = this->_pathCache.front();
+
+		f.normalize();
+		// TODO: Handle non-square grids
+		f.x *= this->map->tileSize.x;
+		f.y *= this->map->tileSize.y;
+		f = this->map->topLeftCoordToAbs(this->map->absToTileCoord(f));
+		return false;
+	} else if (std::holds_alternative<HarvestOrder>(o)) {
+		this->cancel = true;
+		return false;
+	}
+	return true;
+}
+
 void GameObject::_displayAnim(Animation &anim)
 {
 	Sprite &sprite = anim.getSprite();
@@ -49,6 +76,7 @@ GameObject::GameObject(const GameObject &g) :
 	_gridPos(g._gridPos),
 	_spawnOffset(g._spawnOffset),
 	_exitOffset(g._exitOffset),
+	_resourceStorage(g._resourceStorage),
 	_currentDir(g._currentDir),
 	_turnSpeed(g._turnSpeed),
 	_buildSpeed(g._buildSpeed),
@@ -57,9 +85,12 @@ GameObject::GameObject(const GameObject &g) :
 	_sight(g._sight),
 	_limit(g._limit),
 	_gpTimer(g._gpTimer),
-	_speed(g._speed),
 	_passFlags(g._passFlags),
 	_index(g._index),
+	_storageUsed(g._storageUsed),
+	_harvestTime(g._harvestTime),
+	_harvestDelay(g._harvestDelay),
+	_speed(g._speed),
 	_tileCount(g._tileCount),
 	_requiresQueueBuilding(g._requiresQueueBuilding),
 	_boundToGrid(g._boundToGrid),
@@ -74,6 +105,10 @@ GameObject::GameObject(const GameObject &g) :
 	map(g.map),
 	owner(g.owner)
 {
+	this->_harvestAnims.reserve(g._harvestAnims.size());
+	for (auto &anim : g._harvestAnims)
+		this->_harvestAnims.emplace_back(*this, anim);
+
 	this->_anims.reserve(g._anims.size());
 	for (auto &animVec : g._anims) {
 		this->_anims.emplace_back();
@@ -135,6 +170,10 @@ GameObject::GameObject(
 	assert_exp(!json.contains("pass_flags") || json["pass_flags"].is_string() || json["pass_flags"].is_number_unsigned());
 	assert_exp(!json.contains("fake") || json["fake"].is_boolean());
 	assert_exp(!json.contains("proxy") || json["proxy"].is_string());
+	assert_exp(!json.contains("harvest_anim") || json["harvest_anim"].is_object());
+	assert_exp(!json.contains("resource_storage") || json["resource_storage"].is_number_unsigned());
+	assert_exp(!json.contains("harvest_time") || json["harvest_time"].is_number_unsigned());
+	assert_exp(!json.contains("harvest_delay") || json["harvest_delay"].is_number_unsigned());
 
 	auto &base = faction.getBase();
 
@@ -145,6 +184,12 @@ GameObject::GameObject(
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
+	if (json.contains("harvest_time"))
+		this->_harvestTime = json["harvest_time"];
+	if (json.contains("harvest_delay"))
+		this->_harvestDelay = json["harvest_delay"];
+	if (json.contains("resource_storage"))
+		this->_resourceStorage = json["resource_storage"];
 	if (json.contains("limit"))
 		this->_limit = json["limit"];
 	if (json.contains("build_speed"))
@@ -216,6 +261,14 @@ GameObject::GameObject(
 		for (auto &anim: json["anims"])
 			this->_anims.front().emplace_back(*this, animList, anim);
 	}
+	if (json.contains("harvest_anim")) {
+		assert_exp(!json["harvest_anim"].contains("dirs") || json["harvest_anim"]["dirs"].is_number_unsigned());
+
+		unsigned dirs = json["harvest_anim"]["dirs"];
+
+		for (size_t i = 0; i < dirs; i++)
+			this->_harvestAnims.emplace_back(*this, animList, json["harvest_anim"], i);
+	}
 
 	if (json.contains("select")) {
 		assert_exp(json["select"].contains("x"));
@@ -246,86 +299,157 @@ GameObject::GameObject(
 
 GameObject::~GameObject() = default;
 
+
+bool GameObject::_updateTurn(unsigned int target)
+{
+	if (this->_currentDir == target)
+		return true;
+	this->turnTimer++;
+	if (this->turnTimer > this->_turnSpeed) {
+		size_t diff = (this->_currentDir - target + this->_anims.size()) % this->_anims.size();
+
+		this->turnTimer = 0;
+		if (diff >= this->_anims.size() / 2)
+			this->_currentDir = (this->_currentDir + 1) % this->_anims.size();
+		else
+			this->_currentDir = (this->_currentDir - 1 + this->_anims.size()) % this->_anims.size();
+	}
+	return false;
+}
+
+bool GameObject::_updateMove(Vector2i destination, bool force)
+{
+	if (!this->_pathCached) {
+		this->_cachedDest = destination;
+		if (force) {
+			this->_pathCache.clear();
+			this->_pathCache.emplace_back(destination);
+		} else {
+			if (this->_boundToGrid) {
+				AStar::computePath(
+					this->map->pathFindingGrid,
+					this->_gridPos,
+					this->map->absToTileCoord(destination),
+					{1, 1},
+					{1, 1},
+					this->_passFlags,
+					this->_pathCache
+				);
+				for (auto &p : this->_pathCache)
+					p = this->map->topLeftCoordToAbs(p);
+			} else
+				AStar::computePath(
+					*this->pfGrid,
+					this->_position,
+					destination,
+					this->_size,
+					{1, 1},
+					this->_passFlags,
+					this->_pathCache
+				);
+			while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
+				this->_pathCache.pop_back();
+			this->_cachedDebug = AStar::getDebugImage();
+			this->_cachedDebugTexLoaded = false;
+		}
+		this->_pathCached = true;
+	}
+
+	if (this->_pathCache.empty())
+		return true;
+
+	auto &dest = this->_pathCache.back();
+	float a = this->_position.angle(dest);
+	unsigned angle = round((a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+
+	angle %= this->_anims.size();
+	if (angle != this->_currentDir && !this->_handleOrder(TurnOrder{angle}))
+		return false;
+
+	auto pos = this->_position;
+	auto diff = dest - pos;
+
+	diff.normalize();
+	diff *= this->_speed;
+	pos += diff;
+
+	auto diff2 = dest - pos;
+
+	if (pos == dest || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
+		this->setPosition(dest);
+		this->_pathCache.pop_back();
+	} else
+		this->setPosition(pos);
+	return false;
+}
+
+void GameObject::_goToClosestResource()
+{
+
+}
+
+void GameObject::_goToClosestRefinery()
+{
+
+}
+
+bool GameObject::_updateHarvest()
+{
+	if (this->_storageUsed >= this->_resourceStorage)
+		return this->_goToClosestRefinery(), true;
+
+	auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
+
+	if (!tile)
+		return this->_goToClosestResource(), true;
+
+	if (this->harvestDelaying) {
+		this->harvestTimer++;
+		if (this->harvestTimer >= this->_harvestDelay) {
+			this->harvestDelaying = false;
+			this->harvestTimer = 0;
+			if (this->cancel)
+				return true;
+			if (this->_storageUsed >= this->_resourceStorage)
+				return this->_goToClosestRefinery(), true;
+			tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
+			if (tile)
+				return false;
+			this->_goToClosestResource();
+			return true;
+		}
+	} else {
+		if (this->harvestTimer == 0)
+			this->_harvesting = true;
+		this->harvestTimer++;
+		if (this->harvestTimer >= this->_harvestTime) {
+			auto &r = this->manager->getResource(*tile);
+			auto remain = this->_resourceStorage - this->_storageUsed;
+			auto percent = remain / static_cast<float>(r.storage);
+
+			this->harvestDelaying = true;
+			this->harvestTimer = 0;
+			this->_lots.emplace_back(r.value);
+			if (percent < 1) {
+				for (auto &v : this->_lots.back() | std::ranges::views::values)
+					v = std::ceil(v * percent);
+				this->_storageUsed = this->_resourceStorage;
+			} else
+				this->_storageUsed += r.storage;
+			this->manager->consumeResource(*tile);
+		}
+	}
+	return false;
+}
+
 bool GameObject::_handleOrder(const Order &o)
 {
-	if (auto turn = std::get_if<TurnOrder>(&o)) {
-		if (this->_currentDir == turn->resultDir)
-			return true;
-		this->_gpTimer++;
-		if (this->_gpTimer > this->_turnSpeed) {
-			size_t diff = (this->_currentDir - turn->resultDir + this->_anims.size()) % this->_anims.size();
-
-			this->_gpTimer = 0;
-			if (diff >= this->_anims.size() / 2)
-				this->_currentDir = (this->_currentDir + 1) % this->_anims.size();
-			else
-				this->_currentDir = (this->_currentDir - 1 + this->_anims.size()) % this->_anims.size();
-		}
-		return false;
-	} else if (auto move = std::get_if<MoveOrder>(&o)) {
-		if (!this->_pathCached) {
-			this->_cachedDest = move->destination;
-			if (move->force) {
-				this->_pathCache.clear();
-				this->_pathCache.emplace_back(move->destination);
-			} else {
-				if (this->_boundToGrid) {
-					AStar::computePath(
-						this->map->pathFindingGrid,
-						this->_gridPos,
-						this->map->absToTileCoord(move->destination),
-						{1, 1},
-						{1, 1},
-						this->_passFlags,
-						this->_pathCache
-					);
-					for (auto &p : this->_pathCache)
-						p = this->map->topLeftCoordToAbs(p);
-				} else
-					AStar::computePath(
-						*this->pfGrid,
-						this->_position,
-						move->destination,
-						this->_size,
-						{1, 1},
-						this->_passFlags,
-						this->_pathCache
-					);
-				while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
-					this->_pathCache.pop_back();
-				this->_cachedDebug = AStar::getDebugImage();
-				this->_cachedDebugTexLoaded = false;
-			}
-			this->_pathCached = true;
-		}
-
-		if (this->_pathCache.empty())
-			return true;
-
-		auto &dest = this->_pathCache.back();
-		float a = this->_position.angle(dest);
-		unsigned angle = round((a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
-
-		angle %= this->_anims.size();
-		if (angle != this->_currentDir && !this->_handleOrder(TurnOrder{angle}))
-			return false;
-
-		auto pos = this->_position;
-		auto diff = dest - pos;
-
-		diff.normalize();
-		diff *= this->_speed;
-		pos += diff;
-
-		auto diff2 = dest - pos;
-
-		if (pos == dest || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
-			this->setPosition(dest);
-			this->_pathCache.pop_back();
-		} else
-			this->setPosition(pos);
-		return false;
-	}
+	if (auto turn = std::get_if<TurnOrder>(&o))
+		return this->_updateTurn(turn->resultDir);
+	else if (auto move = std::get_if<MoveOrder>(&o))
+		return this->_updateMove(move->destination, move->force);
+	else if (std::holds_alternative<HarvestOrder>(o))
+		return this->_updateHarvest();
 	return true;
 }
 
@@ -340,9 +464,21 @@ void GameObject::update()
 	for (auto &anim : this->_anims[this->_currentDir])
 		if (anim())
 			anim.update();
+	if (!this->_harvestAnims.empty() && this->_harvesting) {
+		auto dir = this->_currentDir * this->_harvestAnims.size() / this->_anims.size();
+		auto &anim = this->_harvestAnims[dir];
+
+		if (!anim() || anim.update())
+			this->_harvesting = false;
+	}
 	if (!this->_orderQueue.empty()) {
-		if (this->_firstEvent)
+		if (this->_firstEvent) {
 			this->_pathCached = false;
+			this->_gpTimer[0] = 0;
+			this->_gpTimer[1] = 0;
+			this->_gpTimer[2] = 0;
+			this->_gpTimer[3] = 0;
+		}
 		if (this->_handleOrder(this->_orderQueue.front())) {
 			this->_orderQueue.pop_front();
 			this->_firstEvent = true;
@@ -356,6 +492,13 @@ void GameObject::render(int layer)
 	for (auto &anim : this->_anims[this->_currentDir])
 		if (anim() && anim.getLayer() == layer)
 			this->_displayAnim(anim.getAnim());
+	if (!this->_harvestAnims.empty() && this->_harvesting) {
+		auto dir = this->_currentDir * this->_harvestAnims.size() / this->_anims.size();
+		auto &anim = this->_harvestAnims[dir];
+
+		if (anim() && anim.getLayer() == layer)
+			this->_displayAnim(anim.getAnim());
+	}
 }
 
 void GameObject::setPosition(const Vector2f &pos)
@@ -519,7 +662,13 @@ bool GameObject::canDeploy() const
 
 bool GameObject::canMove() const
 {
-	return this->_speed;
+	return this->_speed != 0;
+}
+
+void GameObject::harvest(const Vector2i &pos, bool force)
+{
+	this->moveTo(pos, force);
+	this->_orderQueue.emplace_back(HarvestOrder{});
 }
 
 void GameObject::moveTo(const Vector2i &pos, bool force)
@@ -546,7 +695,12 @@ void GameObject::moveTo(const Vector2i &pos, bool force)
 
 void GameObject::clearOrders()
 {
-	this->_orderQueue.clear();
+	if (!this->_orderQueue.empty()) {
+		if (this->_shortenOrder(this->_orderQueue.front()))
+			this->_orderQueue.clear();
+		else
+			this->_orderQueue.erase(this->_orderQueue.begin() + 1, this->_orderQueue.end());
+	}
 	this->_firstEvent = true;
 }
 
@@ -650,6 +804,13 @@ void GameObject::deinitGlobalGrid()
 	this->_initGrid = false;
 }
 
+std::optional<float> GameObject::getStorageDisplay() const
+{
+	if (this->_resourceStorage != 0)
+		return static_cast<float>(this->_storageUsed) / static_cast<float>(this->_resourceStorage);
+	return {};
+}
+
 bool GameObject::isSolid() const
 {
 	return this->_solid;
@@ -663,6 +824,11 @@ void GameObject::setIndex(unsigned int index)
 unsigned GameObject::getIndex() const
 {
 	return this->_index;
+}
+
+unsigned GameObject::getResourceStorage() const
+{
+	return this->_resourceStorage;
 }
 
 bool GameObject::isFake() const

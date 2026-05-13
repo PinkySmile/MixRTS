@@ -329,7 +329,6 @@ static void updateList(
 			r->setTexture(cameos[b]);
 			panel->add(pic, "cameo" + b);
 			added.push_back(b);
-			printf("ADD %s\n", b.c_str());
 		}
 		panel->getVerticalScrollbar()->setValue(scroll);
 	}
@@ -609,6 +608,24 @@ void D2KUI::update()
 				});
 		}
 	);
+	updateList2(
+		this->_faction.getBase().getBase(),
+		pQueue, this->_upgradeOrder,
+		this->_upgradeQueue, this->_upgradeQueueAdded,
+		this->_cameos,
+		[this, &pQueue](const std::string &id, bool rightClick){
+			if (!pQueue[id].buildable)
+				return;
+			if (rightClick)
+				this->_eventQueue.emplace_back(CancelBuildEvent{
+					id, this->_faction.getBase().getName() + ":upgrade"
+				});
+			else
+				this->_eventQueue.emplace_back(StartBuildEvent{
+					id, this->_faction.getBase().getName() + ":upgrade"
+				});
+		}
+	);
 	updateList3(
 		this->_faction.getBase().getBase(),
 		{&iQueue, &lvQueue, &hvQueue}, this->_unitsOrder,
@@ -626,24 +643,6 @@ void D2KUI::update()
 				this->_eventQueue.emplace_back(CancelBuildEvent{id, queueId});
 			else
 				this->_eventQueue.emplace_back(StartBuildEvent{id, queueId});
-		}
-	);
-	updateList2(
-		this->_faction.getBase().getBase(),
-		pQueue, this->_upgradeOrder,
-		this->_upgradeQueue, this->_upgradeQueueAdded,
-		this->_cameos,
-		[this, &pQueue](const std::string &id, bool rightClick){
-			if (!pQueue[id].buildable)
-				return;
-			if (rightClick)
-				this->_eventQueue.emplace_back(CancelBuildEvent{
-					id, this->_faction.getBase().getName() + ":upgrade"
-				});
-			else
-				this->_eventQueue.emplace_back(StartBuildEvent{
-					id, this->_faction.getBase().getName() + ":upgrade"
-				});
 		}
 	);
 
@@ -703,32 +702,23 @@ void D2KUI::_displaySelectedObjectUI(const GameObject &object)
 	));
 	game->screen->draw(sprite);
 
-	// FIXME: Dynamic cast
-	auto *building = dynamic_cast<const Building *>(&object);
+	auto percent = object.getStorageDisplay();
 
-	if (building) {
-		auto &storage = building->getStorage();
+	if (percent) {
+		sf::Vector2f pos = {top.x + 2.f, top.y + size.y - 5.f};
+		unsigned count = 7;
 
-		if (!storage.empty()) {
-			sf::Vector2f pos = {top.x + 2.f, top.y + size.y - 5.f};
-			unsigned count = 7;
-			float percent = 0;
-
-			for (auto &key: storage | std::ranges::views::keys)
-				percent += static_cast<float>(this->state->money[key]) / this->state->totalStorage[key];
-			percent /= storage.size();
-			if (size.x >= 64)
-				count = 15;
-			rect.setSize({2, 2});
-			for (size_t i = 0; i < count; i++) {
-				rect.setPosition(pos);
-				if (percent * count > i && percent != 0)
-					rect.setFillColor(sf::Color{0, 255, 0, 255});
-				else
-					rect.setFillColor(sf::Color{0, 0, 0, 128});
-				game->screen->draw(rect);
-				pos.x += 3;
-			}
+		if (size.x >= 64)
+			count = 15;
+		rect.setSize({2, 2});
+		for (size_t i = 0; i < count; i++) {
+			rect.setPosition(pos);
+			if (*percent * count > i && percent != 0)
+				rect.setFillColor(sf::Color{0, 255, 0, 255});
+			else
+				rect.setFillColor(sf::Color{0, 0, 0, 128});
+			game->screen->draw(rect);
+			pos.x += 3;
 		}
 	}
 }
@@ -858,8 +848,16 @@ void D2KUI::_updateCursor()
 		auto passFlags = obj->getPassFlags();
 
 		// TODO: Handle non snap-to-grid units
+		if (obj->getResourceStorage() != 0 && map->hasAnyGridBits(relPos, GRIDMASK_RESOURCE)) {
+			auto res = GRID_RESOURCE_TYPE(map->grid[relPos.x + relPos.y * map->gridSize.x]);
+
+			if (res != 0) {
+				this->_cursor = "attack";
+				return;
+			}
+		}
 		if (
-			!this->manager->isAreaFree(tl, this->map->tileSize) ||
+			!this->manager->isAreaFree(tl, map->tileSize) ||
 			!map->hasAnyGridBits(relPos, passFlags)
 		)
 			this->_cursor = "no_move";
@@ -971,13 +969,32 @@ void D2KUI::tileClicked(Vector2i absPos)
 			this->_selectedObjects.emplace(this->_objectBuffer.back());
 			this->_objectBuffer.back()->select();
 		} else if (!this->_selectedObjects.empty()) {
+			HarvestUnitEvent hevent;
 			MoveUnitEvent event;
 
 			event.position = this->_placementPos;
 			event.indices.reserve(this->_selectedObjects.size());
-			for (auto s : this->_selectedObjects)
+			hevent.position = this->_placementPos;
+			hevent.indices.reserve(this->_selectedObjects.size());
+			for (auto s : this->_selectedObjects) {
+				auto map = s->map;
+				auto relPos = map->absToTileCoord(this->_placementPos);
+
+				// TODO: Handle non snap-to-grid units
+				if (s->getResourceStorage() != 0 && map->hasAnyGridBits(relPos, GRIDMASK_RESOURCE)) {
+					auto res = GRID_RESOURCE_TYPE(map->grid[relPos.x + relPos.y * map->gridSize.x]);
+
+					if (res != 0) {
+						hevent.indices.push_back(s->getIndex());
+						continue;
+					}
+				}
 				event.indices.push_back(s->getIndex());
-			this->_eventQueue.emplace_back(event);
+			}
+			if (!event.indices.empty())
+				this->_eventQueue.emplace_back(event);
+			if (!hevent.indices.empty())
+				this->_eventQueue.emplace_back(hevent);
 		}
 	} else if (!this->_objectBuffer.empty()) {
 		auto b = this->_objectBuffer.back();

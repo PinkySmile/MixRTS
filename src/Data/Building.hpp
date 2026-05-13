@@ -47,6 +47,7 @@ public:
 	void render(int layer) override;
 	void setColor(const HSLColor &color) override;
 	void built() override;
+	std::optional<float> getStorageDisplay() const override;
 	void produced();
 	void producing(bool producing);
 	void setPrimary(bool primary = true);

@@ -26,12 +26,14 @@ struct MoveOrder {
 	Vector2i destination;
 	bool force;
 };
+struct HarvestOrder {};
 struct DeployOrder {};
 
 typedef std::variant<
 	TurnOrder,
 	MoveOrder,
-	DeployOrder
+	DeployOrder,
+	HarvestOrder
 > Order;
 
 class GameObject {
@@ -43,6 +45,7 @@ protected:
 	std::set<Vector2i> _checkTiles;
 	std::optional<std::vector<std::vector<uint8_t>>> _tiles;
 	std::vector<std::vector<ConditionalAnim>> _anims;
+	std::vector<ConditionalAnim> _harvestAnims;
 	std::unordered_map<std::string, unsigned> _cost;
 	std::shared_ptr<ReqAndCombinator> _requirements;
 	std::optional<std::string> _buildQueue;
@@ -58,8 +61,10 @@ protected:
 	Vector2u _size;
 	Vector2f _position;
 	Vector2i _gridPos;
+	std::vector<std::unordered_map<std::string, unsigned>> _lots;
 	std::optional<Vector2i> _spawnOffset;
 	std::optional<Vector2i> _exitOffset;
+	unsigned _resourceStorage = 0;
 	unsigned _currentDir = 0;
 	unsigned _turnSpeed = 0;
 	unsigned _buildSpeed = -1;
@@ -67,10 +72,13 @@ protected:
 	unsigned _hp;
 	unsigned _sight;
 	unsigned _limit = UINT32_MAX;
-	unsigned _gpTimer = 0;
-	float _speed = 0;
+	std::array<unsigned, 4> _gpTimer = {};
 	unsigned _passFlags = 0;
 	unsigned _index;
+	unsigned _storageUsed = 0;
+	unsigned _harvestTime = 0;
+	unsigned _harvestDelay = 0;
+	float _speed = 0;
 	unsigned char _tileCount = 5;
 	bool _requiresQueueBuilding = true;
 	bool _cachedDebugTexLoaded = false;
@@ -80,8 +88,16 @@ protected:
 	bool _firstEvent = true;
 	bool _initGrid = false;
 	bool _solid = true;
+	bool _harvesting = false;
 	bool _fake;
 
+	bool _updateTurn(unsigned target);
+	bool _updateMove(Vector2i pos, bool force);
+	bool _updateHarvest();
+
+	void _goToClosestResource();
+	void _goToClosestRefinery();
+	bool _shortenOrder(Order &o);
 	void _displayAnim(Animation &anim);
 	virtual bool _handleOrder(const Order &o);
 
@@ -125,6 +141,7 @@ public:
 	virtual void built();
 	virtual void initGlobalGrid();
 	virtual void deinitGlobalGrid();
+	virtual std::optional<float> getStorageDisplay() const;
 
 	unsigned getBottom() const;
 	void setIndex(unsigned index);
@@ -132,12 +149,14 @@ public:
 	void setPosition(const Vector2f &pos);
 	void heal(unsigned amount);
 	void damage(unsigned amount);
+	void harvest(const Vector2i &pos, bool force = false);
 	void moveTo(const Vector2i &pos, bool force = false);
 	void select() const;
 	void playBuiltSound() const;
 	void clearOrders();
 	void renderPathFindingPath();
 
+	[[nodiscard]] unsigned getResourceStorage() const;
 	[[nodiscard]] bool isFake() const;
 	[[nodiscard]] bool requiresQueueBuilding() const;
 	[[nodiscard]] const std::optional<std::string> &getProxy() const;

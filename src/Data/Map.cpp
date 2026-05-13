@@ -49,7 +49,7 @@ MapResource::MapResource(const std::filesystem::path &folder, const nlohmann::js
 	if (json.contains("only_adjacent_collectible")) {
 		for (size_t i = 0; i < json["only_adjacent_collectible"].size(); i++)
 			assert_msg(json["only_adjacent_collectible"][i].is_number_unsigned(), std::to_string(i));
-		this->onlyAdjacentCollectible = json["only_adjacent_collectible"].get<std::vector<unsigned>>();
+		this->onlyAdjCollectible = json["only_adjacent_collectible"].get<std::vector<unsigned>>();
 	}
 }
 
@@ -176,8 +176,10 @@ void LoadedMap::load(Mod &mod, const std::filesystem::path &path)
 	assert_exp(streamAttributes);
 	assert_exp(streamAttributes.read(reinterpret_cast<char *>(attributes.data()), attributes.size() * sizeof(*attributes.data())));
 
-	for (size_t i = 0; i < this->grid.grid.size(); i++)
+	for (size_t i = 0; i < this->grid.grid.size(); i++) {
 		this->grid.grid[i] = attributes[this->originalIndices[i] & 0xFFFFFF] | (this->originalIndices[i] & 0xFF000000);
+		this->displayedIndices[i] &= 0xFFFFFF;
+	}
 	this->buildCache();
 
 
@@ -215,18 +217,20 @@ void LoadedMap::buildCache()
 	this->renderCache.clear(sf::Color::Transparent);
 	for (unsigned y = 0; y < this->grid.gridSize.y; y++)
 		for (unsigned x = 0; x < this->grid.gridSize.x; x++)
-			this->refreshTile(x, y, false);
+			this->refreshTile(x, y, false, false);
 	this->renderCache.display();
 }
 
 #define HAS_RESOURCE(x_, y_) ((x_) >= this->grid.gridSize.x || (y_) >= this->grid.gridSize.y ? true : GRID_RESOURCE_TYPE(this->grid.grid[(x_) + (y_) * this->grid.gridSize.x]) != 0)
-void LoadedMap::refreshTile(unsigned int x, unsigned int y, bool commit)
+void LoadedMap::refreshTile(unsigned int x, unsigned int y, bool commit, bool reload)
 {
 	auto textureSize = this->tileSet.getSize();
-	size_t index = this->displayedIndices[x + y * this->grid.gridSize.x] & 0xFFFFFF;
+	uint32_t &index = this->displayedIndices[x + y * this->grid.gridSize.x];
+	uint32_t old = index;
 	size_t attrs = this->grid.grid[x + y * this->grid.gridSize.x];
 	unsigned res = GRID_RESOURCE_TYPE(attrs);
 
+	index = this->originalIndices[x + y * this->grid.gridSize.x] & 0xFFFFFF;
 	textureSize.x /= this->grid.tileSize.x;
 	this->sprite.setPosition({
 		static_cast<float>(x * this->grid.tileSize.x),
@@ -248,7 +252,10 @@ void LoadedMap::refreshTile(unsigned int x, unsigned int y, bool commit)
 
 		switch (r.strategy) {
 		case MapResource::STRAT_RANDOM:
-			index = r.tiles[game->random() % r.tiles.size()];
+			if (reload && std::ranges::find(r.tiles, old) != r.tiles.end())
+				index = old;
+			else
+				index = r.tiles[game->random() % r.tiles.size()];
 			this->sprite.setTextureRect({
 				sf::Vector2i(
 					index % textureSize.x * this->grid.tileSize.x,
@@ -279,6 +286,16 @@ void LoadedMap::refreshTile(unsigned int x, unsigned int y, bool commit)
 			this->renderCache.draw(this->sprite);
 			break;
 		}
+	}
+	if (index != old && reload) {
+		this->refreshTile(x - 1, y - 1, false, true);
+		this->refreshTile(x - 1, y, false, true);
+		this->refreshTile(x - 1, y + 1, false, true);
+		this->refreshTile(x, y - 1, false, true);
+		this->refreshTile(x, y + 1, false, true);
+		this->refreshTile(x + 1, y - 1, false, true);
+		this->refreshTile(x + 1, y, false, true);
+		this->refreshTile(x + 1, y + 1, false, true);
 	}
 	if (commit)
 		this->renderCache.display();

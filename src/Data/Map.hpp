@@ -68,7 +68,7 @@ struct MapResource {
 	unsigned id;
 	unsigned deplete;
 	std::unordered_map<std::string, unsigned> value;
-	std::vector<unsigned> onlyAdjacentCollectible;
+	std::vector<unsigned> onlyAdjCollectible;
 
 	MapResource(const std::filesystem::path &folder, const nlohmann::json &json);
 };
@@ -97,7 +97,7 @@ struct LoadedMap {
 
 	void load(Mod &mod, const std::filesystem::path &path);
 	void buildCache();
-	void refreshTile(unsigned x, unsigned y, bool commit = true);
+	void refreshTile(unsigned x, unsigned y, bool commit = true, bool reload = true);
 };
 
 

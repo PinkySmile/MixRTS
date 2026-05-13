@@ -7,6 +7,7 @@
 #include "Animation.hpp"
 #include "Building.hpp"
 #include "Utils.hpp"
+#include "Player.hpp"
 #include "../Resources/Assert.hpp"
 #include "../Resources/Game.hpp"
 
@@ -130,6 +131,19 @@ void Building::render(int layer)
 		if (this->_producing && this->_producingAnim && (*this->_producingAnim)() && layer == this->_producingAnim->getLayer())
 			this->_displayAnim(this->_producingAnim->getAnim());
 	}
+}
+
+std::optional<float> Building::getStorageDisplay() const
+{
+	if (this->_storage.empty())
+		return GameObject::getStorageDisplay();
+
+	float percent = 0;
+
+	for (auto &key: this->_storage | std::ranges::views::keys)
+		percent += static_cast<float>(this->owner->state.money[key]) / this->owner->state.totalStorage[key];
+	percent /= this->_storage.size();
+	return percent;
 }
 
 void Building::built()

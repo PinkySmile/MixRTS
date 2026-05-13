@@ -72,6 +72,9 @@ public:
 	void deregisterObject(GameObject *o);
 	void modUnitInArea(const MapState::Quad &quad, int count);
 	void modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, int count);
+	std::optional<Vector2i> getFirstHarvestableTile(MapState &state, Vector2i pos) const;
+	MapResource &getResource(Vector2i pos);
+	void consumeResource(Vector2i pos);
 };
 
 #include "MapState.inl"

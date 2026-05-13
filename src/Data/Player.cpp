@@ -247,11 +247,18 @@ void Player::handleUiEvents()
 				obj->clearOrders();
 				obj->deploy();
 			} else if (auto move = std::get_if<UI::MoveUnitEvent>(&*event)) {
-				for (auto i : move->indices) {
+				for (auto i: move->indices) {
 					auto obj = this->_parent.getObjectById(i);
 
 					obj->clearOrders();
 					obj->moveTo(move->position);
+				}
+			} else if (auto harvest = std::get_if<UI::HarvestUnitEvent>(&*event)) {
+				for (auto i: harvest->indices) {
+					auto obj = this->_parent.getObjectById(i);
+
+					obj->clearOrders();
+					obj->harvest(harvest->position);
 				}
 			} else
 				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));

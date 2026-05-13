@@ -872,3 +872,76 @@ GameObject *GameManager::getObjectById(unsigned int index)
 	assert_exp(this->_objectMap.contains(index));
 	return this->_objectMap[index];
 }
+
+std::optional<Vector2i> GameManager::getFirstHarvestableTile(MapState &state, Vector2i pos) const
+{
+	Vector2i topLeft;
+	Vector2i bottomRight;
+	auto &grid = this->_map.grid;
+
+#define CHECK_RES(x_, y_) do {                                                                                          \
+	if ((x_) < 0 || (y_) < 0 || (x_) >= (int)grid.gridSize.x || (y_) >= (int)grid.gridSize.y)                       \
+		break;                                                                                                  \
+	auto r = GRID_RESOURCE_TYPE(grid.grid[(x_) + (y_) * grid.gridSize.x]);                                          \
+	if (r == 0) break;                                                                                              \
+	auto &re = this->_map.metadata.resources.at(r);                                                                 \
+	if (re.onlyAdjCollectible.empty()) break;                                                                       \
+	if (std::find(re.onlyAdjCollectible.begin(), re.onlyAdjCollectible.end(), tile) == re.onlyAdjCollectible.end()) \
+		goto keepGoing;                                                                                         \
+} while (false);
+
+	grid.clampedPosition(state.tileCoordToAbs(pos), topLeft, bottomRight);
+	for (int y = topLeft.y; y <= bottomRight.y; y++)
+		for (int x = topLeft.x; x <= bottomRight.x; x++) {
+			auto res = GRID_RESOURCE_TYPE(grid.grid[x + y * grid.gridSize.x]);
+			auto tile = this->_map.displayedIndices[x + y * grid.gridSize.x];
+
+			if (res == 0)
+				continue;
+			CHECK_RES(x - 1, y - 1);
+			CHECK_RES(x,     y - 1);
+			CHECK_RES(x + 1, y - 1);
+			CHECK_RES(x - 1, y);
+			CHECK_RES(x + 1, y);
+			CHECK_RES(x - 1, y + 1);
+			CHECK_RES(x,     y + 1);
+			CHECK_RES(x + 1, y + 1);
+			return Vector2i{x, y};
+		keepGoing:
+			continue;
+		}
+	return {};
+#undef CHECK_RES
+}
+
+MapResource &GameManager::getResource(Vector2i pos)
+{
+	assert_exp(pos.x >= 0 && pos.y >= 0 && static_cast<unsigned>(pos.x) < this->_map.grid.gridSize.x && static_cast<unsigned>(pos.y) < this->_map.grid.gridSize.y);
+	auto tile = this->_map.grid.grid[pos.x + pos.y * this->_map.grid.gridSize.x];
+	assert_exp(GRID_RESOURCE_TYPE(tile));
+	assert_exp(this->_map.metadata.resources.contains(GRID_RESOURCE_TYPE(tile)));
+	return this->_map.metadata.resources.at(GRID_RESOURCE_TYPE(tile));
+}
+
+void GameManager::consumeResource(Vector2i pos)
+{
+	assert_exp(pos.x >= 0 && pos.y >= 0 && static_cast<unsigned>(pos.x) < this->_map.grid.gridSize.x && static_cast<unsigned>(pos.y) < this->_map.grid.gridSize.y);
+	auto &tile = this->_map.grid.grid[pos.x + pos.y * this->_map.grid.gridSize.x];
+	assert_exp(GRID_RESOURCE_TYPE(tile));
+	if (GRID_RESOURCE_COUNT(tile) != 0) {
+		tile -= 1 << 29;
+		return;
+	}
+	assert_exp(this->_map.metadata.resources.contains(GRID_RESOURCE_TYPE(tile)));
+
+	auto &r = this->_map.metadata.resources.at(GRID_RESOURCE_TYPE(tile));
+
+	tile &= 0xFFFFFF;
+	if (r.deplete != 0) {
+		tile |= r.deplete << 24;
+		assert_exp(this->_map.metadata.resources.contains(r.deplete));
+		tile |= (this->_map.metadata.resources.at(r.deplete).lots - 1) << 29;
+	}
+	this->_map.refreshTile(pos.x, pos.y);
+	// TODO: Propagate to other maps
+}

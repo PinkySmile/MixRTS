@@ -65,12 +65,18 @@ public:
 		Vector2u position;
 	};
 
+	struct HarvestUnitEvent {
+		std::vector<unsigned> indices;
+		Vector2u position;
+	};
+
 	typedef std::variant<
 		StartBuildEvent,
 		PlaceBuildEvent,
 		CancelBuildEvent,
 		DeployUnitEvent,
-		MoveUnitEvent
+		MoveUnitEvent,
+		HarvestUnitEvent
 	> Event;
 
 	GameManager *manager;
