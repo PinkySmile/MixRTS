@@ -225,7 +225,7 @@ void GameManager::updateRender()
 		player.updateRender();
 }
 
-void GameManager::_renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale)
+void GameManager::_renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale, bool drawGrid)
 {
 	if (grid.textureOutOfSync) {
 		assert_exp(grid.gridImageTexture.loadFromImage(grid.gridImage));
@@ -240,6 +240,39 @@ void GameManager::_renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale)
 		b.renderPathFindingPath();
 	for (auto &b : this->_liveUnits)
 		b.renderPathFindingPath();
+
+	if (!drawGrid)
+		return;
+
+	sf::View view = game->screen->getView();
+	Vector2f size = view.getSize();
+	Vector2f pos = Vector2f(view.getCenter()) - size / 2;
+	Vector2f end = pos + size;
+	sf::RectangleShape shape;
+
+	pos.x -= fmod(pos.x, scale.x);
+	pos.y -= fmod(pos.y, scale.y);
+	shape.setOutlineThickness(1);
+	shape.setFillColor(sf::Color::Transparent);
+	shape.setOutlineColor(sf::Color::Black);
+	shape.setSize(scale - Vector2u{2, 2});
+
+	auto start = pos.x;
+	size_t y = pos.y / scale.y;
+	size_t x;
+
+	while (pos.y < end.y && y < grid.gridSize.y) {
+		pos.x = start;
+		x = pos.x / scale.x;
+		while (pos.x < end.x && x < grid.gridSize.x) {
+			shape.setPosition(pos + Vector2f{1, 1});
+			game->screen->draw(shape);
+			pos.x += scale.x;
+			x++;
+		}
+		pos.y += scale.y;
+		y++;
+	}
 }
 
 static void displayTile(uint32_t tile, sf::RectangleShape &shape)
@@ -355,12 +388,12 @@ void GameManager::render()
 	else if (this->_debugGrid == 1)
 		displayGrid(this->_map.grid);
 	else if (this->_debugGrid == 2)
-		this->_renderPathFindingGrid(this->_map.grid.pathFindingGrid, this->_map.grid.tileSize);
+		this->_renderPathFindingGrid(this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, true);
 	else if (this->_debugGrid != 255) {
 		if ((this->_debugGrid - 3) % 2 == 1) {
 			auto &map = this->_mapStates[(this->_debugGrid - 3) / 2];
 
-			this->_renderPathFindingGrid(map.pathFindingGrid, map.tileSize);
+			this->_renderPathFindingGrid(map.pathFindingGrid, map.tileSize, true);
 		} else
 			displayGrid(this->_mapStates[(this->_debugGrid - 3) / 2]);
 	}
@@ -555,6 +588,14 @@ bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::str
 	return true;
 }
 
+void GameManager::_pushOrder(GameObject &obj, const std::string &order)
+{
+	if (order == "harvest")
+		obj.harvest();
+	else
+		assert_not_reached_msg("Unknown order '" + order + "'");
+}
+
 void GameManager::_onObjectSpawned(Vector2i pos, MapState &map, Player &owner, GameObject &obj, const std::string &id)
 {
 	auto topLeftAbs = map.topLeftCoordToAbs(pos);
@@ -579,7 +620,13 @@ void GameManager::_onObjectSpawned(Vector2i pos, MapState &map, Player &owner, G
 	this->_map.grid.updatePlacementGrid(fullPosAbs, owner.state.team, 1);
 	for (auto &m : this->_mapStates)
 		m.updatePlacementGrid(fullPosAbs, owner.state.team, 1);
+	for (auto &order : obj.getSpawnOrders())
+		this->_pushOrder(obj, order);
 
+	auto extra = obj.getExtraSpawn();
+
+	if (extra)
+		this->spawnUnit(owner.state.index, obj.getPosition() + extra->pos, "", extra->unit);
 	// FIXME: Dynamic cast
 	auto b = dynamic_cast<Building *>(&obj);
 	if (b) {
@@ -888,7 +935,7 @@ std::optional<Vector2i> GameManager::getFirstHarvestableTile(MapState &state, Ve
 	if (re.onlyAdjCollectible.empty()) break;                                                                       \
 	if (std::find(re.onlyAdjCollectible.begin(), re.onlyAdjCollectible.end(), tile) == re.onlyAdjCollectible.end()) \
 		goto keepGoing;                                                                                         \
-} while (false);
+} while (false)
 
 	grid.clampedPosition(state.tileCoordToAbs(pos), topLeft, bottomRight);
 	for (int y = topLeft.y; y <= bottomRight.y; y++)
@@ -911,7 +958,92 @@ std::optional<Vector2i> GameManager::getFirstHarvestableTile(MapState &state, Ve
 			continue;
 		}
 	return {};
+}
+
+std::optional<Vector2i> GameManager::getClosestHarvestableTile(MapState &state, Vector2i pos) const
+{
+	auto &grid = this->_map.grid;
+	int i = 1;
+	std::optional<Vector2i> result;
+	auto cb = [this, &grid, &state](int x, int y) -> std::optional<Vector2i> {
+		auto res = GRID_RESOURCE_TYPE(grid.grid[x + y * grid.gridSize.x]);
+		auto tile = this->_map.displayedIndices[x + y * grid.gridSize.x];
+
+		if (res == 0)
+			return {};
+		CHECK_RES(x - 1, y - 1);
+		CHECK_RES(x, y - 1);
+		CHECK_RES(x + 1, y - 1);
+		CHECK_RES(x - 1, y);
+		CHECK_RES(x + 1, y);
+		CHECK_RES(x - 1, y + 1);
+		CHECK_RES(x, y + 1);
+		CHECK_RES(x + 1, y + 1);
+		return state.absToTileCoord(grid.topLeftCoordToAbs({x, y}));
+	keepGoing:
+		return {};
+	};
+
+	pos = grid.absToTileCoord(state.topLeftCoordToAbs(pos));
+	result = cb(pos.x, pos.y);
+	if (result) return result;
+	while (true) {
+		if (pos.x > i && pos.y > i && static_cast<unsigned>(pos.x + i) >= grid.gridSize.x && static_cast<unsigned>(pos.y + i) >= grid.gridSize.y)
+			return {};
+		if (pos.y >= i)
+			for (int j = std::max(0, pos.x - i); j < std::min<int>(pos.x + i, grid.gridSize.x); j++) {
+				result = cb(j, pos.y - i);
+				if (result) return result;
+			}
+		if (static_cast<unsigned>(pos.y + i) < grid.gridSize.y)
+			for (int j = std::max(0, pos.x - i); j < std::min<int>(pos.x + i, grid.gridSize.x); j++) {
+				result = cb(j, pos.y + i);
+				if (result) return result;
+			}
+		if (pos.x >= i)
+			for (int j = std::max(0, pos.y - i); j < std::min<int>(pos.y + i, grid.gridSize.y); j++) {
+				result = cb(pos.x - i, j);
+				if (result) return result;
+			}
+		if (static_cast<unsigned>(pos.x + i) < grid.gridSize.x)
+			for (int j = std::max(0, pos.y - i); j < std::min<int>(pos.y + i, grid.gridSize.y); j++) {
+				result = cb(pos.x + i, j);
+				if (result) return result;
+			}
+		i++;
+	}
 #undef CHECK_RES
+}
+
+Building *GameManager::getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos)
+{
+	if (this->_liveBuildings.empty())
+		return nullptr;
+
+	Building *best = &this->_liveBuildings.front();
+	auto dist = pos.distance2(best->getPosition() + best->getPoint() + best->map->tileSize / 2);
+	size_t resourceScore = 0;
+	auto *accept = &best->getAcceptResources();
+
+	for (auto &r : preferredResources)
+		resourceScore += std::ranges::find(*accept, r) != accept->end();
+	for (auto &b : this->_liveBuildings) {
+		size_t score = 0;
+		auto d = pos.distance2(b.getPosition() + b.getPoint() + b.map->tileSize / 2);
+
+		accept = &best->getAcceptResources();
+		for (auto &r : preferredResources)
+			score += std::ranges::find(*accept, r) != accept->end();
+		if (resourceScore > score)
+			continue;
+		if (resourceScore < score || d < dist) {
+			resourceScore = score;
+			best = &b;
+			dist = d;
+			continue;
+		}
+	}
+	return best;
 }
 
 MapResource &GameManager::getResource(Vector2i pos)

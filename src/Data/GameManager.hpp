@@ -44,11 +44,12 @@ private:
 	void _recomputeLocked();
 	bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size) const;
 	void _checkScroll();
-	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1});
+	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1}, bool drawGrid = false);
 	void _onObjectSpawned(Vector2i pos, MapState &map, Player &owner, GameObject &obj, const std::string &id);
 	template<typename T>
 	T *_spawnObj(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, std::list<T> &out, const std::unordered_map<std::string, const T *> &in);
 	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, int count);
+	void _pushOrder(GameObject &obj, const std::string &order);
 
 public:
 	GameManager(const std::vector<Faction> &factions);
@@ -73,6 +74,8 @@ public:
 	void modUnitInArea(const MapState::Quad &quad, int count);
 	void modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, int count);
 	std::optional<Vector2i> getFirstHarvestableTile(MapState &state, Vector2i pos) const;
+	std::optional<Vector2i> getClosestHarvestableTile(MapState &state, Vector2i pos) const;
+	Building *getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos);
 	MapResource &getResource(Vector2i pos);
 	void consumeResource(Vector2i pos);
 };

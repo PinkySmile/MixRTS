@@ -22,13 +22,21 @@ bool GameObject::_shortenOrder(Order &o)
 			return true;
 		this->_pathCache.erase(this->_pathCache.begin() + 1, this->_pathCache.end());
 
-		auto &f = this->_pathCache.front();
+		Vector2i cache = this->map->absToTileCoord(this->_pathCache.front());
+		Vector2i pos = this->_gridPos;
 
-		f.normalize();
 		// TODO: Handle non-square grids
-		f.x *= this->map->tileSize.x;
-		f.y *= this->map->tileSize.y;
-		f = this->map->topLeftCoordToAbs(this->map->absToTileCoord(f));
+		if (cache.x > pos.x)
+			pos.x++;
+		else if (cache.x < pos.x)
+			pos.x--;
+		if (cache.y > pos.y)
+			pos.y++;
+		else if (cache.y < pos.y)
+			pos.y--;
+
+		this->_cachedDest = this->map->topLeftCoordToAbs(pos);
+		this->_pathCache.front() = this->_cachedDest;
 		return false;
 	} else if (std::holds_alternative<HarvestOrder>(o)) {
 		this->cancel = true;
@@ -72,8 +80,13 @@ GameObject::GameObject(const GameObject &g) :
 	_id(g._id),
 	_selectBox(g._selectBox),
 	_size(g._size),
+	_point(g._point),
 	_position(g._position),
 	_gridPos(g._gridPos),
+	_extraSpawn(g._extraSpawn),
+	_spawnOrders(g._spawnOrders),
+	_acceptResources(g._acceptResources),
+	_lastRefinery(g._lastRefinery),
 	_spawnOffset(g._spawnOffset),
 	_exitOffset(g._exitOffset),
 	_resourceStorage(g._resourceStorage),
@@ -133,13 +146,6 @@ GameObject::GameObject(
 	assert_exp(!json.contains("build") || json["build"].is_string());
 	assert_exp(!json.contains("speed") || json["speed"].is_number());
 	assert_exp(!json.contains("limit") || json["limit"].is_number_unsigned());
-	assert_exp(!json.contains("tiles") || json["tiles"].is_array());
-	if (json.contains("tiles"))
-		for (size_t i = 0; i < json["tiles"].size(); i++) {
-			assert_msg(json["tiles"][i].is_array(), "json[\"tiles\"][" + std::to_string(i) + "]");
-			for (size_t j = 0; j < json["tiles"][i].size(); j++)
-				assert_msg(json["tiles"][i][j].is_number(), "json[\"tiles\"][" + std::to_string(i) + "][" + std::to_string(j) + "]");
-		}
 	assert_exp(json.contains("hp") && json["hp"].is_number());
 	assert_exp(json.contains("cost") && json["cost"].is_object());
 	for (auto &[key, value] : json["cost"].items())
@@ -148,16 +154,6 @@ GameObject::GameObject(
 	assert_exp(json.contains("size") && json["size"].is_object());
 	assert_exp(json["size"].contains("x") && json["size"]["x"].is_number());
 	assert_exp(json["size"].contains("y") && json["size"]["y"].is_number());
-	if (json.contains("exit_offset")) {
-		assert_exp(json["exit_offset"].is_object());
-		assert_exp(json["exit_offset"].contains("x") && json["exit_offset"]["x"].is_number());
-		assert_exp(json["exit_offset"].contains("y") && json["exit_offset"]["y"].is_number());
-	}
-	if (json.contains("spawn_offset")) {
-		assert_exp(json["spawn_offset"].is_object());
-		assert_exp(json["spawn_offset"].contains("x") && json["spawn_offset"]["x"].is_number());
-		assert_exp(json["spawn_offset"].contains("y") && json["spawn_offset"]["y"].is_number());
-	}
 	assert_exp(!json.contains("directions") || json["directions"].is_number_unsigned());
 	assert_exp(!json.contains("build_speed") || json["build_speed"].is_number_unsigned());
 	assert_exp(!json.contains("group") || json["group"].is_string());
@@ -174,6 +170,50 @@ GameObject::GameObject(
 	assert_exp(!json.contains("resource_storage") || json["resource_storage"].is_number_unsigned());
 	assert_exp(!json.contains("harvest_time") || json["harvest_time"].is_number_unsigned());
 	assert_exp(!json.contains("harvest_delay") || json["harvest_delay"].is_number_unsigned());
+	if (json.contains("exit_offset")) {
+		assert_exp(json["exit_offset"].is_object());
+		assert_exp(json["exit_offset"].contains("x") && json["exit_offset"]["x"].is_number());
+		assert_exp(json["exit_offset"].contains("y") && json["exit_offset"]["y"].is_number());
+	}
+	if (json.contains("spawn_offset")) {
+		assert_exp(json["spawn_offset"].is_object());
+		assert_exp(json["spawn_offset"].contains("x") && json["spawn_offset"]["x"].is_number());
+		assert_exp(json["spawn_offset"].contains("y") && json["spawn_offset"]["y"].is_number());
+	}
+	if (json.contains("point")) {
+		assert_exp(json["point"].is_object());
+		assert_exp(json["point"].contains("x") && json["point"]["x"].is_number());
+		assert_exp(json["point"].contains("y") && json["point"]["y"].is_number());
+	}
+	if (json.contains("tiles")) {
+		assert_exp(json["tiles"].is_array());
+		for (size_t i = 0; i < json["tiles"].size(); i++) {
+			assert_msg(json["tiles"][i].is_array(), "json[\"tiles\"][" + std::to_string(i) + "]");
+			for (size_t j = 0; j < json["tiles"][i].size(); j++)
+				assert_msg(json["tiles"][i][j].is_number(), "json[\"tiles\"][" + std::to_string(i) + "][" + std::to_string(j) + "]");
+		}
+	}
+	if (json.contains("accept_resources")) {
+		assert_exp(json["accept_resources"].is_array());
+		for (size_t i = 0; i < json["accept_resources"].size(); i++)
+			assert_msg(json["accept_resources"][i].is_string(), "json[\"accept_resources\"][" + std::to_string(i) + "]");
+	}
+	if (json.contains("spawn_orders")) {
+		assert_exp(json["spawn_orders"].is_array());
+		for (size_t i = 0; i < json["spawn_orders"].size(); i++)
+			assert_msg(json["spawn_orders"][i].is_string(), "json[\"spawn_orders\"][" + std::to_string(i) + "]");
+	}
+	if (json.contains("spawn")) {
+		assert_exp(json["spawn"].is_object());
+		assert_exp(json["spawn"].contains("unit"));
+		assert_exp(json["spawn"]["unit"].is_string());
+		assert_exp(json["spawn"].contains("pos"));
+		assert_exp(json["spawn"]["pos"].is_object());
+		assert_exp(json["spawn"]["pos"].contains("x"));
+		assert_exp(json["spawn"]["pos"]["x"].is_number_integer());
+		assert_exp(json["spawn"]["pos"].contains("y"));
+		assert_exp(json["spawn"]["pos"]["y"].is_number_integer());
+	}
 
 	auto &base = faction.getBase();
 
@@ -184,6 +224,15 @@ GameObject::GameObject(
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
+	if (json.contains("spawn"))
+		this->_extraSpawn = {
+			RESOURCE(base.getName(), json["spawn"]["unit"]),
+			{json["spawn"]["pos"]["x"], json["spawn"]["pos"]["y"]}
+		};
+	if (json.contains("spawn_orders"))
+		this->_spawnOrders = json["spawn_orders"];
+	if (json.contains("accept_resources"))
+		this->_acceptResources = json["accept_resources"];
 	if (json.contains("harvest_time"))
 		this->_harvestTime = json["harvest_time"];
 	if (json.contains("harvest_delay"))
@@ -200,6 +249,8 @@ GameObject::GameObject(
 		this->_exitOffset = {json["exit_offset"]["x"], json["exit_offset"]["y"]};
 	if (json.contains("spawn_offset"))
 		this->_spawnOffset = {json["spawn_offset"]["x"], json["spawn_offset"]["y"]};
+	if (json.contains("point"))
+		this->_point = {json["point"]["x"], json["point"]["y"]};
 	if (json.contains("requires_queue_building"))
 		this->_requiresQueueBuilding = json["requires_queue_building"];
 	if (json.contains("queue"))
@@ -385,24 +436,43 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 
 void GameObject::_goToClosestResource()
 {
+	auto pos = this->_gridPos;
 
+	if (this->_currentDir == 1 * this->_anims.size() / 8) {
+		pos.x++;
+		pos.y--;
+	} else if (this->_currentDir == 3 * this->_anims.size() / 8) {
+		pos.x++;
+		pos.y++;
+	} else if (this->_currentDir == 5 * this->_anims.size() / 8) {
+		pos.x--;
+		pos.y++;
+	} else if (this->_currentDir == 7 * this->_anims.size() / 8) {
+		pos.x--;
+		pos.y--;
+	} else if (this->_currentDir == 0 * this->_anims.size() / 8)
+		pos.y--;
+	else if (this->_currentDir == 2 * this->_anims.size() / 8)
+		pos.x++;
+	else if (this->_currentDir == 4 * this->_anims.size() / 8)
+		pos.y++;
+	else if (this->_currentDir == 6 * this->_anims.size() / 8)
+		pos.x--;
+
+	auto tile = this->manager->getFirstHarvestableTile(*this->map, pos);
+	if (tile) return this->harvest(this->map->topLeftCoordToAbs(pos));
+	tile = this->manager->getClosestHarvestableTile(*this->map, this->_gridPos);
+	if (tile) return this->harvest(this->map->topLeftCoordToAbs(*tile));
 }
 
 void GameObject::_goToClosestRefinery()
 {
-
+	this->_lastRefinery = this->manager->getClosestResourceDump(this->_acceptResources, this->_position + this->_size / 2);
+	this->dumpResourcesTo(nullptr);
 }
 
 bool GameObject::_updateHarvest()
 {
-	if (this->_storageUsed >= this->_resourceStorage)
-		return this->_goToClosestRefinery(), true;
-
-	auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
-
-	if (!tile)
-		return this->_goToClosestResource(), true;
-
 	if (this->harvestDelaying) {
 		this->harvestTimer++;
 		if (this->harvestTimer >= this->_harvestDelay) {
@@ -412,13 +482,18 @@ bool GameObject::_updateHarvest()
 				return true;
 			if (this->_storageUsed >= this->_resourceStorage)
 				return this->_goToClosestRefinery(), true;
-			tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
+			auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
 			if (tile)
 				return false;
 			this->_goToClosestResource();
 			return true;
 		}
 	} else {
+		if (this->_storageUsed >= this->_resourceStorage)
+			return this->_goToClosestRefinery(), true;
+		auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
+		if (!tile)
+			return this->_goToClosestResource(), true;
 		if (this->harvestTimer == 0)
 			this->_harvesting = true;
 		this->harvestTimer++;
@@ -442,6 +517,14 @@ bool GameObject::_updateHarvest()
 	return false;
 }
 
+bool GameObject::_updateDump(Building *place)
+{
+	if (this->_storageUsed != 0) {
+	} else
+		this->_goToClosestResource();
+	return true;
+}
+
 bool GameObject::_handleOrder(const Order &o)
 {
 	if (auto turn = std::get_if<TurnOrder>(&o))
@@ -450,6 +533,8 @@ bool GameObject::_handleOrder(const Order &o)
 		return this->_updateMove(move->destination, move->force);
 	else if (std::holds_alternative<HarvestOrder>(o))
 		return this->_updateHarvest();
+	else if (auto dump = std::get_if<DumpOrder>(&o))
+		return this->_updateDump(dump->target);
 	return true;
 }
 
@@ -461,6 +546,8 @@ void GameObject::playBuiltSound() const
 
 void GameObject::update()
 {
+	if(this->_lastRefinery && this->_lastRefinery->isDisposable())
+		this->_lastRefinery = nullptr;
 	for (auto &anim : this->_anims[this->_currentDir])
 		if (anim())
 			anim.update();
@@ -665,15 +752,20 @@ bool GameObject::canMove() const
 	return this->_speed != 0;
 }
 
-void GameObject::harvest(const Vector2i &pos, bool force)
+void GameObject::harvest(const Vector2i &pos, bool automatic)
 {
-	this->moveTo(pos, force);
+	this->moveTo(pos, automatic);
 	this->_orderQueue.emplace_back(HarvestOrder{});
 }
 
-void GameObject::moveTo(const Vector2i &pos, bool force)
+void GameObject::harvest()
 {
-	if (!force) {
+	this->_goToClosestResource();
+}
+
+void GameObject::moveTo(const Vector2i &pos, bool automatic)
+{
+	if (!automatic) {
 		if (!this->canMove())
 			return;
 		if (this->_boundToGrid)
@@ -693,15 +785,26 @@ void GameObject::moveTo(const Vector2i &pos, bool force)
 	}
 }
 
+void GameObject::dumpResourcesTo(Building *dump, bool automatic)
+{
+	if (!dump)
+		dump = this->_lastRefinery;
+	if (!dump)
+		return;
+	this->_lastRefinery = dump;
+	this->moveTo(dump->getPosition() + dump->getPoint() + dump->map->tileSize / 2, automatic);
+	this->_orderQueue.emplace_back(DumpOrder{dump});
+}
+
 void GameObject::clearOrders()
 {
 	if (!this->_orderQueue.empty()) {
-		if (this->_shortenOrder(this->_orderQueue.front()))
+		if (this->_shortenOrder(this->_orderQueue.front())) {
 			this->_orderQueue.clear();
-		else
+			this->_firstEvent = true;
+		} else
 			this->_orderQueue.erase(this->_orderQueue.begin() + 1, this->_orderQueue.end());
 	}
-	this->_firstEvent = true;
 }
 
 void GameObject::initGlobalGrid()
@@ -824,6 +927,26 @@ void GameObject::setIndex(unsigned int index)
 unsigned GameObject::getIndex() const
 {
 	return this->_index;
+}
+
+const std::optional<ExtraSpawn> &GameObject::getExtraSpawn() const
+{
+	return this->_extraSpawn;
+}
+
+const Vector2i &GameObject::getPoint() const
+{
+	return this->_point;
+}
+
+const std::vector<std::string> &GameObject::getSpawnOrders() const
+{
+	return this->_spawnOrders;
+}
+
+const std::vector<std::string> &GameObject::getAcceptResources() const
+{
+	return this->_acceptResources;
 }
 
 unsigned GameObject::getResourceStorage() const

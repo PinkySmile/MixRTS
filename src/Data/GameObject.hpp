@@ -28,13 +28,23 @@ struct MoveOrder {
 };
 struct HarvestOrder {};
 struct DeployOrder {};
+struct DumpOrder {
+	Building *target;
+};
 
 typedef std::variant<
 	TurnOrder,
 	MoveOrder,
 	DeployOrder,
-	HarvestOrder
+	HarvestOrder,
+	DumpOrder
 > Order;
+
+
+struct ExtraSpawn {
+	std::string unit;
+	Vector2i pos;
+};
 
 class GameObject {
 protected:
@@ -59,8 +69,13 @@ protected:
 	std::string _id;
 	IntRect _selectBox;
 	Vector2u _size;
+	Vector2i _point;
 	Vector2f _position;
 	Vector2i _gridPos;
+	std::optional<ExtraSpawn> _extraSpawn;
+	std::vector<std::string> _spawnOrders;
+	std::vector<std::string> _acceptResources;
+	Building *_lastRefinery = nullptr;
 	std::vector<std::unordered_map<std::string, unsigned>> _lots;
 	std::optional<Vector2i> _spawnOffset;
 	std::optional<Vector2i> _exitOffset;
@@ -94,6 +109,7 @@ protected:
 	bool _updateTurn(unsigned target);
 	bool _updateMove(Vector2i pos, bool force);
 	bool _updateHarvest();
+	bool _updateDump(Building *place);
 
 	void _goToClosestResource();
 	void _goToClosestRefinery();
@@ -149,13 +165,19 @@ public:
 	void setPosition(const Vector2f &pos);
 	void heal(unsigned amount);
 	void damage(unsigned amount);
-	void harvest(const Vector2i &pos, bool force = false);
-	void moveTo(const Vector2i &pos, bool force = false);
+	void harvest(const Vector2i &pos, bool automatic = false);
+	void harvest();
+	void moveTo(const Vector2i &pos, bool automatic = false);
+	void dumpResourcesTo(Building *dump, bool automatic = false);
 	void select() const;
 	void playBuiltSound() const;
 	void clearOrders();
 	void renderPathFindingPath();
 
+	[[nodiscard]] const std::optional<ExtraSpawn> &getExtraSpawn() const;
+	[[nodiscard]] const Vector2i &getPoint() const;
+	[[nodiscard]] const std::vector<std::string> &getSpawnOrders() const;
+	[[nodiscard]] const std::vector<std::string> &getAcceptResources() const;
 	[[nodiscard]] unsigned getResourceStorage() const;
 	[[nodiscard]] bool isFake() const;
 	[[nodiscard]] bool requiresQueueBuilding() const;
