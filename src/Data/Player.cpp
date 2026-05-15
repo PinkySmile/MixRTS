@@ -246,19 +246,33 @@ void Player::handleUiEvents()
 
 				obj->clearOrders();
 				obj->deploy();
+				obj->playDoSound();
 			} else if (auto move = std::get_if<UI::MoveUnitEvent>(&*event)) {
 				for (auto i: move->indices) {
 					auto obj = this->_parent.getObjectById(i);
 
 					obj->clearOrders();
 					obj->moveTo(move->position);
+					obj->playDoSound();
 				}
 			} else if (auto harvest = std::get_if<UI::HarvestUnitEvent>(&*event)) {
 				for (auto i: harvest->indices) {
 					auto obj = this->_parent.getObjectById(i);
 
+					obj->clearPrimaryDump();
 					obj->clearOrders();
 					obj->harvest(harvest->position);
+					obj->playDoSound();
+				}
+			} else if (auto dump = std::get_if<UI::DumpUnitEvent>(&*event)) {
+				checked_cast(hole, Building, this->_parent.getObjectById(dump->hole));
+
+				for (auto i: harvest->indices) {
+					auto obj = this->_parent.getObjectById(i);
+
+					obj->clearOrders();
+					obj->dumpResourcesTo(hole);
+					obj->playDoSound();
 				}
 			} else
 				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));
@@ -331,7 +345,7 @@ bool Player::credit(const std::string &type, unsigned int amount, CreditStrategy
 			return true;
 		}
 		if (strategy == CREDIT_SPILL) {
-			this->playEVA(UI::EVA_CASH_UP, 1, 0, 0);
+			this->playEVA(UI::EVA_REQUIRE_STORAGE, 300, 1, COOLDOWN_POWER);
 			this->state.money[type] = this->state.totalStorage[type];
 		}
 		return false;

@@ -6,6 +6,7 @@
 #include "GameObject.hpp"
 #include "GameManager.hpp"
 #include "Animation.hpp"
+#include "Player.hpp"
 #include "ConditionalAnim.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
@@ -14,6 +15,7 @@
 #define harvestTimer _gpTimer[0]
 #define cancel _gpTimer[1]
 #define harvestDelaying _gpTimer[2]
+#define dumpTimer _gpTimer[0]
 
 bool GameObject::_shortenOrder(Order &o)
 {
@@ -100,7 +102,6 @@ GameObject::GameObject(const GameObject &g) :
 	_gpTimer(g._gpTimer),
 	_passFlags(g._passFlags),
 	_index(g._index),
-	_storageUsed(g._storageUsed),
 	_harvestTime(g._harvestTime),
 	_harvestDelay(g._harvestDelay),
 	_speed(g._speed),
@@ -121,6 +122,16 @@ GameObject::GameObject(const GameObject &g) :
 	this->_harvestAnims.reserve(g._harvestAnims.size());
 	for (auto &anim : g._harvestAnims)
 		this->_harvestAnims.emplace_back(*this, anim);
+
+	if (g._dump)
+		this->_dump.emplace(
+			g._dump->dir,
+			g._dump->delay,
+			g._dump->delay_after,
+			std::make_unique<ConditionalAnim>(*this, *g._dump->during),
+			std::make_unique<ConditionalAnim>(*this, *g._dump->start),
+			std::make_unique<ConditionalAnim>(*this, *g._dump->stop)
+		);
 
 	this->_anims.reserve(g._anims.size());
 	for (auto &animVec : g._anims) {
@@ -184,6 +195,15 @@ GameObject::GameObject(
 		assert_exp(json["point"].is_object());
 		assert_exp(json["point"].contains("x") && json["point"]["x"].is_number());
 		assert_exp(json["point"].contains("y") && json["point"]["y"].is_number());
+	}
+	if (json.contains("dump")) {
+		assert_exp(json["dump"].is_object());
+		assert_exp(json["dump"].contains("dir") && json["dump"]["dir"].is_number_unsigned());
+		assert_exp(json["dump"].contains("dir") && json["dump"]["delay"].is_number_unsigned());
+		assert_exp(json["dump"].contains("dir") && json["dump"]["delay_after"].is_number_unsigned());
+		assert_exp(json["dump"].contains("during") && json["dump"]["during"].is_object());
+		assert_exp(json["dump"].contains("start_anim") && json["dump"]["start_anim"].is_object());
+		assert_exp(json["dump"].contains("stop_anim") && json["dump"]["stop_anim"].is_object());
 	}
 	if (json.contains("tiles")) {
 		assert_exp(json["tiles"].is_array());
@@ -315,11 +335,21 @@ GameObject::GameObject(
 	if (json.contains("harvest_anim")) {
 		assert_exp(!json["harvest_anim"].contains("dirs") || json["harvest_anim"]["dirs"].is_number_unsigned());
 
+
 		unsigned dirs = json["harvest_anim"]["dirs"];
 
 		for (size_t i = 0; i < dirs; i++)
 			this->_harvestAnims.emplace_back(*this, animList, json["harvest_anim"], i);
 	}
+	if (json.contains("dump"))
+		this->_dump.emplace(
+			json["dump"]["dir"].get<unsigned>(),
+			json["dump"]["delay"].get<unsigned>(),
+			json["dump"]["delay_after"].get<unsigned>(),
+			std::make_unique<ConditionalAnim>(*this, animList, json["dump"]["during"]),
+			std::make_unique<ConditionalAnim>(*this, animList, json["dump"]["start_anim"]),
+			std::make_unique<ConditionalAnim>(*this, animList, json["dump"]["stop_anim"])
+		);
 
 	if (json.contains("select")) {
 		assert_exp(json["select"].contains("x"));
@@ -404,6 +434,10 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 			this->_cachedDebugTexLoaded = false;
 		}
 		this->_pathCached = true;
+		if (this->_pathCache.empty()) {
+			this->_orderQueue.clear();
+			return false;
+		}
 	}
 
 	if (this->_pathCache.empty())
@@ -467,7 +501,8 @@ void GameObject::_goToClosestResource()
 
 void GameObject::_goToClosestRefinery()
 {
-	this->_lastRefinery = this->manager->getClosestResourceDump(this->_acceptResources, this->_position + this->_size / 2);
+	if (!this->_lastRefinery)
+		this->_lastRefinery = this->manager->getClosestResourceDump(this->_acceptResources, this->_position + this->_size / 2);
 	this->dumpResourcesTo(nullptr);
 }
 
@@ -480,7 +515,7 @@ bool GameObject::_updateHarvest()
 			this->harvestTimer = 0;
 			if (this->cancel)
 				return true;
-			if (this->_storageUsed >= this->_resourceStorage)
+			if (this->_lots.size() >= this->_resourceStorage)
 				return this->_goToClosestRefinery(), true;
 			auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
 			if (tile)
@@ -489,7 +524,7 @@ bool GameObject::_updateHarvest()
 			return true;
 		}
 	} else {
-		if (this->_storageUsed >= this->_resourceStorage)
+		if (this->_lots.size() >= this->_resourceStorage)
 			return this->_goToClosestRefinery(), true;
 		auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
 		if (!tile)
@@ -499,18 +534,21 @@ bool GameObject::_updateHarvest()
 		this->harvestTimer++;
 		if (this->harvestTimer >= this->_harvestTime) {
 			auto &r = this->manager->getResource(*tile);
-			auto remain = this->_resourceStorage - this->_storageUsed;
-			auto percent = remain / static_cast<float>(r.storage);
+			std::unordered_map<std::string, unsigned> value;
 
 			this->harvestDelaying = true;
 			this->harvestTimer = 0;
-			this->_lots.emplace_back(r.value);
-			if (percent < 1) {
-				for (auto &v : this->_lots.back() | std::ranges::views::values)
-					v = std::ceil(v * percent);
-				this->_storageUsed = this->_resourceStorage;
-			} else
-				this->_storageUsed += r.storage;
+			for (size_t i = 0; i < r.storage && this->_lots.size() < this->_resourceStorage; i++) {
+				std::unordered_map<std::string, unsigned> diff;
+
+				for (auto &v : r.value) {
+					auto va = v.second * (i + 1) / r.storage;
+
+					diff[v.first] = va - value[v.first];
+					value[v.first] = va;
+				}
+				this->_lots.emplace_back(diff);
+			}
 			this->manager->consumeResource(*tile);
 		}
 	}
@@ -519,10 +557,71 @@ bool GameObject::_updateHarvest()
 
 bool GameObject::_updateDump(Building *place)
 {
-	if (this->_storageUsed != 0) {
-	} else
-		this->_goToClosestResource();
-	return true;
+	if (this->_firstEvent) {
+		if (this->_currentDir != this->_dump->dir) {
+			this->_orderQueue.emplace_front(TurnOrder{this->_dump->dir});
+			this->_orderQueue.emplace_front(DumpOrder{place});
+			return true;
+		}
+		if (place == nullptr || place->isDead()) {
+			this->_goToClosestRefinery();
+			return true;
+		}
+		if (this->_lots.size() == 0) {
+			this->_goToClosestResource();
+			return true;
+		}
+		if (this->_position != (place->getPosition() + place->getPoint()).to<float>())
+			return false;
+		this->_dumpStart = true;
+	} else if (this->_dumpStart) {
+		if (this->_dumpStart && (*this->_dump->start)() && this->_dump->start->update()) {
+			this->_dumping = true;
+			this->_dumpStart = false;
+		}
+	} else if (this->_dumpStop) {
+		if (this->_dumpStop && (*this->_dump->stop)() && this->_dump->stop->update()) {
+			if (this->_lots.size() != 0)
+				this->_goToClosestRefinery();
+			else
+				this->_goToClosestResource();
+			this->_dumpStop = false;
+			return true;
+		}
+	} else if (this->_dumping) {
+		if (place == nullptr || place->isDead()) {
+			this->_dumpStop = true;
+			this->_dumping = false;
+			return false;
+		}
+		if (this->dumpTimer == this->_dump->delay) {
+			std::unordered_map<std::string, unsigned> value;
+			// TODO: Handle other strategies
+			Player::CreditStrategy strategy = Player::CREDIT_SPILL;
+			auto &accept = place->getAcceptResources();
+
+			for (auto &[type, content] : this->_lots.front().value) {
+				if (std::ranges::find(accept, type) == accept.end()) {
+					auto p = this->manager->convertResource(type, accept, content);
+					value[p.first] += p.second;
+				} else
+					value[type] += content;
+			}
+			for (auto &[type, content] : value)
+				this->owner->credit(type, content, strategy);
+			this->_lots.pop_front();
+			place->produced();
+		}
+		if (this->dumpTimer >= this->_dump->delay + this->_dump->delay_after) {
+			if (this->_lots.empty()) {
+				this->_dumpStop = true;
+				this->_dumping = false;
+			} else
+				this->dumpTimer = 0;
+		} else
+			this->dumpTimer++;
+	}
+	return false;
 }
 
 bool GameObject::_handleOrder(const Order &o)
@@ -548,9 +647,16 @@ void GameObject::update()
 {
 	if(this->_lastRefinery && this->_lastRefinery->isDisposable())
 		this->_lastRefinery = nullptr;
-	for (auto &anim : this->_anims[this->_currentDir])
-		if (anim())
-			anim.update();
+	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping)
+		for (auto &anim : this->_anims[this->_currentDir])
+			if (anim())
+				anim.update();
+	for (auto &o : this->_orderQueue)
+		if (auto dump = std::get_if<DumpOrder>(&o))
+			if (dump->target->isDisposable())
+				dump->target = nullptr;
+	if (this->_dumping && (*this->_dump->during)())
+		this->_dump->during->update();
 	if (!this->_harvestAnims.empty() && this->_harvesting) {
 		auto dir = this->_currentDir * this->_harvestAnims.size() / this->_anims.size();
 		auto &anim = this->_harvestAnims[dir];
@@ -576,9 +682,16 @@ void GameObject::update()
 
 void GameObject::render(int layer)
 {
-	for (auto &anim : this->_anims[this->_currentDir])
-		if (anim() && anim.getLayer() == layer)
-			this->_displayAnim(anim.getAnim());
+	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping)
+		for (auto &anim : this->_anims[this->_currentDir])
+			if (anim() && anim.getLayer() == layer)
+				this->_displayAnim(anim.getAnim());
+	if (this->_dumping && (*this->_dump->during)() && this->_dump->during->getLayer() == layer)
+		this->_displayAnim(this->_dump->during->getAnim());
+	if (this->_dumpStop && (*this->_dump->stop)() && this->_dump->stop->getLayer() == layer)
+		this->_displayAnim(this->_dump->stop->getAnim());
+	if (this->_dumpStart && (*this->_dump->start)() && this->_dump->start->getLayer() == layer)
+		this->_displayAnim(this->_dump->start->getAnim());
 	if (!this->_harvestAnims.empty() && this->_harvesting) {
 		auto dir = this->_currentDir * this->_harvestAnims.size() / this->_anims.size();
 		auto &anim = this->_harvestAnims[dir];
@@ -605,6 +718,11 @@ void GameObject::setColor(const HSLColor &color)
 	for (auto &block : this->_anims)
 		for (auto &anim : block)
 			anim.setColor(color);
+	if (this->_dump) {
+		this->_dump->during->setColor(color);
+		this->_dump->start->setColor(color);
+		this->_dump->stop->setColor(color);
+	}
 }
 
 const std::string &GameObject::getId() const
@@ -641,7 +759,7 @@ void GameObject::damage(unsigned int amount)
 
 bool GameObject::isDead() const
 {
-	return this->_hp == 0;
+	return this->_hp == 0 || this->_disposable;
 }
 
 bool GameObject::isDisposable() const
@@ -772,8 +890,6 @@ void GameObject::moveTo(const Vector2i &pos, bool automatic)
 			this->_orderQueue.emplace_back(MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), false});
 		else
 			this->_orderQueue.emplace_back(MoveOrder{pos + this->_size / 2, false});
-		if (this->_doSound)
-			this->_doSound->play();
 	} else {
 		MoveOrder order;
 
@@ -789,10 +905,14 @@ void GameObject::dumpResourcesTo(Building *dump, bool automatic)
 {
 	if (!dump)
 		dump = this->_lastRefinery;
+	else
+		this->_lastRefinery = dump;
 	if (!dump)
 		return;
-	this->_lastRefinery = dump;
-	this->moveTo(dump->getPosition() + dump->getPoint() + dump->map->tileSize / 2, automatic);
+
+	auto pos = dump->getPosition() + dump->getPoint();
+
+	this->moveTo(pos, automatic);
 	this->_orderQueue.emplace_back(DumpOrder{dump});
 }
 
@@ -805,6 +925,17 @@ void GameObject::clearOrders()
 		} else
 			this->_orderQueue.erase(this->_orderQueue.begin() + 1, this->_orderQueue.end());
 	}
+}
+
+void GameObject::playDoSound()
+{
+	if (this->_doSound)
+		this->_doSound->play();
+}
+
+void GameObject::clearPrimaryDump()
+{
+	this->_lastRefinery = nullptr;
 }
 
 void GameObject::initGlobalGrid()
@@ -910,7 +1041,7 @@ void GameObject::deinitGlobalGrid()
 std::optional<float> GameObject::getStorageDisplay() const
 {
 	if (this->_resourceStorage != 0)
-		return static_cast<float>(this->_storageUsed) / static_cast<float>(this->_resourceStorage);
+		return static_cast<float>(this->_lots.size()) / static_cast<float>(this->_resourceStorage);
 	return {};
 }
 

@@ -46,6 +46,19 @@ struct ExtraSpawn {
 	Vector2i pos;
 };
 
+struct DumpInfo {
+	unsigned dir;
+	unsigned delay;
+	unsigned delay_after;
+	std::unique_ptr<ConditionalAnim> during;
+	std::unique_ptr<ConditionalAnim> start;
+	std::unique_ptr<ConditionalAnim> stop;
+};
+
+struct ResourceLot {
+	std::unordered_map<std::string, unsigned> value;
+};
+
 class GameObject {
 protected:
 	const Faction &_base;
@@ -76,9 +89,10 @@ protected:
 	std::vector<std::string> _spawnOrders;
 	std::vector<std::string> _acceptResources;
 	Building *_lastRefinery = nullptr;
-	std::vector<std::unordered_map<std::string, unsigned>> _lots;
+	std::deque<ResourceLot> _lots;
 	std::optional<Vector2i> _spawnOffset;
 	std::optional<Vector2i> _exitOffset;
+	std::optional<DumpInfo> _dump;
 	unsigned _resourceStorage = 0;
 	unsigned _currentDir = 0;
 	unsigned _turnSpeed = 0;
@@ -90,7 +104,6 @@ protected:
 	std::array<unsigned, 4> _gpTimer = {};
 	unsigned _passFlags = 0;
 	unsigned _index;
-	unsigned _storageUsed = 0;
 	unsigned _harvestTime = 0;
 	unsigned _harvestDelay = 0;
 	float _speed = 0;
@@ -105,6 +118,10 @@ protected:
 	bool _solid = true;
 	bool _harvesting = false;
 	bool _fake;
+	// TODO: Find a better way to do this
+	bool _dumpStop = false;
+	bool _dumpStart = false;
+	bool _dumping = false;
 
 	bool _updateTurn(unsigned target);
 	bool _updateMove(Vector2i pos, bool force);
@@ -173,6 +190,8 @@ public:
 	void playBuiltSound() const;
 	void clearOrders();
 	void renderPathFindingPath();
+	void playDoSound();
+	void clearPrimaryDump();
 
 	[[nodiscard]] const std::optional<ExtraSpawn> &getExtraSpawn() const;
 	[[nodiscard]] const Vector2i &getPoint() const;

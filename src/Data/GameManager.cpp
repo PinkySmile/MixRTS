@@ -1020,20 +1020,24 @@ Building *GameManager::getClosestResourceDump(const std::vector<std::string> &pr
 	if (this->_liveBuildings.empty())
 		return nullptr;
 
-	Building *best = &this->_liveBuildings.front();
-	auto dist = pos.distance2(best->getPosition() + best->getPoint() + best->map->tileSize / 2);
+	Building *best = nullptr;
+	double dist = std::numeric_limits<double>::infinity();
 	size_t resourceScore = 0;
-	auto *accept = &best->getAcceptResources();
 
-	for (auto &r : preferredResources)
-		resourceScore += std::ranges::find(*accept, r) != accept->end();
 	for (auto &b : this->_liveBuildings) {
+		if (b.isDead())
+			continue;
+
+		auto &accept = b.getAcceptResources();
+
+		if (accept.empty())
+			continue;
+
 		size_t score = 0;
 		auto d = pos.distance2(b.getPosition() + b.getPoint() + b.map->tileSize / 2);
 
-		accept = &best->getAcceptResources();
 		for (auto &r : preferredResources)
-			score += std::ranges::find(*accept, r) != accept->end();
+			score += std::ranges::find(accept, r) != accept.end();
 		if (resourceScore > score)
 			continue;
 		if (resourceScore < score || d < dist) {
@@ -1076,4 +1080,11 @@ void GameManager::consumeResource(Vector2i pos)
 	}
 	this->_map.refreshTile(pos.x, pos.y);
 	// TODO: Propagate to other maps
+}
+
+std::pair<std::string, unsigned> GameManager::convertResource(const std::string &source, const std::vector<std::string> &expected, unsigned int value)
+{
+	assert_exp(!expected.empty());
+	// TODO:
+	assert_not_reached();
 }

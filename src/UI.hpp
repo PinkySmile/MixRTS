@@ -37,6 +37,7 @@ public:
 		EVA_UPGRADING,
 		EVA_CASH_UP,
 		EVA_CASH_DOWN,
+		EVA_REQUIRE_STORAGE,
 		EVA_COUNT
 	};
 
@@ -70,13 +71,19 @@ public:
 		Vector2u position;
 	};
 
+	struct DumpUnitEvent {
+		std::vector<unsigned> indices;
+		unsigned hole;
+	};
+
 	typedef std::variant<
 		StartBuildEvent,
 		PlaceBuildEvent,
 		CancelBuildEvent,
 		DeployUnitEvent,
 		MoveUnitEvent,
-		HarvestUnitEvent
+		HarvestUnitEvent,
+		DumpUnitEvent
 	> Event;
 
 	GameManager *manager;

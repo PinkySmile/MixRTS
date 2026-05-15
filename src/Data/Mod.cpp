@@ -162,9 +162,29 @@ void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<s
 				assert_exp(!anims.contains(fullId));
 				auto &v = anims[fullId];
 
-				v.reserve(janimArr.size());
-				for (auto &janim: janimArr)
-					v.emplace_back(this->_base, mergeObjects(janim, gen));
+				assert_exp(janimArr.is_array() || janimArr.is_object());
+				if (janimArr.is_array()) {
+					v.reserve(janimArr.size());
+					for (auto &janim: janimArr)
+						v.emplace_back(this->_base, mergeObjects(janim, gen));
+				} else {
+					assert_exp(janimArr.contains("copy") && janimArr["copy"].is_string());
+					assert_exp(janimArr.contains("inverted") && janimArr["inverted"].is_boolean());
+					assert_exp(!janimArr.contains("count") || janimArr["count"].is_number_unsigned());
+
+					std::string copy = RESOURCE(this->_name, janimArr["copy"]);
+					assert_exp(anims.contains(copy));
+					auto &c = anims[copy];
+					size_t count = janimArr.contains("count") ? janimArr["count"].get<size_t>() : c.size();
+
+					v.reserve(count);
+					if (janimArr["inverted"])
+						for (size_t i = 0; i < count; i++)
+							v.emplace_back(c[c.size() - i - 1]);
+					else
+						for (size_t i = 0; i < count; i++)
+							v.emplace_back(c[i]);
+				}
 		#ifndef PROPAGATE_CRASH
 			} catch (std::exception &e) {
 				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what());

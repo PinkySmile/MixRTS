@@ -89,6 +89,7 @@ void D2KUI::_loadEvaSounds(const std::filesystem::path &base, const std::string 
 	this->_evaSounds[EVA_TRAINING]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "train.ogg");
 	this->_evaSounds[EVA_UNIT_READY]       = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "unit_ready.ogg");
 	this->_evaSounds[EVA_UPGRADING]        = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "upgrading.ogg");
+	this->_evaSounds[EVA_REQUIRE_STORAGE]  = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "silo_needed.ogg");
 	this->_evaSounds[EVA_CASH_DOWN]        = std::make_unique<sf::SoundBuffer>(base / "sounds/CASHTIK1.ogg");
 	this->_evaSounds[EVA_CASH_UP]          = std::make_unique<sf::SoundBuffer>(base / "sounds/CASHTIK1.ogg");
 }
