@@ -60,12 +60,16 @@ void UI::update()
 			i--;
 	if (!this->_enabled)
 		return this->_evaQueue.clear();
-	if (this->_evaQueue.empty())
+	if (this->_evaQueue.empty()) {
+		if (this->_globalEvaCooldown != 0)
+			this->_globalEvaCooldown--;
 		return;
+	}
 	if (this->_evaSound.getStatus() != sf::Sound::Status::Playing) {
 		if (this->_globalEvaCooldown == 0) {
 			auto &e = this->_evaQueue.front();
 
+			game->logger.debug("Playing EVA sound " + std::to_string(e.soundId));
 			assert_msg(this->_evaSounds[e.soundId], "Trying to play invalid EVA " + std::to_string(e.soundId));
 			this->_evaSound.setBuffer(*this->_evaSounds[e.soundId]);
 			this->_evaSound.play();
@@ -82,8 +86,16 @@ void UI::update()
 	while (!this->_evaQueue.empty() && (
 		this->_evaQueue.front().expireTimer == 0 ||
 		this->_evaCooldown[this->_evaQueue.front().soundId]
-	))
+	)) {
+		auto &f = this->_evaQueue.front();
+
+		game->logger.debug("Expiring EVA sound " +
+			std::to_string(f.soundId) + " " +
+			std::to_string(static_cast<int>(this->_evaSound.getStatus())) + " " +
+			std::to_string(this->_globalEvaCooldown)
+		);
 		this->_evaQueue.pop_front();
+	}
 }
 
 CursorAnimation &UI::getCurrentCursor()
