@@ -38,6 +38,7 @@ struct PlayerQueue {
 struct PlayerState {
 	size_t team = 0;
 	size_t index;
+	size_t factionIndex;
 	bool hasRadar = false;
 	unsigned consumedPower = 0;
 	unsigned producedPower = 0;

@@ -128,7 +128,7 @@ protected:
 	tgui::Panel::Ptr _panel = tgui::Panel::create();
 	std::unordered_map<std::string, CursorAnimation> _cursors;
 	std::string _cursor = "normal";
-	bool _enabled = true;
+	bool _enabled = false;
 };
 
 

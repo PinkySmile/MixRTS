@@ -117,7 +117,7 @@ protected:
 	bool _initGrid = false;
 	bool _solid = true;
 	bool _harvesting = false;
-	bool _fake;
+	bool _fake = false;
 	// TODO: Find a better way to do this
 	bool _dumpStop = false;
 	bool _dumpStart = false;

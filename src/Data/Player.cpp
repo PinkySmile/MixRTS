@@ -19,7 +19,10 @@
 
 unsigned PlayerState::getCombinedMoney(const std::string &key)
 {
-	return this->systemMoney[key] + this->money[key];
+	auto sys = this->systemMoney[key];
+	auto other = this->money[key];
+
+	return sys + other;
 }
 
 Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &mapState) :
@@ -30,7 +33,7 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 	_primaryFaction(factions[index]),
 	_factions(factions)
 {
-	this->state.index = index;
+	this->state.factionIndex = index;
 	for (size_t i = 0; i < factions.size(); i++) {
 		auto &f = factions[i];
 
@@ -129,20 +132,21 @@ void Player::update()
 
 void Player::render()
 {
-	for (auto &ui : this->_uis)
-		ui->render();
+	if (this->_enabled)
+		this->_uis[this->_currentUi]->render();
 }
 
 void Player::renderAbove()
 {
-	this->_uis[this->_currentUi]->renderAbove();
+	if (this->_enabled)
+		this->_uis[this->_currentUi]->renderAbove();
 }
 
 void Player::setEnabled(bool enabled)
 {
 	this->_enabled = enabled;
-	for (auto &ui : this->_uis)
-		ui->setEnabled(enabled);
+	for (size_t i = 0; i < this->_uis.size(); i++)
+		this->_uis[i]->setEnabled(i == this->_currentUi && enabled);
 }
 
 const std::unordered_map<std::string, const Building *> &Player::getBuildings() const
@@ -167,26 +171,26 @@ HSLColor Player::getColor() const
 
 void Player::onMouseMoved(Vector2i pos)
 {
-	for (auto &ui : this->_uis)
-		ui->mouseMovedToTile(pos);
+	if (this->_enabled)
+		this->_uis[this->_currentUi]->mouseMovedToTile(pos);
 }
 
 void Player::onLeftMouseClicked(Vector2i pos)
 {
-	for (auto &ui : this->_uis)
-		ui->tileClicked(pos);
+	if (this->_enabled)
+		this->_uis[this->_currentUi]->tileClicked(pos);
 }
 
 void Player::onRightMouseClicked(Vector2i pos)
 {
-	for (auto &ui : this->_uis)
-		ui->onCancel(pos);
+	if (this->_enabled)
+		this->_uis[this->_currentUi]->onCancel(pos);
 }
 
 void Player::mouseOnUi()
 {
-	for (auto &ui : this->_uis)
-		ui->mouseOnUi();
+	if (this->_enabled)
+		this->_uis[this->_currentUi]->mouseOnUi();
 }
 
 void Player::updateRender()
@@ -281,8 +285,8 @@ void Player::handleUiEvents()
 
 void Player::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args)
 {
-	for (auto &ui : this->_uis)
-		ui->playEVA(sound, expireIn, priority, cooldown, args);
+	if (this->_enabled)
+		this->_uis[this->_currentUi]->playEVA(sound, expireIn, priority, cooldown, args);
 }
 
 void Player::checkUnlocked(const Faction &faction)

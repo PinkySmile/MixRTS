@@ -52,7 +52,7 @@ private:
 	void _pushOrder(GameObject &obj, const std::string &order);
 
 public:
-	GameManager(const std::vector<Faction> &factions);
+	GameManager(const std::vector<Faction> &factions, size_t nbPlayers);
 	void loadMap(Mod &mod, const std::filesystem::path &path);
 	void addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea, unsigned team);
 	void update();

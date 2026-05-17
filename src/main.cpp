@@ -76,21 +76,59 @@ int main()
 
 		mod.loadFactions("factions.json", factions);
 
-		std::vector<Faction> allFactions{factions.at("d2k:atreides")};
-		GameManager manager{allFactions};
+		std::vector<Faction> allFactions{
+			factions.at("d2k:atreides"),
+			factions.at("d2k:harkonen"),
+			factions.at("d2k:ordos")
+		};
+		bool b = false;
+		GameManager manager{allFactions, 3};
 		auto &players = manager.getPlayers();
 		auto &map = manager.getLoadedMap();
-		size_t spawn = 0;
-		bool b = false;
+		std::array<size_t, 3> spawn{};
+		unsigned currentPlayer = 0;
 
 		manager.loadMap(mod, "mods/dune2000/maps/8PLAY1");
-		for (size_t i = 1; i < map.grid.startAreas.size(); i++)
-			if (map.grid.startAreas[i].distance2(Vector2u{0, 0}) < map.grid.startAreas[spawn].distance2(Vector2u{0, 0}))
-				spawn = i;
-		manager.addPlayer(0, HSLColor{214, 375, 919}, spawn, 0); // Atreides blue
-		//manager.addPlayer(0, HSLColor{0, 800, 750}); // Harkonen's red
-		//manager.addPlayer(0, HSLColor{145, 250, 900}); // Ordos's green
+		const auto &areas = map.grid.startAreas;
+		size_t numAreas = areas.size();
+		assert_exp(numAreas >= 3);
+		spawn[0] = game->random() % numAreas;
+
+		double maxDist = -1.0;
+		size_t bestJ = 0;
+		size_t bestK = 0;
+
+		for (size_t j = 0; j < numAreas; j++) {
+			if (j == spawn[0]) continue;
+
+			for (size_t k = j + 1; k < numAreas; k++) {
+				if (k == spawn[0]) continue;
+
+				// Calculate total distance between spawn[0], j, and k
+				auto d01 = areas[spawn[0]].distance2(areas[j]); // P1 to P2
+				auto d02 = areas[spawn[0]].distance2(areas[k]); // P1 to P3
+				auto d12 = areas[j].distance2(areas[k]);        // P2 to P3
+
+				// Find the absolute weakest link (shortest distance) in this trio
+				auto currentMinDist = std::min({d01, d02, d12});
+
+				// Track the pair that maximizes the total distance
+				if (currentMinDist > maxDist) {
+					maxDist = currentMinDist;
+					bestJ = j;
+					bestK = k;
+				}
+			}
+		}
+
+		spawn[1] = bestJ;
+		spawn[2] = bestK;
+		manager.addPlayer(0, HSLColor{214, 375, 919}, spawn[0], 0); // Atreides blue
+		manager.addPlayer(1, HSLColor{  0, 800, 750}, spawn[1], 1); // Harkonen's red
+		manager.addPlayer(2, HSLColor{145, 250, 900}, spawn[2], 2); // Ordos's green
 		players[0].setEnabled(true);
+		players[1].setEnabled(false);
+		players[2].setEnabled(false);
 
 		//music.play();
 		reloadViews(game->screen->getSize());
@@ -100,6 +138,15 @@ int main()
 					game->screen->close();
 				else if (auto resized = event->getIf<sf::Event::Resized>())
 					reloadViews(resized->size);
+				else if (auto key = event->getIf<sf::Event::KeyPressed>()) {
+				#ifdef _DEBUG
+					if (key->code == sf::Keyboard::Key::F4) {
+						players[currentPlayer].setEnabled(false);
+						currentPlayer = (currentPlayer + 1) % players.size();
+						players[currentPlayer].setEnabled(true);
+					}
+				#endif
+				}
 				manager.consumeEvent(*event);
 				game->gui.handleEvent(*event);
 			}

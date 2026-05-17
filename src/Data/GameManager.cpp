@@ -33,13 +33,14 @@ static bool isMouseOverUI()
 	return false;
 }
 
-GameManager::GameManager(const std::vector<Faction> &factions) :
+GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers) :
 	_factions(factions)
 {
 	for (auto &f : this->_factions) {
 		f.load();
 		this->_mapStates.emplace_back();
 	}
+	this->_players.reserve(nbPlayers);
 }
 
 void GameManager::loadMap(Mod &mod, const std::filesystem::path &path)
@@ -84,6 +85,7 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned
 			m.placementGrid.emplace_back(m.grid.size(), 0);
 	}
 	this->_players.emplace_back(*this, this->_factions, factionIndex, color, this->_mapStates);
+	this->_players[index].state.index = index;
 	this->_players[index].state.team = team;
 	this->_players[index].state.systemMoney = faction.getStartingMoney();
 	for (auto &b : faction.getStartingBuildings()) {
@@ -550,7 +552,7 @@ void GameManager::consumeEvent(const Event &event)
 bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePosAbs)
 {
 	auto &player = this->_players[owner];
-	auto &map = this->_mapStates[owner];
+	auto &map = this->_mapStates[player.state.factionIndex];
 	auto &buildings = player.getBuildings();
 	assert_msg(buildings.contains(id), id);
 	auto &base = *buildings.at(id);
@@ -639,7 +641,7 @@ template<typename T>
 T *GameManager::_spawnObj(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, std::list<T> &out, const std::unordered_map<std::string, const T *> &in)
 {
 	auto &player = this->_players[owner];
-	auto &map = this->_mapStates[owner];
+	auto &map = this->_mapStates[player.state.factionIndex];
 	auto &buildings = player.getBuildings();
 	std::string concrete = player.getPrimaryFaction().getBase().getName() + ":conc";
 	assert_msg(in.contains(id), id);
