@@ -62,12 +62,29 @@ static bool aStar(Vector2i start, Vector2i goal, const std::function<bool(Vector
 
 	closedSet.clear();
 
+	// Track the closest node we've found to the goal so far
+	Vector2i bestNode = start;
+	float minHScore = std::max(std::abs(start.x - goal.x), std::abs(start.y - goal.y)) * 10;
+
 	while (!openSet.empty()) {
 		// This operation can occur in O(Log(N)) time if open_set is a min-heap or a priority queue
 		auto current = openSet.top().first;
+		openSet.pop();
+
+		// If we already fully processed this node, skip it.
+		if (closedSet.contains(current))
+			continue;
 
 		closedSet.emplace(current);
-		openSet.pop();
+
+		// Track the closest point to destination
+		auto currentDiff = current - goal;
+		float currentHScore = std::max(std::abs(currentDiff.x), std::abs(currentDiff.y)) * 10;
+		if (currentHScore < minHScore) {
+			minHScore = currentHScore;
+			bestNode = current;
+		}
+
 		if (current == goal) {
 			reconstructPath(cameFrom, current, totalPath);
 			return true;
@@ -84,6 +101,8 @@ static bool aStar(Vector2i start, Vector2i goal, const std::function<bool(Vector
 		neighbors.emplace_back(Vector2i{current.x + step.x, current.y + step.y}, true);
 
 		for (auto [neighbor, corner] : neighbors) {
+			if (closedSet.contains(neighbor))
+				continue;
 			if (isObstructed(neighbor))
 				continue;
 			if (neighbor.distance2(start) > 250000)
@@ -96,16 +115,26 @@ static bool aStar(Vector2i start, Vector2i goal, const std::function<bool(Vector
 			if (tentativeGScore >= GET_OPTIONAL(gScore, neighbor))
 				continue;
 
-			auto diff = current - goal;
-
 			// This path to neighbor is better than any previous one. Record it!
 			gScore[neighbor] = tentativeGScore;
-			openSet.emplace(neighbor, tentativeGScore + std::max(std::abs(diff.x), std::abs(diff.y)) * 100);
+
+			auto neighborDiff = neighbor - goal;
+			float hScore = std::max(std::abs(neighborDiff.x), std::abs(neighborDiff.y)) * 10;
+
+			// Using a slight multiplier (e.g., 1.2 * hScore) is okay for RTS speedups,
+			// but keep it balanced with tentativeGScore.
+			openSet.emplace(neighbor, tentativeGScore + hScore);
 			cameFrom[neighbor] = current;
 		}
 	}
 
-	// Open set is empty but goal was never reached
+	// If we get here, the path to the target was completely blocked.
+	// Fall back to the best node we managed to reach.
+	if (bestNode != start) {
+		reconstructPath(cameFrom, bestNode, totalPath);
+		return true; // Return true because we populated a valid fallback path
+	}
+
 	return false;
 }
 
