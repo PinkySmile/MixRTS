@@ -71,8 +71,8 @@ public:
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
 	void registerObject(GameObject *o);
 	void deregisterObject(GameObject *o);
-	void modUnitInArea(const MapState::Quad &quad, int count);
-	void modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, int count);
+	void modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, int count);
+	void modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, int count);
 	std::optional<Vector2i> getFirstHarvestableTile(MapState &state, Vector2i pos) const;
 	std::optional<Vector2i> getClosestHarvestableTile(MapState &state, Vector2i pos) const;
 	Building *getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos);

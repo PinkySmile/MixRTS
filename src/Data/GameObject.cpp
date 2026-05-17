@@ -22,22 +22,39 @@ bool GameObject::_shortenOrder(Order &o)
 	if (std::holds_alternative<MoveOrder>(o)) {
 		if (!this->_boundToGrid)
 			return true;
+
+		float x = std::fmod(this->_position.x, this->map->tileSize.x);
+		float y = std::fmod(this->_position.y, this->map->tileSize.y);
+
+		if (x == 0 && y == 0)
+			return true;
 		this->_pathCache.erase(this->_pathCache.begin() + 1, this->_pathCache.end());
 
-		Vector2i cache = this->map->absToTileCoord(this->_pathCache.front());
-		Vector2i pos = this->_gridPos;
+		Vector2f pos = this->_position;
 
 		// TODO: Handle non-square grids
-		if (cache.x > pos.x)
-			pos.x++;
-		else if (cache.x < pos.x)
-			pos.x--;
-		if (cache.y > pos.y)
-			pos.y++;
-		else if (cache.y < pos.y)
-			pos.y--;
+		if (this->_currentDir == 1 * this->_anims.size() / 8) {
+			pos.x += this->map->tileSize.x - x;
+			pos.y -= y;
+		} else if (this->_currentDir == 3 * this->_anims.size() / 8) {
+			pos.x += this->map->tileSize.x - x;
+			pos.y += this->map->tileSize.y - y;
+		} else if (this->_currentDir == 5 * this->_anims.size() / 8) {
+			pos.x -= x;
+			pos.y += this->map->tileSize.y - y;
+		} else if (this->_currentDir == 7 * this->_anims.size() / 8) {
+			pos.x -= x;
+			pos.y -= y;
+		} else if (this->_currentDir == 0 * this->_anims.size() / 8)
+			pos.y -= y;
+		else if (this->_currentDir == 2 * this->_anims.size() / 8)
+			pos.x += this->map->tileSize.x - x;
+		else if (this->_currentDir == 4 * this->_anims.size() / 8)
+			pos.y += this->map->tileSize.y - y;
+		else if (this->_currentDir == 6 * this->_anims.size() / 8)
+			pos.x -= x;
 
-		this->_cachedDest = this->map->topLeftCoordToAbs(pos);
+		this->_cachedDest = pos;
 		this->_pathCache.front() = this->_cachedDest;
 		return false;
 	} else if (std::holds_alternative<HarvestOrder>(o)) {
@@ -942,47 +959,43 @@ void GameObject::initGlobalGrid()
 {
 	if (this->_initGrid)
 		return;
+
 	if (this->_tiles) {
 		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
 			auto &line = (*this->_tiles)[gy];
 
 			for (size_t gx = 0; gx < line.size(); gx++) {
-				if (!(line[gx] & MASK_SOLID))
+				if (!(line[gx] & MASK_PLACEMENT_REQUIRED))
 					continue;
 				this->manager->modUnitInArea(
 					this->map->tileCoordToAbs({
 						static_cast<int>(this->_gridPos.x + gx),
 						static_cast<int>(this->_gridPos.y + gy)
 					}),
-					this->_tileCount
+					this->owner->state.team, 1,
+					(line[gx] & MASK_SOLID) ? this->_tileCount : 0
 				);
 			}
 		}
 	} else {
-		if (this->_boundToGrid) {
+		MapState::Quad abs = {
+			this->_position,
+			{this->_position.x + this->_size.x, this->_position.y},
+			{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
+			{this->_position.x, this->_position.y + this->_size.y},
+		};
+
+		if (this->_boundToGrid)
 			this->manager->modUnitInArea(
-				{
-					this->_position,
-					{this->_position.x + this->_size.x, this->_position.y},
-					{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
-					{this->_position.x, this->_position.y + this->_size.y},
-				},
+				abs,
 				this->map->pathFindingGrid,
 				this->_gridPos,
 				this->map->tileSize,
+				0, 0,
 				this->_tileCount
 			);
-		} else {
-			this->manager->modUnitInArea(
-				{
-					this->_position,
-					{this->_position.x + this->_size.x, this->_position.y},
-					{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
-					{this->_position.x, this->_position.y + this->_size.y},
-				},
-				this->_tileCount
-			);
-		}
+		else
+			this->manager->modUnitInArea(abs, 0, 0, this->_tileCount);
 	}
 	this->manager->registerObject(this);
 	this->_initGrid = true;
@@ -997,42 +1010,37 @@ void GameObject::deinitGlobalGrid()
 			auto &line = (*this->_tiles)[gy];
 
 			for (size_t gx = 0; gx < line.size(); gx++) {
-				if (!(line[gx] & MASK_SOLID))
+				if (!(line[gx] & MASK_PLACEMENT_REQUIRED))
 					continue;
 				this->manager->modUnitInArea(
 					this->map->tileCoordToAbs({
 						static_cast<int>(this->_gridPos.x + gx),
 						static_cast<int>(this->_gridPos.y + gy)
 					}),
-					-this->_tileCount
+					this->owner->state.team, -1,
+					(line[gx] & MASK_SOLID) ? -this->_tileCount : 0
 				);
 			}
 		}
 	} else {
-		if (this->_boundToGrid) {
+		MapState::Quad abs = {
+			this->_position,
+			{this->_position.x + this->_size.x, this->_position.y},
+			{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
+			{this->_position.x, this->_position.y + this->_size.y},
+		};
+
+		if (this->_boundToGrid)
 			this->manager->modUnitInArea(
-				{
-					this->_position,
-					{this->_position.x + this->_size.x, this->_position.y},
-					{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
-					{this->_position.x, this->_position.y + this->_size.y},
-				},
+				abs,
 				this->map->pathFindingGrid,
 				this->_gridPos,
 				this->map->tileSize,
+				0, 0,
 				-this->_tileCount
 			);
-		} else {
-			this->manager->modUnitInArea(
-				{
-					this->_position,
-					{this->_position.x + this->_size.x, this->_position.y},
-					{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
-					{this->_position.x, this->_position.y + this->_size.y},
-				},
-				-this->_tileCount
-			);
-		}
+		else
+			this->manager->modUnitInArea(abs, 0, 0, -this->_tileCount);
 	}
 	this->manager->deregisterObject(this);
 	this->_initGrid = false;

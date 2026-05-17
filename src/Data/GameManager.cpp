@@ -599,7 +599,6 @@ void GameManager::_pushOrder(GameObject &obj, const std::string &order)
 void GameManager::_onObjectSpawned(Vector2i pos, MapState &map, Player &owner, GameObject &obj, const std::string &id)
 {
 	auto topLeftAbs = map.topLeftCoordToAbs(pos);
-	auto fullPosAbs = map.tileCoordToAbs(pos);
 	auto group = obj.getGroup();
 
 	obj.manager = this;
@@ -617,9 +616,7 @@ void GameManager::_onObjectSpawned(Vector2i pos, MapState &map, Player &owner, G
 	owner.state.myObjects.emplace_back(&obj);
 
 	this->_objectMap[this->_lastObjectId++] = &obj;
-	this->_map.grid.updatePlacementGrid(fullPosAbs, owner.state.team, 1);
-	for (auto &m : this->_mapStates)
-		m.updatePlacementGrid(fullPosAbs, owner.state.team, 1);
+
 	for (auto &order : obj.getSpawnOrders())
 		this->_pushOrder(obj, order);
 
@@ -889,29 +886,39 @@ void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &st
 		for (int x = std::max(minv.x, 0); x < std::min<int>(maxv.x, state.gridSize.x); x++)
 			if (count < 0)
 				PFGRIDMASK_DEL_UNIT(state, x, y, -count);
-			else
+			else if (count > 0)
 				PFGRIDMASK_ADD_UNIT(state, x, y, count);
 }
 
-void GameManager::modUnitInArea(const MapState::Quad &quad, int count)
+void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, int count)
 {
 	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, count);
 	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, count);
 	for (auto &map : this->_mapStates)
 		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, count);
+	if (placementCount != 0) {
+		this->_map.grid.updatePlacementGrid(quad, team, placementCount);
+		for (auto &m : this->_mapStates)
+			m.updatePlacementGrid(quad, team, placementCount);
+	}
 }
 
-void GameManager::modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, int count)
+void GameManager::modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, int count)
 {
 	if (count < 0)
 		PFGRIDMASK_DEL_UNIT(special, rel.x, rel.y, -count);
-	else
+	else if (count > 0)
 		PFGRIDMASK_ADD_UNIT(special, rel.x, rel.y, count);
 	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, count);
 	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, count);
 	for (auto &map : this->_mapStates)
 		if (&map.pathFindingGrid != &special)
 			this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, count);
+	if (placementCount != 0) {
+		this->_map.grid.updatePlacementGrid(quad, team, placementCount);
+		for (auto &m : this->_mapStates)
+			m.updatePlacementGrid(quad, team, placementCount);
+	}
 }
 
 GameObject *GameManager::getObjectById(unsigned int index)
