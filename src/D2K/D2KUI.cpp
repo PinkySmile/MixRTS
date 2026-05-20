@@ -588,8 +588,6 @@ void D2KUI::update()
 		this->_buildQueue, this->_buildQueueAdded,
 		this->_cameos,
 		[this, &bQueue](const std::string &id, bool rightClick){
-			if (!bQueue[id].buildable)
-				return;
 			if (rightClick) {
 				this->_eventQueue.emplace_back(CancelBuildEvent{
 					id, this->_faction.getBase().getName() + ":building"
@@ -603,7 +601,7 @@ void D2KUI::update()
 					this->_placementBuilding = &it->second;
 				else
 					game->logger.debug("Cannot find " + id);
-			} else if (bQueue[id].buildProgress == 0)
+			} else
 				this->_eventQueue.emplace_back(StartBuildEvent{
 					id, this->_faction.getBase().getName() + ":building"
 				});
@@ -614,9 +612,7 @@ void D2KUI::update()
 		pQueue, this->_upgradeOrder,
 		this->_upgradeQueue, this->_upgradeQueueAdded,
 		this->_cameos,
-		[this, &pQueue](const std::string &id, bool rightClick){
-			if (!pQueue[id].buildable)
-				return;
+		[this](const std::string &id, bool rightClick){
 			if (rightClick)
 				this->_eventQueue.emplace_back(CancelBuildEvent{
 					id, this->_faction.getBase().getName() + ":upgrade"
@@ -634,10 +630,6 @@ void D2KUI::update()
 		this->_cameos,
 		[&iQueue, &lvQueue, &hvQueue, this](const std::string &id, size_t i, bool rightClick){
 			auto queue = i == 0 ? iQueue : i == 1 ? lvQueue : hvQueue;
-
-			if (!queue[id].buildable)
-				return;
-
 			auto queueId = this->_faction.getBase().getName() + (i == 0 ? ":infantry" : i == 1 ? ":light_vehicule" : ":heavy_vehicule");
 
 			if (rightClick)
@@ -1021,6 +1013,8 @@ void D2KUI::mouseOnUi()
 
 void D2KUI::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args)
 {
+	if (sound == EVA_ALREADY_BUILDING)
+		return;
 	if (sound == EVA_BUILDING) {
 		if (args == this->_faction.getBase().getName() + ":upgrade")
 			sound = EVA_UPGRADING;

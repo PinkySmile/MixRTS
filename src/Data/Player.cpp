@@ -211,7 +211,13 @@ void Player::handleUiEvents()
 				this->resetQueue(place->queue);
 			} else if (auto startBuild = std::get_if<UI::StartBuildEvent>(&*event)) {
 				bool b = true;
+				auto &queue = this->state.queues[startBuild->queue][startBuild->id];
 
+				if ((queue.buildProgress != 0 && !queue.paused) || !queue.buildable) {
+					if (this->state.buildQueues[startBuild->queue] != nullptr)
+						this->playEVA(UI::EVA_ALREADY_BUILDING, 300, 2, 300);
+					continue;
+				}
 				for (auto &[name, q] : this->state.queues[startBuild->queue]) {
 					if (q.paused) {
 						if (name == startBuild->id)
@@ -222,9 +228,9 @@ void Player::handleUiEvents()
 					q.buildable = false;
 				}
 				if (b) {
-					this->state.queues[startBuild->queue][startBuild->id].buildable = true;
-					this->state.queues[startBuild->queue][startBuild->id].buildProgress = 1;
-					this->state.buildQueues[startBuild->queue] = &this->state.queues[startBuild->queue][startBuild->id];
+					queue.buildable = true;
+					queue.buildProgress = 1;
+					this->state.buildQueues[startBuild->queue] = &queue;
 				}
 
 				Building *building = this->getPrimaryBuilding(startBuild->queue);
