@@ -172,9 +172,6 @@ void GameManager::_checkScroll()
 void GameManager::update()
 {
 	this->_checkScroll();
-	if (isMouseOverUI())
-		for (auto &p: this->_players)
-			p.mouseOnUi();
 	for (auto &b : this->_liveBuildings)
 		b.update();
 	for (auto &u : this->_liveUnits)
@@ -183,6 +180,9 @@ void GameManager::update()
 		player.update();
 	for (auto &player : this->_players)
 		player.handleUiEvents();
+	if (isMouseOverUI())
+		for (auto &p: this->_players)
+			p.mouseOnUi();
 
 	for (auto &list : this->_renderObjects | std::ranges::views::values) {
 		auto it = list.begin();
