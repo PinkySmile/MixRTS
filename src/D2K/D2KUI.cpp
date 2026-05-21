@@ -117,6 +117,7 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_starport        = this->_panel->get<tgui::Button>("Starport");
 	this->_blazon          = this->_panel->get<tgui::Picture>("Blazon");
 	this->_power           = this->_panel->get<tgui::Panel>("Power");
+	this->_settings        = this->_panel->get<tgui::Panel>("Settings");
 	this->_greenPower      = this->_power->get<tgui::Picture>("GreenPower");
 	this->_yellowPower     = this->_power->get<tgui::Picture>("YellowPower");
 	this->_redPower        = this->_power->get<tgui::Picture>("RedPower");
@@ -132,6 +133,7 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_creditDigits[5] = this->_panel->get<tgui::Picture>("Credit5");
 	this->_creditDigits[6] = this->_panel->get<tgui::Picture>("Credit6");
 	this->_creditDigits[7] = this->_panel->get<tgui::Picture>("Credit7");
+	this->_resumeGame      = this->_settings->get<tgui::Button>("Resume");
 	this->_creditRawDigits[0] = tgui::Texture{(base / "numbers/credit_0.png").native()};
 	this->_creditRawDigits[1] = tgui::Texture{(base / "numbers/credit_1.png").native()};
 	this->_creditRawDigits[2] = tgui::Texture{(base / "numbers/credit_2.png").native()};
@@ -147,6 +149,7 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 		assert_exp(this->_selectCorners[i].loadFromFile(base / ("cursor/select_" + std::to_string(i) + ".png")));
 
 	this->_blazon->getRenderer()->setTexture({(base / params["blazon"].get<std::string>()).native()});
+	this->_settings->setVisible(false);
 	this->_main1->setVisible(false);
 	this->_main2->setVisible(false);
 	this->_upgrade->setVisible(false);
@@ -231,6 +234,22 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 		this->_up2->setVisible(true);
 		this->_down1->setVisible(true);
 		this->_down2->setVisible(true);
+	});
+	this->_options->onMousePress([this]{
+		this->_soundButton.play();
+	});
+	this->_options->onClick([this]{
+		this->_settings->setVisible(true);
+		game->paused = true;
+		this->forcedCursor.reset();
+	});
+	this->_resumeGame->onMousePress([this]{
+		this->_soundButton.play();
+	});
+	this->_resumeGame->onClick([this]{
+		this->_settings->setVisible(false);
+		game->paused = false;
+		this->forcedCursor.reset();
 	});
 
 	const std::string &prefix = params["cameo_prefix"];

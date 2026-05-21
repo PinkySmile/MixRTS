@@ -22,6 +22,7 @@
 
 struct Game {
 	bool hosting = false;
+	bool paused = false;
 	std::random_device random;
 	RandomWrapper gameRandom;
 	Logger logger;

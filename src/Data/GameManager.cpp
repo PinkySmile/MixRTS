@@ -27,7 +27,7 @@ static bool isMouseOverUI()
 			continue;
 		if (auto container = widget->cast<tgui::Container>())
 			for (auto w : container->getWidgets())
-				if (w->isMouseOnWidget(pos))
+				if (w->isVisible() && w->isMouseOnWidget(pos))
 					return true;
 	}
 	return false;
@@ -129,6 +129,9 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned
 
 void GameManager::_checkScroll()
 {
+	if (game->paused)
+		return;
+
 	Vector2u size = game->screen->getSize();
 	auto pos = sf::Mouse::getPosition(*game->screen);
 	std::string name = "scroll_";
