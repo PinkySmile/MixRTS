@@ -55,6 +55,7 @@ void UI::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int priorit
 
 void UI::update()
 {
+	this->_settings->setVisible(game->paused);
 	for (auto &i : this->_evaCooldown)
 		if (i)
 			i--;
@@ -100,7 +101,7 @@ void UI::update()
 
 CursorAnimation &UI::getCurrentCursor()
 {
-	if (this->forcedCursor)
+	if (!game->paused && this->forcedCursor)
 		return this->_cursors.at(*this->forcedCursor);
 	return this->_cursors.at(this->_cursor);
 }

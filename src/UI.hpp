@@ -126,6 +126,7 @@ protected:
 	std::vector<GameObject *> _objectBuffer;
 	sf::Sound _evaSound;
 	std::deque<Event> _eventQueue;
+	tgui::Panel::Ptr _settings;
 	tgui::Panel::Ptr _panel = tgui::Panel::create();
 	std::unordered_map<std::string, CursorAnimation> _cursors;
 	std::string _cursor = "normal";

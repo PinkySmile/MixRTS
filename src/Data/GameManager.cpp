@@ -549,6 +549,8 @@ void GameManager::consumeEvent(const Event &event)
 					p.onRightMouseClicked(pos);
 			}
 		}
+	} else if (event.is<sf::Event::FocusLost>()) {
+		game->paused = true;
 	}
 }
 

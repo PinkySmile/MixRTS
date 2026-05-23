@@ -65,7 +65,6 @@ int main()
 	#endif
 		game->modManager.loadMod("mods/dune2000/");
 		game->screen->setMouseCursorVisible(false);
-		game->screen->setMouseCursorGrabbed(true);
 		game->locale = "fr";
 
 		sf::Clock clock;
@@ -164,6 +163,7 @@ int main()
 			manager.renderAbove();
 			dispFPS(clock.restart().asSeconds());
 			game->screen->display();
+			game->screen->setMouseCursorGrabbed(!game->paused);
 		}
 		return 0;
 #ifndef PROPAGATE_CRASH

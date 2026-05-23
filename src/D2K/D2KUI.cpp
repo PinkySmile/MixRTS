@@ -239,17 +239,13 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 		this->_soundButton.play();
 	});
 	this->_options->onClick([this]{
-		this->_settings->setVisible(true);
 		game->paused = true;
-		this->forcedCursor.reset();
 	});
 	this->_resumeGame->onMousePress([this]{
 		this->_soundButton.play();
 	});
 	this->_resumeGame->onClick([this]{
-		this->_settings->setVisible(false);
 		game->paused = false;
-		this->forcedCursor.reset();
 	});
 
 	const std::string &prefix = params["cameo_prefix"];

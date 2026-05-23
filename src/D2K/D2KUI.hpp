@@ -21,7 +21,6 @@
 class D2KUI : public UI {
 private:
 	const Faction &_faction;
-	tgui::Panel::Ptr _settings;
 	tgui::Button::Ptr _resumeGame;
 	tgui::Panel::Ptr _power;
 	tgui::Button::Ptr _sell;
