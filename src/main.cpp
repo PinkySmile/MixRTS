@@ -60,6 +60,7 @@ int main()
 #endif
 	#ifdef _WIN32
 		new Game(R"(C:\Windows\Fonts\Arial.ttf)");
+		ShowWindow(game->screen->getNativeHandle(), SW_MAXIMIZE);
 	#else
 		new Game("/usr/share/fonts/noto/NotoSans-Regular.ttf");
 	#endif

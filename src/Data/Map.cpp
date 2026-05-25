@@ -31,7 +31,7 @@ MapResource::MapResource(const std::filesystem::path &folder, const nlohmann::js
 	} else if (strat == "connected") {
 		assert_exp(json.contains("tiles") && json["tiles"].is_string());
 		std::filesystem::path path = folder / json["tiles"];
-		std::ifstream streamTiles{path};
+		std::ifstream streamTiles{path, std::fstream::binary};
 
 		this->tiles.resize(256);
 		assert_exp(streamTiles);
