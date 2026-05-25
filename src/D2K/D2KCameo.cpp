@@ -31,7 +31,7 @@ void D2KCameo::Renderer::setTexture(const tgui::Texture &texture)
 	const tgui::Texture *toUse = &texture;
 
 	if (!data) {
-		sf::Image img{{60, 47}};
+		sf::Image img{sf::Vector2u{60, 47}};
 
 		for (size_t y = 1; y < 46; y++)
 			for (size_t x = 1; x < 59; x++)

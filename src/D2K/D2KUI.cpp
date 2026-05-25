@@ -238,13 +238,13 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_options->onMousePress([this]{
 		this->_soundButton.play();
 	});
-	this->_options->onClick([this]{
+	this->_options->onClick([]{
 		game->paused = true;
 	});
 	this->_resumeGame->onMousePress([this]{
 		this->_soundButton.play();
 	});
-	this->_resumeGame->onClick([this]{
+	this->_resumeGame->onClick([]{
 		game->paused = false;
 	});
 

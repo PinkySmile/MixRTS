@@ -58,11 +58,9 @@ int main()
 #ifndef PROPAGATE_CRASH
 	try {
 #endif
+		new Game("mods/NotoSans-Regular.ttf");
 	#ifdef _WIN32
-		new Game(R"(C:\Windows\Fonts\Arial.ttf)");
 		ShowWindow(game->screen->getNativeHandle(), SW_MAXIMIZE);
-	#else
-		new Game("/usr/share/fonts/noto/NotoSans-Regular.ttf");
 	#endif
 		game->modManager.loadMod("mods/dune2000/");
 		game->screen->setMouseCursorVisible(false);
