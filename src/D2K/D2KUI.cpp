@@ -967,7 +967,7 @@ void D2KUI::tileClicked(Vector2i absPos)
 				if (!obj->canDeploy())
 					this->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300, "");
 				else
-					this->_eventQueue.emplace_back(DeployUnitEvent{obj->getIndex()});
+					this->_eventQueue.emplace_back(DeployUnitEvent{obj->index});
 				return;
 			}
 		}
@@ -993,11 +993,11 @@ void D2KUI::tileClicked(Vector2i absPos)
 					auto res = GRID_RESOURCE_TYPE(map->grid[relPos.x + relPos.y * map->gridSize.x]);
 
 					if (res != 0) {
-						hevent.indices.push_back(s->getIndex());
+						hevent.indices.push_back(s->index);
 						continue;
 					}
 				}
-				event.indices.push_back(s->getIndex());
+				event.indices.push_back(s->index);
 			}
 			if (!event.indices.empty())
 				this->_eventQueue.emplace_back(event);

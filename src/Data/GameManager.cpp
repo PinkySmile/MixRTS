@@ -603,17 +603,15 @@ void GameManager::_pushOrder(GameObject &obj, const std::string &order)
 		assert_not_reached_msg("Unknown order '" + order + "'");
 }
 
-void GameManager::_onObjectSpawned(Vector2i pos, MapState &map, Player &owner, GameObject &obj, const std::string &id)
+void GameManager::_initObject(MapState &map, Player &owner, GameObject &obj, const std::string &id)
 {
-	auto topLeftAbs = map.topLeftCoordToAbs(pos);
 	auto group = obj.getGroup();
 
 	obj.manager = this;
 	obj.owner = &owner;
 	obj.map = &map;
 	obj.pfGrid = &this->_map.pathFindingGrid;
-	obj.setIndex(this->_lastObjectId);
-	obj.setPosition(topLeftAbs);
+	obj.index = this->_lastObjectId;
 	obj.setColor(owner.getColor());
 	obj.built();
 
@@ -623,23 +621,27 @@ void GameManager::_onObjectSpawned(Vector2i pos, MapState &map, Player &owner, G
 	owner.state.myObjects.emplace_back(&obj);
 
 	this->_objectMap[this->_lastObjectId++] = &obj;
+}
 
+void GameManager::_onObjectSpawned(Vector2i pos, GameObject &obj)
+{
+	obj.setPosition(obj.map->topLeftCoordToAbs(pos));
 	for (auto &order : obj.getSpawnOrders())
 		this->_pushOrder(obj, order);
 
 	auto extra = obj.getExtraSpawn();
 
 	if (extra)
-		this->spawnUnit(owner.state.index, obj.getPosition() + extra->pos, "", extra->unit);
+		this->spawnUnit(obj.owner->state.index, obj.getPosition() + extra->pos, "", extra->unit);
 	// FIXME: Dynamic cast
 	auto b = dynamic_cast<Building *>(&obj);
 	if (b) {
 		auto &gqueue = b->getGivenQueue();
 
 		if (gqueue)
-			owner.state.queueBuildings[*gqueue].push_back(b);
+			obj.owner->state.queueBuildings[*gqueue].push_back(b);
 	}
-	owner.checkUnlocked(obj.getFaction());
+	obj.owner->checkUnlocked(obj.getFaction());
 }
 
 template<typename T>
@@ -684,7 +686,8 @@ T *GameManager::_spawnObj(size_t owner, Vector2i absPos, const std::string &buil
 				for (auto &m : this->_mapStates)
 					m.setGridBits(fullPosAbs, GRIDMASK_HAS_CONCRETE);
 				this->_liveBuildings.emplace_back(concBase);
-				this->_onObjectSpawned(fullPos, map, player, this->_liveBuildings.back(), concrete);
+				this->_initObject(map, player, this->_liveBuildings.back(), concrete);
+				this->_onObjectSpawned(fullPos, this->_liveBuildings.back());
 			}
 			if (line[x] & GameObject::MASK_PLACEMENT_REQUIRED) {
 				// OPTIMIZE: Can use a reference instead of calling helpers
@@ -714,6 +717,7 @@ noGrid:
 
 		auto &obj = out.back();
 
+		this->_initObject(map, player, obj, id);
 		if (nbTiles != nbConcreteTiles)
 			obj.damage(obj.getHealth() * (nbTiles - nbConcreteTiles) / (nbTiles * 2));
 
@@ -724,17 +728,16 @@ noGrid:
 			auto spawn = parent->getSpawnOffset();
 
 			if (spawn) {
-				this->_onObjectSpawned(map.absToTileCoord(*spawn + parent->getPosition()), map, player, obj, id);
+				pos = map.absToTileCoord(*spawn + parent->getPosition());
 				if (exit) {
 					auto next = *exit + parent->getPosition();
 
 					obj.moveTo(next, true);
 					obj.setDirection(obj.getPosition().angle(next));
 				}
-				return &obj;
 			}
 		}
-		this->_onObjectSpawned(pos, map, player, obj, id);
+		this->_onObjectSpawned(pos, obj);
 		if constexpr (std::is_same_v<T, Building>) {
 			auto &gqueue = obj.getGivenQueue();
 			auto &bqueue = obj.getBuildQueue();

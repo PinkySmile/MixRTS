@@ -103,7 +103,6 @@ protected:
 	unsigned _limit = UINT32_MAX;
 	std::array<unsigned, 4> _gpTimer = {};
 	unsigned _passFlags = 0;
-	unsigned _index;
 	unsigned _harvestTime = 0;
 	unsigned _harvestDelay = 0;
 	float _speed = 0;
@@ -147,6 +146,7 @@ public:
 		float health;
 	};
 
+	unsigned index;
 	AnimationState animationState;
 	PathFindingGrid *pfGrid = nullptr;
 	GameManager *manager = nullptr;
@@ -177,7 +177,6 @@ public:
 	virtual std::optional<float> getStorageDisplay() const;
 
 	unsigned getBottom() const;
-	void setIndex(unsigned index);
 	void setDirection(float angle);
 	void setPosition(const Vector2f &pos);
 	void heal(unsigned amount);
@@ -202,7 +201,6 @@ public:
 	[[nodiscard]] bool requiresQueueBuilding() const;
 	[[nodiscard]] const std::optional<std::string> &getProxy() const;
 	[[nodiscard]] const std::optional<std::vector<std::vector<uint8_t>>> &getTileData() const;
-	[[nodiscard]] unsigned getIndex() const;
 	[[nodiscard]] const std::string &getId() const;
 	[[nodiscard]] unsigned getMaxHealth() const;
 	[[nodiscard]] unsigned getHealth() const;

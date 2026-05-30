@@ -118,7 +118,6 @@ GameObject::GameObject(const GameObject &g) :
 	_limit(g._limit),
 	_gpTimer(g._gpTimer),
 	_passFlags(g._passFlags),
-	_index(g._index),
 	_harvestTime(g._harvestTime),
 	_harvestDelay(g._harvestDelay),
 	_speed(g._speed),
@@ -130,6 +129,7 @@ GameObject::GameObject(const GameObject &g) :
 	_initGrid(g._initGrid),
 	_solid(g._solid),
 	_fake(g._fake),
+	index(g.index),
 	animationState(g.animationState),
 	pfGrid(g.pfGrid),
 	manager(g.manager),
@@ -1056,16 +1056,6 @@ std::optional<float> GameObject::getStorageDisplay() const
 bool GameObject::isSolid() const
 {
 	return this->_solid;
-}
-
-void GameObject::setIndex(unsigned int index)
-{
-	this->_index = index;
-}
-
-unsigned GameObject::getIndex() const
-{
-	return this->_index;
 }
 
 const std::optional<ExtraSpawn> &GameObject::getExtraSpawn() const

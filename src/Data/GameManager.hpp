@@ -45,7 +45,8 @@ private:
 	bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size) const;
 	void _checkScroll();
 	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1}, bool drawGrid = false);
-	void _onObjectSpawned(Vector2i pos, MapState &map, Player &owner, GameObject &obj, const std::string &id);
+	void _initObject(MapState &map, Player &owner, GameObject &obj, const std::string &id);
+	void _onObjectSpawned(Vector2i pos, GameObject &obj);
 	template<typename T>
 	T *_spawnObj(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, std::list<T> &out, const std::unordered_map<std::string, const T *> &in);
 	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, int count);
