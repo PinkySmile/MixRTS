@@ -13,51 +13,49 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	_base(base),
 	_name(name)
 {
-	assert_exp(data.contains("can_sell"));
-	assert_exp(data.contains("can_repair"));
-	assert_exp(data.contains("buildings"));
-	assert_exp(data.contains("animations"));
-	assert_exp(data.contains("upgrades"));
-	assert_exp(data.contains("units"));
-	assert_exp(data.contains("sounds"));
-	assert_exp(data.contains("starting_money"));
-	assert_exp(data.contains("ui"));
-	assert_exp(data.contains("regress_tech"));
-	assert_exp(data.contains("starting_units"));
-	assert_exp(data.contains("starting_building"));
+	assert_exp(data.contains("can_sell") && data["can_sell"].is_boolean());
+	assert_exp(data.contains("can_repair") && data["can_repair"].is_boolean());
+	assert_exp(data.contains("regress_tech") && data["regress_tech"].is_boolean());
+	assert_exp(!data.contains("primary_queue") || data["primary_queue"].is_string());
 
-	assert_exp(data["can_sell"].is_boolean());
-	assert_exp(data["can_repair"].is_boolean());
-	assert_exp(data["regress_tech"].is_boolean());
-	assert_exp(data["sounds"].is_array());
+	assert_exp(data.contains("sounds") && data["sounds"].is_array());
 	for (size_t i = 0; i < data["sounds"].size(); i++)
 		assert_msg(data["sounds"][i].is_string(), "data[\"sounds\"][" + std::to_string(i) + "]");
-	assert_exp(data["units"].is_array());
+
+	assert_exp(data.contains("units") && data["units"].is_array());
 	for (size_t i = 0; i < data["units"].size(); i++)
 		assert_msg(data["units"][i].is_string(), "data[\"units\"][" + std::to_string(i) + "]");
-	assert_exp(data["buildings"].is_array());
+
+	assert_exp(data.contains("buildings") && data["buildings"].is_array());
 	for (size_t i = 0; i < data["buildings"].size(); i++)
 		assert_msg(data["buildings"][i].is_string(), "data[\"buildings\"][" + std::to_string(i) + "]");
-	assert_exp(data["animations"].is_array());
+
+	assert_exp(data.contains("animations") && data["animations"].is_array());
 	for (size_t i = 0; i < data["animations"].size(); i++)
 		assert_msg(data["animations"][i].is_string(), "data[\"animations\"][" + std::to_string(i) + "]");
-	assert_exp(data["upgrades"].is_array());
+
+	assert_exp(data.contains("upgrades") && data["upgrades"].is_array());
 	for (size_t i = 0; i < data["upgrades"].size(); i++)
 		assert_msg(data["upgrades"][i].is_string(), "data[\"upgrades\"][" + std::to_string(i) + "]");
-	assert_exp(data["starting_money"].is_object());
+
+	assert_exp(data.contains("starting_money") && data["starting_money"].is_object());
 	for (auto &[key, value] : data["starting_money"].items())
 		assert_msg(value.is_number(), "data[\"starting_money\"][\"" + key + "\"]");
-	assert_exp(data["place"].is_object());
-	assert_exp(data["place"]["best"].is_array());
+
+	assert_exp(data.contains("place") && data["place"].is_object());
+	assert_exp(data["place"].contains("best") && data["place"]["best"].is_array());
 	for (size_t i = 0; i < data["place"]["best"].size(); i++)
 		assert_msg(data["place"]["best"][i].is_string(), "data[\"place\"][\"best\"][" + std::to_string(i) + "]");
-	assert_exp(data["place"]["ok"].is_array());
+
+	assert_exp(data["place"].contains("ok") && data["place"]["ok"].is_array());
 	for (size_t i = 0; i < data["place"]["ok"].size(); i++)
 		assert_msg(data["place"]["ok"][i].is_string(), "data[\"place\"][\"ok\"][" + std::to_string(i) + "]");
-	assert_exp(data["place"]["bad"].is_array());
+
+	assert_exp(data["place"].contains("bad") && data["place"]["bad"].is_array());
 	for (size_t i = 0; i < data["place"]["bad"].size(); i++)
 		assert_msg(data["place"]["bad"][i].is_string(), "data[\"place\"][\"bad\"][" + std::to_string(i) + "]");
-	assert_exp(data["starting_building"].is_array());
+
+	assert_exp(data.contains("starting_building") && data["starting_building"].is_array());
 	for (size_t i = 0; i < data["starting_building"].size(); i++) {
 		assert_msg(data["starting_building"][i].is_object(), "data[\"starting_building\"][" + std::to_string(i) + "]");
 		assert_msg(data["starting_building"][i].contains("name"), "data[\"starting_building\"][" + std::to_string(i) + "]");
@@ -72,6 +70,7 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 			assert_msg(data["starting_building"][i]["offset"]["y"].is_number(), "data[\"starting_building\"][" + std::to_string(i) + "]");
 		}
 	}
+
 	assert_exp(data["starting_units"].is_array());
 	for (size_t i = 0; i < data["starting_units"].size(); i++) {
 		assert_msg(data["starting_units"][i].is_object(), "data[\"starting_units\"][" + std::to_string(i) + "]");
@@ -99,6 +98,8 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	this->_uiData = data["ui"];
 	this->_regressTech = data["regress_tech"];
 
+	if (data.contains("primary_queue"))
+		this->_primaryQueue = data["primary_queue"].get<std::string>();
 	for (const auto &p : data["place"]["best"]) {
 		this->_placementCursors[0].emplace_back();
 		this->_placementCursors[0].back().load(base.getBase() / p);
@@ -225,5 +226,10 @@ bool Faction::regressTech() const
 const std::string &Faction::getName() const
 {
 	return this->_name;
+}
+
+const std::optional<std::string> &Faction::getPrimaryQueue() const
+{
+	return this->_primaryQueue;
 }
 

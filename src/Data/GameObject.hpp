@@ -117,6 +117,7 @@ protected:
 	bool _solid = true;
 	bool _harvesting = false;
 	bool _fake = false;
+	bool _central = false;
 	// TODO: Find a better way to do this
 	bool _dumpStop = false;
 	bool _dumpStart = false;
@@ -192,6 +193,7 @@ public:
 	void playDoSound();
 	void clearPrimaryDump();
 
+	[[nodiscard]] bool isCentral() const;
 	[[nodiscard]] const std::optional<ExtraSpawn> &getExtraSpawn() const;
 	[[nodiscard]] const Vector2i &getPoint() const;
 	[[nodiscard]] const std::vector<std::string> &getSpawnOrders() const;

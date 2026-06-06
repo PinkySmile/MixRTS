@@ -129,6 +129,10 @@ GameObject::GameObject(const GameObject &g) :
 	_initGrid(g._initGrid),
 	_solid(g._solid),
 	_fake(g._fake),
+	_central(g._central),
+	_dumpStop(g._dumpStop),
+	_dumpStart(g._dumpStart),
+	_dumping(g._dumping),
 	index(g.index),
 	animationState(g.animationState),
 	pfGrid(g.pfGrid),
@@ -170,6 +174,7 @@ GameObject::GameObject(
 {
 	assert_exp(!json.contains("requires_queue_building") || json["requires_queue_building"].is_boolean());
 	assert_exp(!json.contains("grid_bound") || json["grid_bound"].is_boolean());
+	assert_exp(!json.contains("central") || json["central"].is_boolean());
 	assert_exp(!json.contains("queue") || json["queue"].is_string());
 	assert_exp(!json.contains("build") || json["build"].is_string());
 	assert_exp(!json.contains("speed") || json["speed"].is_number());
@@ -266,6 +271,8 @@ GameObject::GameObject(
 			RESOURCE(base.getName(), json["spawn"]["unit"]),
 			{json["spawn"]["pos"]["x"], json["spawn"]["pos"]["y"]}
 		};
+	if (json.contains("central"))
+		this->_central = json["central"];
 	if (json.contains("spawn_orders"))
 		this->_spawnOrders = json["spawn_orders"];
 	if (json.contains("accept_resources"))
@@ -1167,4 +1174,9 @@ void GameObject::renderPathFindingPath()
 		sprite.setScale(scale);
 		game->screen->draw(sprite);
 	}
+}
+
+bool GameObject::isCentral() const
+{
+	return this->_central;
 }

@@ -79,6 +79,7 @@ public:
 	Building *getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos);
 	MapResource &getResource(Vector2i pos);
 	void consumeResource(Vector2i pos);
+	void centerCameraOn(const GameObject &object);
 	std::pair<std::string, unsigned> convertResource(const std::string &source, const std::vector<std::string> &expected, unsigned value);
 };
 

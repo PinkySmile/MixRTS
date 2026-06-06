@@ -89,6 +89,7 @@ public:
 	void setEnabled(bool enabled);
 	HSLColor getColor() const;
 	void mouseOnUi();
+	void keyPressed(const sf::Event::KeyPressed &key);
 	const Faction &getPrimaryFaction() const;
 	const std::unordered_map<std::string, const Unit *> &getUnits() const;
 	const std::unordered_map<std::string, const Building *> &getBuildings() const;

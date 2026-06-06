@@ -193,6 +193,20 @@ void Player::mouseOnUi()
 		this->_uis[this->_currentUi]->mouseOnUi();
 }
 
+void Player::keyPressed(const Event::KeyPressed &key)
+{
+	if (!this->_enabled)
+		return;
+	// TODO: Hardcoded key
+	if (key.code == sf::Keyboard::Key::H) {
+		for (auto &b : this->state.myObjects)
+			if (b->isCentral()) {
+				this->_parent.centerCameraOn(*b);
+				return;
+			}
+	}
+}
+
 void Player::updateRender()
 {
 	for (auto &ui : this->_uis)
@@ -458,6 +472,7 @@ void Player::unlockObject(const Faction &f, const std::string &name, T &object, 
 	this->playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
 }
 
+// Only these 3 types are valid for that template
 template void Player::unlockObject(const Faction &f, const std::string &name, Unit &object, bool debugTime);
 template void Player::unlockObject(const Faction &f, const std::string &name, Upgrade &object, bool debugTime);
 template void Player::unlockObject(const Faction &f, const std::string &name, Building &object, bool debugTime);

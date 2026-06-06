@@ -524,6 +524,8 @@ void GameManager::consumeEvent(const Event &event)
 			DEBUG_MODE = this->_isDebugUnlocked;
 		}
 	#endif
+		for (auto &p : this->_players)
+			p.keyPressed(*keyPressed);
 	} else if (auto mouseMove = event.getIf<sf::Event::MouseMoved>()) {
 		Vector2i pos = mouseMove->position;
 
@@ -1104,4 +1106,27 @@ std::pair<std::string, unsigned> GameManager::convertResource(const std::string 
 	assert_exp(!expected.empty());
 	// TODO:
 	assert_not_reached();
+}
+
+void GameManager::centerCameraOn(const GameObject &object)
+{
+	Vector2u size = game->screen->getSize();
+	auto target = object.getPosition() + object.getSize() / 2.f;
+
+	// TODO: Hardcoded UI offset
+	size.x -= 160 * guiScale;
+	size.y -= 20 * guiScale;
+	// size /= this->_cameraZoom;
+	this->_cameraTranslate = {
+		target.x - size.x / 2,
+		target.y - size.y / 2 + 20 * guiScale
+	};
+	if (this->_cameraTranslate.x < 0)
+		this->_cameraTranslate.x = 0;
+	if (this->_cameraTranslate.y < 0)
+		this->_cameraTranslate.y = 0;
+	if (this->_cameraTranslate.x >= this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x)
+		this->_cameraTranslate.x = 0;
+	if (this->_cameraTranslate.y >= this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y)
+		this->_cameraTranslate.y = 0;
 }

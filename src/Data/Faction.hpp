@@ -35,6 +35,7 @@ private:
 	std::unordered_map<std::string, unsigned> _startingMoney;
 	std::vector<StartObject> _startingBuildings;
 	std::vector<StartObject> _startingUnits;
+	std::optional<std::string> _primaryQueue;
 	nlohmann::json _uiData;
 	std::string _name;
 	bool _regressTech;
@@ -50,6 +51,7 @@ public:
 
 	Faction(const Mod &base, const std::string &name, const nlohmann::json &data);
 	void load();
+	[[nodiscard]] const std::optional<std::string> &getPrimaryQueue() const;
 	[[nodiscard]] const std::unordered_map<std::string, Unit> &getUnits() const;
 	[[nodiscard]] const std::unordered_map<std::string, MultiSound> &getSounds() const;
 	[[nodiscard]] const std::unordered_map<std::string, Upgrade> &getUpgrades() const;
