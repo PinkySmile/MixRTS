@@ -465,7 +465,7 @@ void GameManager::_checkObjectLocked(const std::string &name, T &object, Player 
 			owner.resetQueue(*bqueue);
 		}
 	}
-	q.buildTime = object.getBuildSpeed();
+	q.buildTime = object.getBuildSpeed() * 8;
 }
 
 void GameManager::_recomputeLocked()
