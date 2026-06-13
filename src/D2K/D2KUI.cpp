@@ -654,12 +654,12 @@ void D2KUI::update()
 		}
 	);
 
-	float percent = 100 + (static_cast<float>(this->state->producedPower) - this->state->consumedPower) / 2;
+	float percent = ceil(100 + (static_cast<float>(this->state->producedPower) - this->state->consumedPower) / 2);
 
-	this->_power->setSize({10, ceil(percent)});
+	this->_power->setSize({10, percent});
 	this->_greenPower->setVisible(percent >= 100);
-	this->_yellowPower->setVisible(percent >= 70 && percent < 100);
-	this->_redPower->setVisible(percent < 70);
+	this->_yellowPower->setVisible(percent > 50 && percent < 100);
+	this->_redPower->setVisible(percent <= 50);
 
 	this->_upgrade->setVisible(this->_hasUpgrades());
 	this->_updateCursor();

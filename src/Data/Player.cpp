@@ -120,10 +120,19 @@ void Player::update()
 
 			for (auto &p : extra)
 				this->consume(p.first, p.second);
-			q->buildProgress++;
+
+			percent = 100 + (static_cast<float>(this->state.producedPower) - this->state.consumedPower) / 2;
+			if (percent >= 100)
+				q->buildProgress += 4;
+			else if (percent >= 50)
+				q->buildProgress += 2;
+			else
+				q->buildProgress++;
 			q->spent = expected;
-			if (q->buildProgress == q->buildTime)
+			if (q->buildProgress >= q->buildTime) {
 				this->playEVA(UI::EVA_BUILDING_DONE, EXPIRE_BUILD, PRIORITY_BUILD, 0, qname);
+				q->buildProgress = q->buildTime;
+			}
 		}
 	}
 	if (this->state.producedPower < this->state.consumedPower)
@@ -451,7 +460,7 @@ void Player::unlockObject(const Faction &f, const std::string &name, T &object, 
 	queue.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < queue.limit;
 	queue.paused = false;
 	queue.buildProgress = 0;
-	queue.buildTime = debugTime ? 1 : object.getBuildSpeed();
+	queue.buildTime = debugTime ? 1 : object.getBuildSpeed() * 4;
 	queue.faction = &f;
 	if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*queue.building)>>) {
 		queue.building = &object;
