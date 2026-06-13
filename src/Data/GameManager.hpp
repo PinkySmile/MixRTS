@@ -79,8 +79,13 @@ public:
 	Building *getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos);
 	MapResource &getResource(Vector2i pos);
 	void consumeResource(Vector2i pos);
-	void centerCameraOn(const GameObject &object);
+	void centerCameraOn(Vector2f pos);
 	std::pair<std::string, unsigned> convertResource(const std::string &source, const std::vector<std::string> &expected, unsigned value);
+
+	inline void centerCameraOn(const GameObject &object)
+	{
+		this->centerCameraOn(object.getPosition() + object.getSize() / 2.f);
+	}
 };
 
 #include "MapState.inl"

@@ -101,28 +101,8 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned
 		this->spawnUnit(index, start, u.queue, u.name);
 	}
 	// FIXME: Always teleport to player 0 starting point
-	if (index == 0) {
-		Vector2u size = game->screen->getSize();
-		auto start = this->_mapStates[factionIndex].startAreas[startingArea];
-
-		// TODO: Hardcoded UI offset
-		size.x -= 160 * guiScale;
-		size.y -= 20 * guiScale;
-		// size /= this->_cameraZoom;
-		this->_cameraZoom = 1;
-		this->_cameraTranslate = {
-			(start.x + 0.5f) * this->_map.grid.tileSize.x - size.x / 2,
-			(start.y + 0.5f) * this->_map.grid.tileSize.y - size.y / 2 + 20 * guiScale
-		};
-		if (this->_cameraTranslate.x < 0)
-			this->_cameraTranslate.x = 0;
-		if (this->_cameraTranslate.y < 0)
-			this->_cameraTranslate.y = 0;
-		if (this->_cameraTranslate.x >= this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x)
-			this->_cameraTranslate.x = 0;
-		if (this->_cameraTranslate.y >= this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y)
-			this->_cameraTranslate.y = 0;
-	}
+	if (index == 0)
+		this->centerCameraOn(this->_mapStates[factionIndex].startAreas[startingArea]);
 }
 
 #define SCROLL_SPEED 8
@@ -722,6 +702,7 @@ noGrid:
 		this->_initObject(map, player, obj, id);
 		if (nbTiles != nbConcreteTiles)
 			obj.damage(obj.getHealth() * (nbTiles - nbConcreteTiles) / (nbTiles * 2));
+			//obj.damage(obj.getHealth() * (nbTiles - nbConcreteTiles) * 3 / (nbTiles * 4));
 
 		auto parent = player.getSpawnBuilding(buildQueue);
 
@@ -1108,10 +1089,9 @@ std::pair<std::string, unsigned> GameManager::convertResource(const std::string 
 	assert_not_reached();
 }
 
-void GameManager::centerCameraOn(const GameObject &object)
+void GameManager::centerCameraOn(Vector2f target)
 {
 	Vector2u size = game->screen->getSize();
-	auto target = object.getPosition() + object.getSize() / 2.f;
 
 	// TODO: Hardcoded UI offset
 	size.x -= 160 * guiScale;
