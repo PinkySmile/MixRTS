@@ -1137,7 +1137,7 @@ void GameObject::setDirection(float angle)
 	this->_currentDir %= this->_anims.size();
 }
 
-void GameObject::renderPathFindingPath()
+void GameObject::renderPathFindingPath() const
 {
 	if (!this->_pathCached)
 		return;

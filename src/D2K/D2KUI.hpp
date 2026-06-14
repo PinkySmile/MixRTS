@@ -53,7 +53,6 @@ private:
 	unsigned _placementAnimation[3] = {0, 0, 0};
 	Vector2i _placementPos;
 	const Building *_placementBuilding = nullptr;
-	std::set<const GameObject *> _selectedObjects;
 	std::array<sf::Texture, 4> _selectCorners;
 
 	std::unordered_map<std::string, tgui::Texture> _cameos;

@@ -39,7 +39,8 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 
 		this->_uis.emplace_back(f.createUI());
 		this->_uis.back()->manager = &parent;
-		this->_uis.back()->state = &this->state;
+		this->_uis.back()->state = &this->uiState;
+		this->_uis.back()->ownerState = &this->state;
 		this->_uis.back()->map = &mapState[i];
 		game->gui.add(this->_uis.back()->getPanel());
 		if (i == index)
@@ -170,6 +171,11 @@ void Player::setEnabled(bool enabled)
 	this->_enabled = enabled;
 	for (size_t i = 0; i < this->_uis.size(); i++)
 		this->_uis[i]->setEnabled(i == this->_currentUi && enabled);
+}
+
+bool Player::isEnabled() const
+{
+	return this->_enabled;
 }
 
 const std::unordered_map<std::string, const Building *> &Player::getBuildings() const

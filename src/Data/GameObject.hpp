@@ -76,7 +76,7 @@ protected:
 	std::vector<Vector2i> _pathCache;
 	Vector2i _cachedDest;
 	sf::Image _cachedDebug;
-	sf::Texture _cachedDebugTex;
+	mutable sf::Texture _cachedDebugTex;
 	std::deque<Order> _orderQueue;
 	std::string _group;
 	std::string _id;
@@ -108,7 +108,7 @@ protected:
 	float _speed = 0;
 	unsigned char _tileCount = 5;
 	bool _requiresQueueBuilding = true;
-	bool _cachedDebugTexLoaded = false;
+	mutable bool _cachedDebugTexLoaded = false;
 	bool _boundToGrid = false;
 	bool _disposable = false;
 	bool _pathCached = false;
@@ -189,7 +189,7 @@ public:
 	void select() const;
 	void playBuiltSound() const;
 	void clearOrders();
-	void renderPathFindingPath();
+	void renderPathFindingPath() const;
 	void playDoSound();
 	void clearPrimaryDump();
 

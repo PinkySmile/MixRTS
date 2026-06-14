@@ -213,7 +213,7 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	});
 	this->_main1->onMousePress([this]{
 		this->_upgrade->setVisible(this->_hasUpgrades());
-		this->_starport->setVisible(this->state->queues.contains(this->_faction.getBase().getName() + ":starport"));
+		this->_starport->setVisible(this->ownerState->queues.contains(this->_faction.getBase().getName() + ":starport"));
 		this->_main1->setVisible(false);
 		this->_buildQueue->setVisible(true);
 		this->_unitsQueue->setVisible(true);
@@ -225,7 +225,7 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	});
 	this->_main2->onMousePress([this]{
 		this->_upgrade->setVisible(this->_hasUpgrades());
-		this->_starport->setVisible(this->state->queues.contains(this->_faction.getBase().getName() + ":starport"));
+		this->_starport->setVisible(this->ownerState->queues.contains(this->_faction.getBase().getName() + ":starport"));
 		this->_main1->setVisible(false);
 		this->_buildQueue->setVisible(true);
 		this->_unitsQueue->setVisible(true);
@@ -280,9 +280,9 @@ D2KUI::~D2KUI() noexcept = default;
 
 bool D2KUI::_hasUpgrades()
 {
-	auto it = this->state->queues.find(this->_faction.getBase().getName() + ":upgrade");
+	auto it = this->ownerState->queues.find(this->_faction.getBase().getName() + ":upgrade");
 
-	if (it == this->state->queues.end())
+	if (it == this->ownerState->queues.end())
 		return false;
 	return std::ranges::any_of(it->second | std::ranges::views::values, [](const PlayerQueue &q){
 		return q.buildable && q.unlocked;
@@ -562,23 +562,23 @@ static void updateList3(
 
 void D2KUI::update()
 {
-	auto it = this->_selectedObjects.begin();
+	auto it = this->state->selectedObjects.begin();
 
-	while (it != this->_selectedObjects.end())
+	while (it != this->state->selectedObjects.end())
 		if ((*it)->isDisposable())
-			it = this->_selectedObjects.erase(it);
+			it = this->state->selectedObjects.erase(it);
 		else
 			++it;
 
 	UI::update();
 
 	unsigned i = 0;
-	unsigned credits = std::min(99999999U, this->state->getCombinedMoney("base:credits"));
-	auto &bQueue = this->state->queues[this->_faction.getBase().getName() + ":building"];
-	auto &pQueue = this->state->queues[this->_faction.getBase().getName() + ":upgrade"];
-	auto &iQueue = this->state->queues[this->_faction.getBase().getName() + ":infantry"];
-	auto &lvQueue = this->state->queues[this->_faction.getBase().getName() + ":light_vehicule"];
-	auto &hvQueue = this->state->queues[this->_faction.getBase().getName() + ":heavy_vehicule"];
+	unsigned credits = std::min(99999999U, this->ownerState->getCombinedMoney("base:credits"));
+	auto &bQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":building"];
+	auto &pQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":upgrade"];
+	auto &iQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":infantry"];
+	auto &lvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":light_vehicule"];
+	auto &hvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":heavy_vehicule"];
 	auto &placement = this->_faction.getPlacementCursors();
 	auto &anim = this->_placementAnimation;
 
@@ -654,7 +654,7 @@ void D2KUI::update()
 		}
 	);
 
-	float percent = ceil(100 + (static_cast<float>(this->state->producedPower) - this->state->consumedPower) / 2);
+	float percent = ceil(100 + (static_cast<float>(this->ownerState->producedPower) - this->ownerState->consumedPower) / 2);
 
 	this->_power->setSize({10, percent});
 	this->_greenPower->setVisible(percent >= 100);
@@ -737,7 +737,7 @@ bool D2KUI::_isSelectionTooFar() const
 		return false;
 
 	const std::set<Vector2i> &okTiles = this->_placementBuilding->getCheckTiles();
-	auto &placementGrid = this->map->placementGrid[this->state->team];
+	auto &placementGrid = this->map->placementGrid[this->ownerState->team];
 	auto gridPos = this->map->absToTileCoord(this->_placementPos);
 
 	if (okTiles.empty())
@@ -759,7 +759,7 @@ void D2KUI::render()
 		return;
 	if (this->_placementBuilding != nullptr)
 		this->_displayPlacementPreview();
-	for (auto &b : this->_selectedObjects)
+	for (auto &b : this->state->selectedObjects)
 		this->_displaySelectedObjectUI(*b);
 }
 
@@ -824,8 +824,8 @@ void D2KUI::_updateCursor()
 
 	if (!this->_objectBuffer.empty()) {
 		// TODO: Handle non snap-to-grid units/buildings
-		if (this->_selectedObjects.size() == 1) {
-			auto obj = *this->_selectedObjects.begin();
+		if (this->state->selectedObjects.size() == 1) {
+			auto obj = *this->state->selectedObjects.begin();
 
 			if (obj->isDeployable() && std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()) {
 				if (obj->canDeploy())
@@ -839,9 +839,9 @@ void D2KUI::_updateCursor()
 		return;
 	}
 
-	bool canMove = !this->_selectedObjects.empty();
+	bool canMove = !this->state->selectedObjects.empty();
 
-	for (auto o : this->_selectedObjects) {
+	for (auto o : this->state->selectedObjects) {
 		if (!o->canMove())
 			canMove = false;
 	}
@@ -849,7 +849,7 @@ void D2KUI::_updateCursor()
 	if (!canMove)
 		this->_cursor = "normal";
 	else {
-		auto obj = *this->_selectedObjects.begin();
+		auto obj = *this->state->selectedObjects.begin();
 		auto map = obj->map;
 		auto relPos = map->absToTileCoord(this->_placementPos);
 		auto tl = this->map->topLeftCoordToAbs(pos);
@@ -946,8 +946,8 @@ void D2KUI::onCancel(Vector2i absPos)
 {
 	if (this->_placementBuilding)
 		this->_placementBuilding = nullptr;
-	else if (!this->_selectedObjects.empty())
-		this->_selectedObjects.clear();
+	else if (!this->state->selectedObjects.empty())
+		this->state->selectedObjects.clear();
 	this->mouseMovedToTile(absPos);
 }
 
@@ -959,9 +959,9 @@ void D2KUI::tileClicked(Vector2i absPos)
 	this->_objectBuffer.clear();
 	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
 	// TODO: Hardcoded key
-	if (!this->_selectedObjects.empty() && !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)) {
-		if (this->_selectedObjects.size() == 1) {
-			auto obj = *this->_selectedObjects.begin();
+	if (!this->state->selectedObjects.empty() && !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)) {
+		if (this->state->selectedObjects.size() == 1) {
+			auto obj = *this->state->selectedObjects.begin();
 
 			if (obj->isDeployable() && std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()) {
 				if (!obj->canDeploy())
@@ -973,18 +973,18 @@ void D2KUI::tileClicked(Vector2i absPos)
 		}
 
 		if (!this->_objectBuffer.empty()) {
-			this->_selectedObjects.clear();
-			this->_selectedObjects.emplace(this->_objectBuffer.back());
+			this->state->selectedObjects.clear();
+			this->state->selectedObjects.emplace(this->_objectBuffer.back());
 			this->_objectBuffer.back()->select();
-		} else if (!this->_selectedObjects.empty()) {
+		} else if (!this->state->selectedObjects.empty()) {
 			HarvestUnitEvent hevent;
 			MoveUnitEvent event;
 
 			event.position = this->_placementPos;
-			event.indices.reserve(this->_selectedObjects.size());
+			event.indices.reserve(this->state->selectedObjects.size());
 			hevent.position = this->_placementPos;
-			hevent.indices.reserve(this->_selectedObjects.size());
-			for (auto s : this->_selectedObjects) {
+			hevent.indices.reserve(this->state->selectedObjects.size());
+			for (auto s : this->state->selectedObjects) {
 				auto map = s->map;
 				auto relPos = map->absToTileCoord(this->_placementPos);
 
@@ -1006,13 +1006,13 @@ void D2KUI::tileClicked(Vector2i absPos)
 		}
 	} else if (!this->_objectBuffer.empty()) {
 		auto b = this->_objectBuffer.back();
-		auto it = this->_selectedObjects.find(b);
+		auto it = this->state->selectedObjects.find(b);
 
-		if (it == this->_selectedObjects.end()) {
-			this->_selectedObjects.emplace(b);
+		if (it == this->state->selectedObjects.end()) {
+			this->state->selectedObjects.emplace(b);
 			b->select();
 		} else
-			this->_selectedObjects.erase(it);
+			this->state->selectedObjects.erase(it);
 	}
 }
 

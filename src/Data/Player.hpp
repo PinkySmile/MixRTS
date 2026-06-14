@@ -56,6 +56,10 @@ struct PlayerState {
 	void clean();
 };
 
+struct UIState {
+	std::set<const GameObject *> selectedObjects;
+};
+
 class Player {
 private:
 	GameManager &_parent;
@@ -73,6 +77,7 @@ private:
 
 public:
 	PlayerState state;
+	UIState uiState;
 
 	enum CreditStrategy {
 		CREDIT_SYSTEM,
@@ -104,6 +109,8 @@ public:
 	bool consume(const std::string &type, unsigned amount);
 	Building *getPrimaryBuilding(const std::string &queue);
 	Building *getSpawnBuilding(const std::string &queue);
+
+	[[nodiscard]] bool isEnabled() const;
 
 	template<typename T>
 	void unlockObject(const Faction &f, const std::string &name, T &object, bool debugTime = false);

@@ -221,10 +221,10 @@ void GameManager::_renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale, 
 
 	sprite.setScale(scale);
 	game->screen->draw(sprite);
-	for (auto &b : this->_liveBuildings)
-		b.renderPathFindingPath();
-	for (auto &b : this->_liveUnits)
-		b.renderPathFindingPath();
+	for (auto &p : this->_players)
+		if (p.isEnabled())
+			for (auto &o : p.uiState.selectedObjects)
+				o->renderPathFindingPath();
 
 	if (!drawGrid)
 		return;

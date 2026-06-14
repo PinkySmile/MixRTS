@@ -25,6 +25,7 @@ struct MapState;
 struct MapMetadata;
 struct LoadedMap;
 struct PlayerState;
+struct UIState;
 struct PlayerQueue;
 struct Game;
 

@@ -87,8 +87,9 @@ public:
 		DumpUnitEvent
 	> Event;
 
+	UIState *state;
 	GameManager *manager;
-	PlayerState *state;
+	PlayerState *ownerState;
 	MapState *map;
 	std::optional<std::string> forcedCursor;
 
