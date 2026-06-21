@@ -394,7 +394,8 @@ GameObject::GameObject(
 		if (!anims.empty()) {
 			auto &anim = anims.front();
 
-			this->_selectBox.position = anim.getOffset();
+			this->_selectBox.position.x = 0;
+			this->_selectBox.position.y = anim.getOffset().y;
 			this->_selectBox.size = this->_size;
 		}
 	}
@@ -591,7 +592,7 @@ bool GameObject::_updateDump(Building *place)
 			this->_goToClosestRefinery();
 			return true;
 		}
-		if (this->_lots.size() == 0) {
+		if (this->_lots.empty()) {
 			this->_goToClosestResource();
 			return true;
 		}
@@ -632,7 +633,7 @@ bool GameObject::_updateDump(Building *place)
 					value[type] += content;
 			}
 			for (auto &[type, content] : value)
-				this->owner->credit(type, content, strategy);
+				place->owner->credit(type, content, strategy);
 			this->_lots.pop_front();
 			place->produced();
 		}

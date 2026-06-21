@@ -673,7 +673,6 @@ void D2KUI::_displaySelectedObjectUI(const GameObject &object)
 	sf::Sprite sprite{this->_selectCorners[0]};
 	sf::RectangleShape rect;
 
-	top.x = 0;
 	top += object.getPosition();
 	rect.setPosition({top.x + 1.f, top.y + 1.f});
 	rect.setSize({size.x - 2.f, 2});
@@ -827,7 +826,11 @@ void D2KUI::_updateCursor()
 		if (this->state->selectedObjects.size() == 1) {
 			auto obj = *this->state->selectedObjects.begin();
 
-			if (obj->isDeployable() && std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()) {
+			if (
+				this->ownerState->index == obj->owner->state.index &&
+				obj->isDeployable() &&
+				std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()
+			) {
 				if (obj->canDeploy())
 					this->_cursor = "deploy";
 				else
@@ -835,7 +838,34 @@ void D2KUI::_updateCursor()
 				return;
 			}
 		}
-		this->_cursor = "select";
+
+		bool canDeposit = std::ranges::any_of(this->_objectBuffer, [this](const GameObject *o){
+			// We can provide income to our teammate by sending harvesters to their resource dump.
+			return o->owner->state.team == this->ownerState->team && !o->getAcceptResources().empty();
+		});
+		bool canHarvest = std::ranges::any_of(this->state->selectedObjects, [this](const GameObject *o){
+			// TODO: Wrong check. Should have a different index per controlling player.
+			//       This one is only the player index that were declared at the start but
+			//       a player can control multiple in case their ally leaves.
+			return o->owner->state.index == this->ownerState->index && o->getResourceStorage() != 0;
+		});
+
+		if (canDeposit && canHarvest)
+			this->_cursor = "enter";
+		else if (std::ranges::find(this->state->selectedObjects, this->_objectBuffer.back()) == this->state->selectedObjects.end())
+			this->_cursor = "select";
+		else
+			this->_cursor = "normal";
+		return;
+	}
+
+	if (std::ranges::all_of(this->state->selectedObjects, [this](const GameObject *o){
+		// TODO: Wrong check. Should have a different index per controlling player.
+		//       This one is only the player index that were declared at the start but
+		//       a player can control multiple in case their ally leaves.
+		return this->ownerState->index != o->owner->state.index;
+	})) {
+		this->_cursor = "normal";
 		return;
 	}
 
@@ -846,9 +876,7 @@ void D2KUI::_updateCursor()
 			canMove = false;
 	}
 
-	if (!canMove)
-		this->_cursor = "normal";
-	else {
+	if (canMove) {
 		auto obj = *this->state->selectedObjects.begin();
 		auto map = obj->map;
 		auto relPos = map->absToTileCoord(this->_placementPos);
@@ -879,7 +907,8 @@ void D2KUI::_updateCursor()
 			this->_cursor = "move_inf";
 		else
 			this->_cursor = "move";
-	}
+	} else
+		this->_cursor = "normal";
 }
 
 void D2KUI::_handleTryPlace()
@@ -963,7 +992,11 @@ void D2KUI::tileClicked(Vector2i absPos)
 		if (this->state->selectedObjects.size() == 1) {
 			auto obj = *this->state->selectedObjects.begin();
 
-			if (obj->isDeployable() && std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()) {
+			if (
+				obj->owner->state.index == this->ownerState->index &&
+				obj->isDeployable() &&
+				std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()
+			) {
 				if (!obj->canDeploy())
 					this->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300, "");
 				else
@@ -972,27 +1005,70 @@ void D2KUI::tileClicked(Vector2i absPos)
 			}
 		}
 
-		if (!this->_objectBuffer.empty()) {
+		unsigned dumpId = 0;
+		bool canDeposit = std::ranges::any_of(this->_objectBuffer, [this, &dumpId](const GameObject *o){
+			// We can provide income to our teammate by sending harvesters to their resource dump.
+			if (o->owner->state.team == this->ownerState->team && !o->getAcceptResources().empty()) {
+				dumpId = o->index;
+				return true;
+			}
+			return false;
+		});
+		bool hasHarvester = false;
+		bool canHarvest = false;
+		unsigned res = 0;
+
+		for (auto o : this->state->selectedObjects) {
+			// TODO: Wrong check. Should have a different index per controlling player.
+			//       This one is only the player index that were declared at the start but
+			//       a player can control multiple in case their ally leaves.
+			if (o->owner->state.index != this->ownerState->index || o->getResourceStorage() == 0)
+				continue;
+			hasHarvester = true;
+
+			auto relPos = o->map->absToTileCoord(this->_placementPos);
+
+			canHarvest = o->map->hasAnyGridBits(relPos, GRIDMASK_RESOURCE);
+			if (canHarvest) {
+				res = GRID_RESOURCE_TYPE(o->map->grid[relPos.x + relPos.y * o->map->gridSize.x]);
+				canHarvest = res != 0;
+			}
+			if (canHarvest)
+				break;
+		}
+
+		if (!this->_objectBuffer.empty() && (!hasHarvester || !canDeposit)) {
 			this->state->selectedObjects.clear();
 			this->state->selectedObjects.emplace(this->_objectBuffer.back());
-			this->_objectBuffer.back()->select();
+			// TODO: Wrong check. Should have a different index per controlling player.
+			//       This one is only the player index that were declared at the start but
+			//       a player can control multiple in case their ally leaves.
+			if (this->_objectBuffer.back()->owner->state.index == this->ownerState->index)
+				this->_objectBuffer.back()->select();
 		} else if (!this->state->selectedObjects.empty()) {
 			HarvestUnitEvent hevent;
+			DumpUnitEvent devent;
 			MoveUnitEvent event;
 
 			event.position = this->_placementPos;
 			event.indices.reserve(this->state->selectedObjects.size());
 			hevent.position = this->_placementPos;
 			hevent.indices.reserve(this->state->selectedObjects.size());
+			devent.hole = dumpId;
+			devent.indices.reserve(this->state->selectedObjects.size());
 			for (auto s : this->state->selectedObjects) {
-				auto map = s->map;
-				auto relPos = map->absToTileCoord(this->_placementPos);
+				// TODO: Wrong check. Should have a different index per controlling player.
+				//       This one is only the player index that were declared at the start but
+				//       a player can control multiple in case their ally leaves.
+				if (s->owner->state.index != this->ownerState->index)
+					continue;
 
 				// TODO: Handle non snap-to-grid units
-				if (s->getResourceStorage() != 0 && map->hasAnyGridBits(relPos, GRIDMASK_RESOURCE)) {
-					auto res = GRID_RESOURCE_TYPE(map->grid[relPos.x + relPos.y * map->gridSize.x]);
-
-					if (res != 0) {
+				if (s->getResourceStorage() != 0) {
+					if (canDeposit) {
+						devent.indices.push_back(s->index);
+						continue;
+					} else if (canHarvest) {
 						hevent.indices.push_back(s->index);
 						continue;
 					}
@@ -1003,6 +1079,8 @@ void D2KUI::tileClicked(Vector2i absPos)
 				this->_eventQueue.emplace_back(event);
 			if (!hevent.indices.empty())
 				this->_eventQueue.emplace_back(hevent);
+			if (!devent.indices.empty())
+				this->_eventQueue.emplace_back(devent);
 		}
 	} else if (!this->_objectBuffer.empty()) {
 		auto b = this->_objectBuffer.back();
@@ -1010,7 +1088,11 @@ void D2KUI::tileClicked(Vector2i absPos)
 
 		if (it == this->state->selectedObjects.end()) {
 			this->state->selectedObjects.emplace(b);
-			b->select();
+			// TODO: Wrong check. Should have a different index per controlling player.
+			//       This one is only the player index that were declared at the start but
+			//       a player can control multiple in case their ally leaves.
+			if (b->owner->state.index == this->ownerState->index)
+				b->select();
 		} else
 			this->state->selectedObjects.erase(it);
 	}

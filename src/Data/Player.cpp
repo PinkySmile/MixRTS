@@ -320,7 +320,7 @@ void Player::handleUiEvents()
 			} else if (auto dump = std::get_if<UI::DumpUnitEvent>(&*event)) {
 				checked_cast(hole, Building, this->_parent.getObjectById(dump->hole));
 
-				for (auto i: harvest->indices) {
+				for (auto i: dump->indices) {
 					auto obj = this->_parent.getObjectById(i);
 
 					obj->clearOrders();
