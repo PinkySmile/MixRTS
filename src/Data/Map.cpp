@@ -63,6 +63,8 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 	assert_exp(json.contains("animations") && json["animations"].is_array());
 	assert_exp(json.contains("generators") && json["generators"].is_array());
 	assert_exp(json.contains("resources") && json["resources"].is_array());
+	assert_exp(!json.contains("skirts_conc") || json["skirts"].is_object());
+	assert_exp(json.contains("skirts") && json["skirts"].is_object());
 
 	for (size_t i = 0; i < json["animations"].size(); i++) {
 		auto &anim = json["animations"][i];
@@ -97,6 +99,52 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 	#ifndef PROPAGATE_CRASH
 		} catch (std::exception &e) {
 			throw _AssertionFailedException("In key [\"resources\"][" + std::to_string(i) + "]\n" + e.what());
+		}
+	#endif
+	}
+	for (auto &[key, value] : json["skirts"].items()) {
+		assert_msg(value.is_array(), "json[\"skirts\"][" + key + "]");
+		for (size_t i = 0; i < value.size(); i++)
+			assert_msg(value[i].is_number_unsigned(), "json[\"skirts\"][" + key + "][" + std::to_string(i) + "]");
+	#ifndef PROPAGATE_CRASH
+		try {
+	#endif
+			Vector2u size;
+			auto pos = key.find('x');
+
+			assert_exp(pos != std::string::npos);
+			size.x = std::stoul(key.substr(0, pos));
+			size.y = std::stoul(key.substr(pos + 1));
+			assert_exp(!this->skirts.contains(size));
+			this->skirts[size] = value.get<std::vector<unsigned>>();
+			assert_exp(this->skirts[size].size() == size.x * size.y);
+	#ifndef PROPAGATE_CRASH
+		} catch (std::exception &e) {
+			throw _AssertionFailedException("In key [\"skirts\"][" + key + "]\n" + e.what());
+		}
+	#endif
+	}
+	if (!json.contains("skirts_conc"))
+		this->skirtsConcrete = this->skirts;
+	else for (auto &[key, value] : json["skirts_conc"].items()) {
+		assert_msg(value.is_array(), "json[\"skirts_conc\"][" + key + "]");
+		for (size_t i = 0; i < value.size(); i++)
+			assert_msg(value[i].is_number_unsigned(), "json[\"skirts_conc\"][" + key + "][" + std::to_string(i) + "]");
+	#ifndef PROPAGATE_CRASH
+		try {
+	#endif
+			Vector2u size;
+			auto pos = key.find('x');
+
+			assert_exp(pos != std::string::npos);
+			size.x = std::stoul(key.substr(0, pos));
+			size.y = std::stoul(key.substr(pos + 1));
+			assert_exp(!this->skirtsConcrete.contains(size));
+			this->skirtsConcrete[size] = value.get<std::vector<unsigned>>();
+			assert_exp(this->skirtsConcrete[size].size() == size.x * size.y);
+	#ifndef PROPAGATE_CRASH
+		} catch (std::exception &e) {
+			throw _AssertionFailedException("In key [\"skirts_conc\"][" + key + "]\n" + e.what());
 		}
 	#endif
 	}

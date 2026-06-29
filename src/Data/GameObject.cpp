@@ -98,6 +98,7 @@ GameObject::GameObject(const GameObject &g) :
 	_group(g._group),
 	_id(g._id),
 	_selectBox(g._selectBox),
+	_skirt(g._skirt),
 	_size(g._size),
 	_point(g._point),
 	_position(g._position),
@@ -203,6 +204,13 @@ GameObject::GameObject(
 	assert_exp(!json.contains("resource_storage") || json["resource_storage"].is_number_unsigned());
 	assert_exp(!json.contains("harvest_time") || json["harvest_time"].is_number_unsigned());
 	assert_exp(!json.contains("harvest_delay") || json["harvest_delay"].is_number_unsigned());
+	if (json.contains("skirt")) {
+		assert_exp(json["skirt"].is_object());
+		assert_exp(json["skirt"].contains("x") && json["skirt"]["x"].is_number());
+		assert_exp(json["skirt"].contains("y") && json["skirt"]["y"].is_number());
+		assert_exp(json["skirt"].contains("w") && json["skirt"]["w"].is_number());
+		assert_exp(json["skirt"].contains("h") && json["skirt"]["h"].is_number());
+	}
 	if (json.contains("exit_offset")) {
 		assert_exp(json["exit_offset"].is_object());
 		assert_exp(json["exit_offset"].contains("x") && json["exit_offset"]["x"].is_number());
@@ -291,6 +299,8 @@ GameObject::GameObject(
 		this->_boundToGrid = json["grid_bound"];
 	if (json.contains("exit_offset"))
 		this->_exitOffset = {json["exit_offset"]["x"], json["exit_offset"]["y"]};
+	if (json.contains("skirt"))
+		this->_skirt = {json["skirt"]["x"], json["skirt"]["y"], json["skirt"]["w"], json["skirt"]["h"]};
 	if (json.contains("spawn_offset"))
 		this->_spawnOffset = {json["spawn_offset"]["x"], json["spawn_offset"]["y"]};
 	if (json.contains("point"))
@@ -705,8 +715,56 @@ void GameObject::update()
 	}
 }
 
+void GameObject::drawSkirt() const
+{
+	if (this->_skirt.size.x == 0 || this->_skirt.size.y == 0)
+		return;
+
+	auto size = Vector2u(this->_skirt.size.x, this->_skirt.size.y);
+	auto &lmap = this->manager->getLoadedMap();
+	auto &skirts = lmap.metadata.skirts;
+	auto &skirtsC = lmap.metadata.skirtsConcrete;
+	auto it = skirts.find(size);
+	auto itC = skirtsC.find(size);
+	auto textureSize = lmap.tileSet.getSize();
+	sf::Sprite sprite{lmap.tileSet};
+
+	textureSize.x /= lmap.grid.tileSize.x;
+	assert_exp(it != skirts.end());
+	assert_exp(it != skirtsC.end());
+	for (size_t x = 0; x < size.x; x++) {
+		for (size_t y = 0; y < size.y; y++) {
+			Vector2f pos = {
+				static_cast<float>(this->_position.x + this->_skirt.position.x + x * this->map->tileSize.x),
+				static_cast<float>(this->_position.y + this->_skirt.position.y + y * this->map->tileSize.y)
+			};
+			MapState::Quad abs{
+				{static_cast<float>(pos.x),                         static_cast<float>(pos.y)},
+				{static_cast<float>(pos.x + this->map->tileSize.x), static_cast<float>(pos.y)},
+				{static_cast<float>(pos.x + this->map->tileSize.x), static_cast<float>(pos.y + this->map->tileSize.y)},
+				{static_cast<float>(pos.x),                         static_cast<float>(pos.y + this->map->tileSize.y)}
+			};
+			auto tIndex = lmap.grid.anyHasAnyGridBits(abs, GRIDMASK_HAS_CONCRETE) ?
+				itC->second[x + y * size.x] :
+				it->second[x + y * size.x];
+
+			sprite.setPosition(pos);
+			sprite.setTextureRect({
+				sf::Vector2i(
+					tIndex % textureSize.x * lmap.grid.tileSize.x,
+					tIndex / textureSize.x * lmap.grid.tileSize.y
+				),
+				sf::Vector2i(lmap.grid.tileSize)
+			});
+			game->screen->displayElement(sprite);
+		}
+	}
+}
+
 void GameObject::render(int layer)
 {
+	if (layer == -1)
+		this->drawSkirt();
 	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping)
 		for (auto &anim : this->_anims[this->_currentDir])
 			if (anim() && anim.getLayer() == layer)

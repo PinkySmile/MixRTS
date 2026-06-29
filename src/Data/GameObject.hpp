@@ -81,6 +81,7 @@ protected:
 	std::string _group;
 	std::string _id;
 	IntRect _selectBox;
+	IntRect _skirt{0, 0, 0, 0};
 	Vector2u _size;
 	Vector2i _point;
 	Vector2f _position;
@@ -136,10 +137,9 @@ protected:
 
 public:
 	enum BuildingMask {
-		MASK_SKIRT              = 1 << 0,
+		MASK_PLACEMENT_CONCRETE = 1 << 0,
 		MASK_SOLID              = 1 << 1,
 		MASK_PLACEMENT_REQUIRED = 1 << 2,
-		MASK_PLACEMENT_CONCRETE = 2 << 2,
 	};
 
 	struct AnimationState {
@@ -178,6 +178,7 @@ public:
 	virtual std::optional<float> getStorageDisplay() const;
 
 	unsigned getBottom() const;
+	void drawSkirt() const;
 	void setDirection(float angle);
 	void setPosition(const Vector2f &pos);
 	void heal(unsigned amount);

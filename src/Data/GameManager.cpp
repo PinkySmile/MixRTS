@@ -364,6 +364,12 @@ void GameManager::render()
 	game->screen->draw(sprite);
 	for (auto &list : this->_renderObjects | std::ranges::views::values)
 		for (auto b : list)
+			b->render(-2);
+	for (auto &list : this->_renderObjects | std::ranges::views::values)
+		for (auto b : list)
+			b->render(-1);
+	for (auto &list : this->_renderObjects | std::ranges::views::values)
+		for (auto b : list)
 			b->render(0);
 	for (auto &list : this->_renderObjects | std::ranges::views::values)
 		for (auto b : list)

@@ -76,6 +76,8 @@ struct MapResource {
 struct MapMetadata {
 	std::unordered_map<std::string, std::vector<Animation>> animations;
 	std::unordered_map<unsigned, MapResource> resources;
+	std::map<Vector2u, std::vector<unsigned>> skirtsConcrete;
+	std::map<Vector2u, std::vector<unsigned>> skirts;
 
 	void load(Mod &mod, const std::filesystem::path &path);
 };

@@ -120,7 +120,7 @@ void Building::update()
 
 void Building::render(int layer)
 {
-	if (!this->_building || !this->_buildAnim || this->_buildAnim->current() >= this->_showAfterBuild)
+	if (!this->_building || !this->_buildAnim || this->_buildAnim->current() >= this->_showAfterBuild || layer == -1)
 		GameObject::render(layer);
 	if (this->_building && this->_buildAnim && (*this->_buildAnim)()) {
 		if (layer == this->_buildAnim->getLayer())
