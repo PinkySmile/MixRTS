@@ -60,13 +60,108 @@ struct ResourceLot {
 };
 
 class GameObject {
+public:
+	union BuildingMask {
+		struct {
+			bool placementConcrete: 1;
+			bool solid: 1;
+			bool placementRequired: 1;
+		};
+		uint8_t value;
+	};
+	struct AnimationState {
+		std::string storageKey;
+		float health;
+	};
+
+	unsigned index;
+	AnimationState animationState;
+	PathFindingGrid *pfGrid = nullptr;
+	GameManager *manager = nullptr;
+	MapState *map = nullptr;
+	Player *owner = nullptr;
+
+
+	GameObject(const GameObject &b);
+	GameObject(
+		const Faction &base,
+		const std::string &id,
+		const std::unordered_map<std::string, std::vector<Animation>> &animList,
+		const std::unordered_map<std::string, MultiSound> &sounds,
+		const nlohmann::json &json
+	);
+	virtual ~GameObject();
+
+	virtual void setColor(const HSLColor &color);
+	virtual void update();
+	virtual void render(int layer);
+	virtual bool canDeploy() const;
+	virtual bool isDeployable() const;
+	virtual bool canMove() const;
+	virtual void deploy();
+	virtual void built();
+	virtual void initGlobalGrid();
+	virtual void deinitGlobalGrid();
+	virtual std::optional<float> getStorageDisplay() const;
+
+	unsigned getBottom() const;
+	void drawSkirt() const;
+	void setDirection(float angle);
+	void setPosition(const Vector2f &pos);
+	void heal(unsigned amount);
+	void damage(unsigned amount);
+	void harvest(const Vector2i &pos, bool automatic = false);
+	void harvest();
+	void moveTo(const Vector2i &pos, bool automatic = false);
+	void dumpResourcesTo(Building *dump, bool automatic = false);
+	void select() const;
+	void playBuiltSound() const;
+	void clearOrders();
+	void renderPathFindingPath() const;
+	void playDoSound();
+	void clearPrimaryDump();
+
+	[[nodiscard]] bool isCentral() const;
+	[[nodiscard]] const std::optional<ExtraSpawn> &getExtraSpawn() const;
+	[[nodiscard]] const Vector2i &getPoint() const;
+	[[nodiscard]] const std::vector<std::string> &getSpawnOrders() const;
+	[[nodiscard]] const std::vector<std::string> &getAcceptResources() const;
+	[[nodiscard]] unsigned getResourceStorage() const;
+	[[nodiscard]] bool isFake() const;
+	[[nodiscard]] bool requiresQueueBuilding() const;
+	[[nodiscard]] const std::optional<std::string> &getProxy() const;
+	[[nodiscard]] const std::optional<std::vector<std::vector<BuildingMask>>> &getTileData() const;
+	[[nodiscard]] const std::string &getId() const;
+	[[nodiscard]] unsigned getMaxHealth() const;
+	[[nodiscard]] unsigned getHealth() const;
+	[[nodiscard]] bool isDead() const;
+	[[nodiscard]] bool isDisposable() const;
+	[[nodiscard]] const IntRect &getSelectBox() const;
+	[[nodiscard]] const Vector2u &getSize() const;
+	[[nodiscard]] Vector2i getPosition() const;
+	[[nodiscard]] const std::optional<Vector2i> &getSpawnOffset() const;
+	[[nodiscard]] const std::optional<Vector2i> &getExitOffset() const;
+	[[nodiscard]] const std::vector<ConditionalAnim>& getBaseAnims() const;
+	[[nodiscard]] const ReqAndCombinator &getRequirements() const;
+	[[nodiscard]] const Mod &getBase() const;
+	[[nodiscard]] const Faction &getFaction() const;
+	[[nodiscard]] unsigned getBuildSpeed() const;
+	[[nodiscard]] const std::string &getGroup() const;
+	[[nodiscard]] bool isObstructed() const;
+	[[nodiscard]] unsigned getLimit() const;
+	[[nodiscard]] unsigned getPassFlags() const;
+	[[nodiscard]] bool isSolid() const;
+	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getCost() const;
+	[[nodiscard]] const std::set<Vector2i> &getCheckTiles() const;
+	[[nodiscard]] const std::optional<std::string> &getBuildQueue() const;
+
 protected:
 	const Faction &_base;
 	const MultiSound *_buildSound = nullptr;
 	const MultiSound *_doSound = nullptr;
 	const MultiSound *_selectSound = nullptr;
 	std::set<Vector2i> _checkTiles;
-	std::optional<std::vector<std::vector<uint8_t>>> _tiles;
+	std::optional<std::vector<std::vector<BuildingMask>>> _tiles;
 	std::vector<std::vector<ConditionalAnim>> _anims;
 	std::vector<ConditionalAnim> _harvestAnims;
 	std::unordered_map<std::string, unsigned> _cost;
@@ -134,99 +229,6 @@ protected:
 	bool _shortenOrder(Order &o);
 	void _displayAnim(Animation &anim);
 	virtual bool _handleOrder(const Order &o);
-
-public:
-	enum BuildingMask {
-		MASK_PLACEMENT_CONCRETE = 1 << 0,
-		MASK_SOLID              = 1 << 1,
-		MASK_PLACEMENT_REQUIRED = 1 << 2,
-	};
-
-	struct AnimationState {
-		std::string storageKey;
-		float health;
-	};
-
-	unsigned index;
-	AnimationState animationState;
-	PathFindingGrid *pfGrid = nullptr;
-	GameManager *manager = nullptr;
-	MapState *map = nullptr;
-	Player *owner = nullptr;
-
-
-	GameObject(const GameObject &b);
-	GameObject(
-		const Faction &base,
-		const std::string &id,
-		const std::unordered_map<std::string, std::vector<Animation>> &animList,
-		const std::unordered_map<std::string, MultiSound> &sounds,
-		const nlohmann::json &json
-	);
-	virtual ~GameObject();
-
-	virtual void setColor(const HSLColor &color);
-	virtual void update();
-	virtual void render(int layer);
-	virtual bool canDeploy() const;
-	virtual bool isDeployable() const;
-	virtual bool canMove() const;
-	virtual void deploy();
-	virtual void built();
-	virtual void initGlobalGrid();
-	virtual void deinitGlobalGrid();
-	virtual std::optional<float> getStorageDisplay() const;
-
-	unsigned getBottom() const;
-	void drawSkirt() const;
-	void setDirection(float angle);
-	void setPosition(const Vector2f &pos);
-	void heal(unsigned amount);
-	void damage(unsigned amount);
-	void harvest(const Vector2i &pos, bool automatic = false);
-	void harvest();
-	void moveTo(const Vector2i &pos, bool automatic = false);
-	void dumpResourcesTo(Building *dump, bool automatic = false);
-	void select() const;
-	void playBuiltSound() const;
-	void clearOrders();
-	void renderPathFindingPath() const;
-	void playDoSound();
-	void clearPrimaryDump();
-
-	[[nodiscard]] bool isCentral() const;
-	[[nodiscard]] const std::optional<ExtraSpawn> &getExtraSpawn() const;
-	[[nodiscard]] const Vector2i &getPoint() const;
-	[[nodiscard]] const std::vector<std::string> &getSpawnOrders() const;
-	[[nodiscard]] const std::vector<std::string> &getAcceptResources() const;
-	[[nodiscard]] unsigned getResourceStorage() const;
-	[[nodiscard]] bool isFake() const;
-	[[nodiscard]] bool requiresQueueBuilding() const;
-	[[nodiscard]] const std::optional<std::string> &getProxy() const;
-	[[nodiscard]] const std::optional<std::vector<std::vector<uint8_t>>> &getTileData() const;
-	[[nodiscard]] const std::string &getId() const;
-	[[nodiscard]] unsigned getMaxHealth() const;
-	[[nodiscard]] unsigned getHealth() const;
-	[[nodiscard]] bool isDead() const;
-	[[nodiscard]] bool isDisposable() const;
-	[[nodiscard]] const IntRect &getSelectBox() const;
-	[[nodiscard]] const Vector2u &getSize() const;
-	[[nodiscard]] Vector2i getPosition() const;
-	[[nodiscard]] const std::optional<Vector2i> &getSpawnOffset() const;
-	[[nodiscard]] const std::optional<Vector2i> &getExitOffset() const;
-	[[nodiscard]] const std::vector<ConditionalAnim>& getBaseAnims() const;
-	[[nodiscard]] const ReqAndCombinator &getRequirements() const;
-	[[nodiscard]] const Mod &getBase() const;
-	[[nodiscard]] const Faction &getFaction() const;
-	[[nodiscard]] unsigned getBuildSpeed() const;
-	[[nodiscard]] const std::string &getGroup() const;
-	[[nodiscard]] bool isObstructed() const;
-	[[nodiscard]] unsigned getLimit() const;
-	[[nodiscard]] unsigned getPassFlags() const;
-	[[nodiscard]] bool isSolid() const;
-	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getCost() const;
-	[[nodiscard]] const std::set<Vector2i> &getCheckTiles() const;
-	[[nodiscard]] const std::optional<std::string> &getBuildQueue() const;
 };
 
 

@@ -83,6 +83,12 @@ void GameObject::_displayAnim(Animation &anim)
 }
 
 GameObject::GameObject(const GameObject &g) :
+	index(g.index),
+	animationState(g.animationState),
+	pfGrid(g.pfGrid),
+	manager(g.manager),
+	map(g.map),
+	owner(g.owner),
 	_base(g._base),
 	_buildSound(g._buildSound),
 	_doSound(g._doSound),
@@ -133,13 +139,7 @@ GameObject::GameObject(const GameObject &g) :
 	_central(g._central),
 	_dumpStop(g._dumpStop),
 	_dumpStart(g._dumpStart),
-	_dumping(g._dumping),
-	index(g.index),
-	animationState(g.animationState),
-	pfGrid(g.pfGrid),
-	manager(g.manager),
-	map(g.map),
-	owner(g.owner)
+	_dumping(g._dumping)
 {
 	this->_harvestAnims.reserve(g._harvestAnims.size());
 	for (auto &anim : g._harvestAnims)
@@ -309,8 +309,22 @@ GameObject::GameObject(
 		this->_requiresQueueBuilding = json["requires_queue_building"];
 	if (json.contains("queue"))
 		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);
-	if (json.contains("tiles"))
-		this->_tiles = json["tiles"];
+	if (json.contains("tiles")) {
+		std::vector<std::vector<uint8_t>> b = json["tiles"];
+		std::vector<std::vector<BuildingMask>> r;
+
+		r.reserve(b.size());
+		for (auto &v : b) {
+			r.emplace_back();
+
+			auto &h = r.back();
+
+			h.reserve(v.size());
+			for (auto i : v)
+				h.push_back(BuildingMask{.value = i});
+		}
+		this->_tiles = r;
+	}
 	if (json.contains("fake"))
 		this->_fake = json["fake"];
 	if (json.contains("proxy"))
@@ -1031,7 +1045,7 @@ void GameObject::initGlobalGrid()
 			auto &line = (*this->_tiles)[gy];
 
 			for (size_t gx = 0; gx < line.size(); gx++) {
-				if (!(line[gx] & MASK_PLACEMENT_REQUIRED))
+				if (!line[gx].placementRequired)
 					continue;
 				this->manager->modUnitInArea(
 					this->map->tileCoordToAbs({
@@ -1039,7 +1053,7 @@ void GameObject::initGlobalGrid()
 						static_cast<int>(this->_gridPos.y + gy)
 					}),
 					this->owner->state.team, 1,
-					(line[gx] & MASK_SOLID) ? this->_tileCount : 0
+					line[gx].solid ? this->_tileCount : 0
 				);
 			}
 		}
@@ -1076,7 +1090,7 @@ void GameObject::deinitGlobalGrid()
 			auto &line = (*this->_tiles)[gy];
 
 			for (size_t gx = 0; gx < line.size(); gx++) {
-				if (!(line[gx] & MASK_PLACEMENT_REQUIRED))
+				if (!line[gx].placementRequired)
 					continue;
 				this->manager->modUnitInArea(
 					this->map->tileCoordToAbs({
@@ -1084,7 +1098,7 @@ void GameObject::deinitGlobalGrid()
 						static_cast<int>(this->_gridPos.y + gy)
 					}),
 					this->owner->state.team, -1,
-					(line[gx] & MASK_SOLID) ? -this->_tileCount : 0
+					line[gx].solid ? -this->_tileCount : 0
 				);
 			}
 		}
@@ -1164,7 +1178,7 @@ const std::optional<std::string> &GameObject::getProxy() const
 	return this->_proxy;
 }
 
-const std::optional<std::vector<std::vector<uint8_t>>> &GameObject::getTileData() const
+const std::optional<std::vector<std::vector<GameObject::BuildingMask>>> &GameObject::getTileData() const
 {
 	return this->_tiles;
 }

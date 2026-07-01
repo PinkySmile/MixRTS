@@ -571,7 +571,7 @@ bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::str
 
 			Vector2i fullPos = {static_cast<int>(pos.x + x), static_cast<int>(pos.y + y)};
 
-			if ((line[x] & GameObject::MASK_PLACEMENT_REQUIRED)) {
+			if (line[x].placementRequired) {
 				uint32_t mask = GRIDMASK_CAN_BUILD;
 
 				if (basePos == fullPos)
@@ -667,7 +667,7 @@ T *GameManager::_spawnObj(size_t owner, Vector2i absPos, const std::string &buil
 			auto fullPosAbs = map.tileCoordToAbs(fullPos);
 
 			if (
-				(line[x] & GameObject::MASK_PLACEMENT_CONCRETE) &&
+				line[x].placementConcrete &&
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				map.hasAllGridBits(fullPos, GRIDMASK_CAN_BUILD) &&
 				this->isAreaFree(map.topLeftCoordToAbs(fullPos), map.tileSize)
@@ -680,13 +680,13 @@ T *GameManager::_spawnObj(size_t owner, Vector2i absPos, const std::string &buil
 				this->_initObject(map, player, this->_liveBuildings.back(), concrete);
 				this->_onObjectSpawned(fullPos, this->_liveBuildings.back());
 			}
-			if (line[x] & GameObject::MASK_PLACEMENT_REQUIRED) {
+			if (line[x].placementRequired) {
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				this->_map.grid.resetGridBits(fullPos, GRIDMASK_IS_FREE);
 				for (auto &m : this->_mapStates)
 					m.resetGridBits(fullPosAbs, GRIDMASK_IS_FREE);
 			}
-			if (line[x] & GameObject::MASK_SOLID) {
+			if (line[x].solid) {
 				nbTiles++;
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				nbConcreteTiles += map.hasAnyGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
@@ -809,7 +809,7 @@ bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const
 		for (size_t x = 0; x < line.size(); x++) {
 			if (x + pos.x >= obj.map->gridSize.x)
 				break;
-			if ((line[x] & GameObject::MASK_SOLID) == 0)
+			if (!line[x].solid)
 				continue;
 
 			Vector2i fullPos = {static_cast<int>(pos.x + x), static_cast<int>(pos.y + y)};

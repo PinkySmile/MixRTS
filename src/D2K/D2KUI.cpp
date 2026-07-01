@@ -594,7 +594,6 @@ void D2KUI::update()
 {
 	UI::update();
 
-	unsigned i = 0;
 	unsigned credits = std::min(99999999U, this->ownerState->getCombinedMoney("base:credits"));
 	auto &bQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":building"];
 	auto &pQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":upgrade"];
@@ -602,14 +601,13 @@ void D2KUI::update()
 	auto &lvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":light_vehicule"];
 	auto &hvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":heavy_vehicule"];
 
-	do {
+	for (unsigned i = 0; i < 8; i++) {
 		if (credits != 0 || i == 0)
 			this->_creditDigits[i]->getRenderer()->setTexture(this->_creditRawDigits[credits % 10]);
 		else
 			this->_creditDigits[i]->getRenderer()->setTexture(this->_creditRawDigits[10]);
 		credits /= 10;
-		i++;
-	} while (i < 8);
+	};
 
 	updateList(
 		this->_faction.getBase().getBase(),
@@ -686,11 +684,9 @@ void D2KUI::_updateCursor()
 	if (
 		this->_placementBuilding != nullptr
 	#ifdef _DEBUG
-		||
-		this->_placementPos.x < 0 ||
-		this->_placementPos.y < 0 ||
-		this->_placementPos.x >= this->map->gridSize.x * this->map->tileSize.x ||
-		this->_placementPos.y >= this->map->gridSize.y * this->map->tileSize.y
+		|| this->_placementPos.x < 0 || this->_placementPos.y < 0 ||
+		static_cast<unsigned>(this->_placementPos.x) >= this->map->gridSize.x * this->map->tileSize.x ||
+		static_cast<unsigned>(this->_placementPos.y) >= this->map->gridSize.y * this->map->tileSize.y
 	#endif
 	) {
 		this->_cursor = CURSOR_NORMAL;

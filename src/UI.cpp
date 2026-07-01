@@ -263,9 +263,9 @@ void UI::_displayPlacementPreview()
 		auto &line = (*tileData)[y];
 
 		for (size_t x = 0; x < line.size(); x++) {
-			uint8_t buildingMask = line[x];
+			GameObject::BuildingMask buildingMask = line[x];
 
-			if ((buildingMask & (GameObject::MASK_PLACEMENT_REQUIRED | GameObject::MASK_PLACEMENT_CONCRETE)) == 0)
+			if (!buildingMask.placementRequired && !buildingMask.placementConcrete)
 				continue;
 
 			Sprite *sprite = &placement[2][this->_placementAnimation[2]];
@@ -281,11 +281,10 @@ void UI::_displayPlacementPreview()
 			) {
 				if (tooFar || !this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD) || (
 					this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE) &&
-					(buildingMask & GameObject::MASK_PLACEMENT_CONCRETE) &&
-					!(buildingMask & GameObject::MASK_PLACEMENT_REQUIRED)
+					buildingMask.placementConcrete && !buildingMask.placementRequired
 				) || !this->manager->isAreaFree(this->map->topLeftCoordToAbs(full), this->map->tileSize))
 					sprite = &placement[2][this->_placementAnimation[2]];
-				else if (this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE) || (buildingMask & GameObject::MASK_PLACEMENT_CONCRETE))
+				else if (this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE) || buildingMask.placementConcrete)
 					sprite = &placement[0][this->_placementAnimation[0]];
 				else
 					sprite = &placement[1][this->_placementAnimation[1]];
@@ -316,9 +315,9 @@ void UI::_handleTryPlace()
 		auto &line = (*tileData)[y];
 
 		for (size_t x = 0; x < line.size(); x++) {
-			uint8_t buildingMask = line[x];
+			GameObject::BuildingMask buildingMask = line[x];
 
-			if ((buildingMask & (GameObject::MASK_PLACEMENT_REQUIRED | GameObject::MASK_PLACEMENT_CONCRETE)) == 0)
+			if (!buildingMask.placementRequired && !buildingMask.placementConcrete)
 				continue;
 
 			Vector2i full = {
@@ -328,16 +327,16 @@ void UI::_handleTryPlace()
 
 			if (full.x < 0 || full.y < 0 || static_cast<size_t>(full.x) >= this->map->gridSize.x || static_cast<size_t>(full.y) >+ this->map->gridSize.y)
 				continue;
-			if (buildingMask & GameObject::MASK_PLACEMENT_REQUIRED) {
+			if (buildingMask.placementRequired) {
 				if (
 					!this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD) ||
 					!this->manager->isAreaFree(this->map->topLeftCoordToAbs(full), this->map->tileSize)
-					) {
+				) {
 					this->playEVA(EVA_CANNOT_BUILD, 600, 2, 60, "");
 					return;
 				}
 				foundGood = true;
-			} else if (buildingMask & GameObject::MASK_PLACEMENT_CONCRETE) {
+			} else if (buildingMask.placementConcrete) {
 				if (this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD) && !this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE))
 					foundGood = true;
 			}
@@ -372,7 +371,7 @@ void UI::tileClicked(Vector2i absPos)
 				obj->owner->state.index == this->ownerState->index &&
 				obj->isDeployable() &&
 				std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()
-				) {
+			) {
 				if (!obj->canDeploy())
 					this->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300, "");
 				else
@@ -384,11 +383,10 @@ void UI::tileClicked(Vector2i absPos)
 		unsigned dumpId = 0;
 		bool canDeposit = std::ranges::any_of(this->_objectBuffer, [this, &dumpId](const GameObject *o){
 			// We can provide income to our teammate by sending harvesters to their resource dump.
-			if (o->owner->state.team == this->ownerState->team && !o->getAcceptResources().empty()) {
-				dumpId = o->index;
-				return true;
-			}
-			return false;
+			if (o->owner->state.team != this->ownerState->team || o->getAcceptResources().empty())
+				return false;
+			dumpId = o->index;
+			return true;
 		});
 		bool hasHarvester = false;
 		bool canHarvest = false;

@@ -92,9 +92,9 @@ Building::Building(
 			auto &line = (*this->_tiles)[y];
 
 			for (size_t x = 0; x < line.size(); x++) {
-				uint8_t buildingMask = line[x];
+				BuildingMask buildingMask = line[x];
 
-				if ((buildingMask & (GameObject::MASK_PLACEMENT_REQUIRED | GameObject::MASK_PLACEMENT_CONCRETE)) == 0)
+				if (!buildingMask.placementRequired && !buildingMask.placementConcrete)
 					continue;
 
 				for (int i1 = -this->_buildMaxDistance - 1; i1 <= this->_buildMaxDistance + 1; i1++)
