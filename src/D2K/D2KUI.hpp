@@ -20,7 +20,6 @@
 
 class D2KUI : public UI {
 private:
-	const Faction &_faction;
 	tgui::Button::Ptr _resumeGame;
 	tgui::Panel::Ptr _power;
 	tgui::Button::Ptr _sell;
@@ -50,11 +49,6 @@ private:
 	tgui::ScrollablePanel::Ptr _upgradeQueue;
 	tgui::ScrollablePanel::Ptr _starportQueue;
 
-	unsigned _placementAnimation[3] = {0, 0, 0};
-	Vector2i _placementPos;
-	const Building *_placementBuilding = nullptr;
-	std::array<sf::Texture, 4> _selectCorners;
-
 	std::unordered_map<std::string, tgui::Texture> _cameos;
 	std::array<tgui::Picture::Ptr, 8> _creditDigits;
 	std::array<tgui::Texture, 11> _creditRawDigits;
@@ -72,21 +66,12 @@ private:
 
 	void _loadEvaSounds(const std::filesystem::path &base, const std::string &folder);
 	bool _hasUpgrades();
-	void _displayPlacementPreview();
-	void _handleTryPlace();
-	void _displaySelectedObjectUI(const GameObject &object);
-	bool _isSelectionTooFar() const;
 	void _updateCursor();
 
 public:
 	D2KUI(const Faction &faction, const std::filesystem::path &base, const nlohmann::json &params);
 	~D2KUI() noexcept override;
 	void update() override;
-	void render() override;
-	void onCancel(Vector2i absPos) override;
-	void tileClicked(Vector2i absPos) override;
-	void mouseMovedToTile(Vector2i absPos) override;
-	void mouseOnUi() override;
 	void playEVA(EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args) override;
 };
 

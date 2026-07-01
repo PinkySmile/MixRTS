@@ -73,6 +73,7 @@ inline Color __getPFDebugColor(PATHFINDINGGRID_TYPE tile)
 
 inline unsigned char PFGRIDMASK_NB_UNITS(PathFindingGrid &g, unsigned x, unsigned y)
 {
+	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
 	return PFGRIDMASK_NB_UNITS(g.grid[x + y * g.gridSize.x]);
 }
 inline void PFGRIDMASK_ADD_UNIT(PathFindingGrid &g, unsigned x, unsigned y, unsigned count)

@@ -35,8 +35,11 @@ private:
 	unsigned _lastObjectId = 0;
 	std::unordered_map<unsigned, GameObject *> _objectMap;
 	std::map<unsigned, std::list<GameObject *>> _renderObjects;
+
+	// DEBUG
 	unsigned char _debugGrid = 255;
 	bool _isDebugUnlocked = false;
+	bool _limitCamera = true;
 
 	template<typename T>
 	void _checkObjectLocked(const std::string &name, T &object, Player &owner);

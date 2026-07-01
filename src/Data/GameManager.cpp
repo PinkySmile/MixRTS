@@ -114,37 +114,39 @@ void GameManager::_checkScroll()
 
 	Vector2u size = game->screen->getSize();
 	auto pos = sf::Mouse::getPosition(*game->screen);
-	std::string name = "scroll_";
+	unsigned cursor = UI::CURSOR_SCROLL_ALL_DIRS;
 	auto old = this->_cameraTranslate;
 
 	if (pos.y == 0) {
-		name += "t";
+		cursor = UI::CURSOR_SCROLL_TOP;
 		this->_cameraTranslate.y -= SCROLL_SPEED;
 	} else if (pos.y == static_cast<int>(size.y) - 1) {
-		name += "b";
+		cursor = UI::CURSOR_SCROLL_BOTTOM;
 		this->_cameraTranslate.y += SCROLL_SPEED;
 	}
 	if (pos.x == 0) {
-		name += "l";
+		cursor += UI::CURSOR_HORZ_LEFT;
 		this->_cameraTranslate.x -= SCROLL_SPEED;
 	} else if (pos.x == static_cast<int>(size.x) - 1) {
-		name += "r";
+		cursor += UI::CURSOR_HORZ_RIGHT;
 		this->_cameraTranslate.x += SCROLL_SPEED;
 	}
 
 	size /= this->_cameraZoom;
 	// TODO: Hardcoded UI offset
 	size.x -= 160 * guiScale;
-	this->_cameraTranslate.x = std::max<float>(this->_cameraTranslate.x, 0);
-	this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -20 * guiScale);
-	this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x);
-	this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y);
-	if (name != "scroll_") {
+	if (this->_limitCamera) {
+		this->_cameraTranslate.x = std::max<float>(this->_cameraTranslate.x, 0);
+		this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -20 * guiScale);
+		this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x);
+		this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y);
+	}
+	if (cursor != UI::CURSOR_SCROLL_ALL_DIRS) {
 		if (old == this->_cameraTranslate)
-			name = "no_" + name;
+			cursor += UI::CURSOR_SCROLL_DIFF;
 		for (auto &p : this->_players)
 			for (auto &u : p.getUIs())
-				u->forcedCursor = name;
+				u->forcedCursor = static_cast<UI::Cursor>(cursor);
 	} else {
 		for (auto &p : this->_players)
 			for (auto &u : p.getUIs())
@@ -508,7 +510,8 @@ void GameManager::consumeEvent(const Event &event)
 				this->_unlockAll();
 			this->_isDebugUnlocked = !this->_isDebugUnlocked;
 			DEBUG_MODE = this->_isDebugUnlocked;
-		}
+		} else if (keyPressed->code == sf::Keyboard::Key::F5)
+			this->_limitCamera = !this->_limitCamera;
 	#endif
 		for (auto &p : this->_players)
 			p.keyPressed(*keyPressed);

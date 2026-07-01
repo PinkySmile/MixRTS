@@ -6,6 +6,8 @@
 #define MIXRTS_UI_HPP
 
 
+#include <list>
+#include <deque>
 #include <string>
 #include <unordered_map>
 #include <TGUI/Widgets/Panel.hpp>
@@ -40,6 +42,44 @@ public:
 		EVA_REQUIRE_STORAGE,
 		EVA_ALREADY_BUILDING,
 		EVA_COUNT
+	};
+	enum Cursor {
+		CURSOR_HORZ_NONE,
+		CURSOR_HORZ_RIGHT,
+		CURSOR_HORZ_LEFT,
+
+		CURSOR_NORMAL = 0,
+		CURSOR_MOVE,
+		CURSOR_MOVE_RESTRICT,
+		CURSOR_NO_MOVE,
+		CURSOR_SELECT,
+		CURSOR_ATTACK,
+		CURSOR_ATTACK_MOVE,
+		CURSOR_ENTER,
+		CURSOR_DUMP,
+		CURSOR_SCROLL_ALL_DIRS,
+		CURSOR_SCROLL_RIGHT,
+		CURSOR_SCROLL_LEFT,
+		CURSOR_SCROLL_TOP,
+		CURSOR_SCROLL_TOP_RIGHT,
+		CURSOR_SCROLL_TOP_LEFT,
+		CURSOR_SCROLL_BOTTOM,
+		CURSOR_SCROLL_BOTTOM_RIGHT,
+		CURSOR_SCROLL_BOTTOM_LEFT,
+		CURSOR_NO_SCROLL_RIGHT,
+		CURSOR_NO_SCROLL_LEFT,
+		CURSOR_NO_SCROLL_TOP,
+		CURSOR_NO_SCROLL_TOP_RIGHT,
+		CURSOR_NO_SCROLL_TOP_LEFT,
+		CURSOR_NO_SCROLL_BOTTOM,
+		CURSOR_NO_SCROLL_BOTTOM_RIGHT,
+		CURSOR_NO_SCROLL_BOTTOM_LEFT,
+		CURSOR_DEPLOY,
+		CURSOR_NO_DEPLOY,
+		CURSOR_PRIMARY,
+		CURSOR_COUNT,
+
+		CURSOR_SCROLL_DIFF = CURSOR_NO_SCROLL_RIGHT - CURSOR_SCROLL_RIGHT,
 	};
 
 	struct StartBuildEvent {
@@ -91,9 +131,9 @@ public:
 	GameManager *manager;
 	PlayerState *ownerState;
 	MapState *map;
-	std::optional<std::string> forcedCursor;
+	std::optional<Cursor> forcedCursor;
 
-	UI();
+	UI(const Faction &faction);
 	virtual ~UI();
 	virtual void setEnabled(bool enabled);
 	bool isEnabled() const;
@@ -103,12 +143,12 @@ public:
 	virtual void renderAbove();
 	virtual void updateRender();
 
-	virtual void mouseOnUi() = 0;
-	virtual void onCancel(Vector2i absPos) = 0;
-	virtual void tileClicked(Vector2i absPos) = 0;
-	virtual void mouseMovedToTile(Vector2i absPos) = 0;
+	virtual void mouseOnUi();
+	virtual void onCancel(Vector2i absPos);
+	virtual void tileClicked(Vector2i absPos);
+	virtual void mouseMovedToTile(Vector2i absPos);
 	virtual void update();
-	virtual void render() = 0;
+	virtual void render();
 
 protected:
 	struct EVAQueue {
@@ -120,8 +160,18 @@ protected:
 
 	CursorAnimation &getCurrentCursor();
 
+	void _handleTryPlace();
+	void _displayPlacementPreview();
+	void _displaySelectedObjectUI(const GameObject &object);
+	bool _isSelectionTooFar() const;
+
+	const Faction &_faction;
+	std::array<sf::Texture, 4> _selectCorners;
+	unsigned _placementAnimation[3] = {0, 0, 0};
+	Vector2i _placementPos;
+	const Building *_placementBuilding = nullptr;
 	unsigned _globalEvaCooldown = 0;
-	std::deque<EVAQueue> _evaQueue;
+	std::list<EVAQueue> _evaQueue;
 	std::array<unsigned, EVA_COUNT> _evaCooldown{0};
 	std::array<std::unique_ptr<sf::SoundBuffer>, EVA_COUNT> _evaSounds{nullptr};
 	std::vector<GameObject *> _objectBuffer;
@@ -129,8 +179,9 @@ protected:
 	std::deque<Event> _eventQueue;
 	tgui::Panel::Ptr _settings;
 	tgui::Panel::Ptr _panel = tgui::Panel::create();
+	std::array<std::string, CURSOR_COUNT> _cursorMapping;
 	std::unordered_map<std::string, CursorAnimation> _cursors;
-	std::string _cursor = "normal";
+	Cursor _cursor = CURSOR_NORMAL;
 	bool _enabled = false;
 };
 
