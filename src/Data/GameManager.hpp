@@ -16,7 +16,7 @@
 #include "Color.hpp"
 #include "Vector.hpp"
 #include "Utils.hpp"
-#include "Unit.hpp"
+#include "GameObject.hpp"
 #include "Map.hpp"
 
 // #define QUADRANT_SIZE_X 128
@@ -30,8 +30,7 @@ private:
 	std::vector<MapState> _mapStates;
 	std::vector<Player> _players;
 	std::vector<Faction> _factions;
-	std::list<Unit> _liveUnits;
-	std::list<Building> _liveBuildings;
+	std::list<GameObject> _liveObjects;
 	unsigned _lastObjectId = 0;
 	std::unordered_map<unsigned, GameObject *> _objectMap;
 	std::map<unsigned, std::list<GameObject *>> _renderObjects;
@@ -66,8 +65,7 @@ public:
 	std::vector<Player> &getPlayers();
 	const std::vector<Faction> &getFactions() const;
 	GameObject *getObjectById(unsigned index);
-	Unit *spawnUnit(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id);
-	Building *spawnBuilding(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id);
+	GameObject *spawnObject(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id);
 	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePos);
 	const LoadedMap &getLoadedMap() const;
 	void consumeEvent(const sf::Event &event);
@@ -79,7 +77,7 @@ public:
 	void modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, int count);
 	std::optional<Vector2i> getFirstHarvestableTile(MapState &state, Vector2i pos) const;
 	std::optional<Vector2i> getClosestHarvestableTile(MapState &state, Vector2i pos) const;
-	Building *getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos);
+	GameObject *getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos);
 	MapResource &getResource(Vector2i pos);
 	void consumeResource(Vector2i pos);
 	void centerCameraOn(Vector2f pos);

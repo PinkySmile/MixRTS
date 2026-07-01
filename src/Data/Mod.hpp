@@ -8,7 +8,6 @@
 
 #include <map>
 #include <string>
-#include "Building.hpp"
 #include "CursorAnimation.hpp"
 #include "Faction.hpp"
 
@@ -39,19 +38,12 @@ public:
 		const std::filesystem::path &path,
 		const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades
 	) const;
-	void loadUnits(
+	void loadObjects(
 		const std::filesystem::path &path,
 		const Faction &base,
 		const std::unordered_map<std::string, std::vector<Animation>> &anims,
 		const std::unordered_map<std::string, MultiSound> &sounds,
-		std::unordered_map<std::string, Unit> &units
-	) const;
-	void loadBuildings(
-		const std::filesystem::path &path,
-		const Faction &base,
-		const std::unordered_map<std::string, std::vector<Animation>> &anims,
-		const std::unordered_map<std::string, MultiSound> &sounds,
-		std::unordered_map<std::string, Building> &buildings
+		std::unordered_map<std::string, GameObject> &objects
 	) const;
 	const std::filesystem::path &getBase() const;
 	const std::string &getName() const;

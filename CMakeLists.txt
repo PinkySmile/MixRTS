@@ -129,8 +129,6 @@ add_executable(
 	MixRTS
 	src/Data/Animation.cpp
 	src/Data/Animation.hpp
-	src/Data/Building.cpp
-	src/Data/Building.hpp
 	src/Data/ConditionalAnim.cpp
 	src/Data/ConditionalAnim.hpp
 	src/Data/CursorAnimation.cpp
@@ -192,8 +190,6 @@ add_executable(
 	src/Data/Upgrade.hpp
 	src/Data/Requirements/ReqConst.cpp
 	src/Data/Requirements/ReqConst.hpp
-	src/Data/Unit.cpp
-	src/Data/Unit.hpp
 	src/Data/GameObject.cpp
 	src/Data/GameObject.hpp
 	src/Data/MultiSound.cpp

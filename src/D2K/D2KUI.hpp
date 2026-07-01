@@ -66,7 +66,9 @@ private:
 
 	void _loadEvaSounds(const std::filesystem::path &base, const std::string &folder);
 	bool _hasUpgrades();
-	void _updateCursor();
+
+protected:
+	void _displaySelectedObjectUI(const GameObject &object) override;
 
 public:
 	D2KUI(const Faction &faction, const std::filesystem::path &base, const nlohmann::json &params);

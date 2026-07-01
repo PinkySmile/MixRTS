@@ -22,8 +22,7 @@
 struct PlayerQueue {
 	const Faction *faction;
 	const Upgrade *upgrade;
-	const Unit *unit;
-	const Building *building;
+	const GameObject *object;
 	const std::string *queueId;
 	const std::string *elementId;
 	std::unordered_map<std::string, unsigned> spent;
@@ -46,8 +45,8 @@ struct PlayerState {
 	std::unordered_map<std::string, unsigned> systemMoney;
 	std::unordered_map<std::string, unsigned> totalStorage;
 	std::unordered_map<std::string, unsigned> elementsOwned;
-	std::unordered_map<std::string, std::list<Building *>> queueBuildings;
-	std::unordered_map<std::string, Building *> primaryBuildings;
+	std::unordered_map<std::string, std::list<GameObject *>> queueBuildings;
+	std::unordered_map<std::string, GameObject *> primaryBuildings;
 	std::list<GameObject *> myObjects;
 	std::unordered_map<std::string, PlayerQueue *> buildQueues;
 	std::unordered_map<std::string, std::unordered_map<std::string, PlayerQueue>> queues;
@@ -70,8 +69,7 @@ private:
 	const Faction &_primaryFaction;
 	const std::vector<Faction> &_factions;
 	std::vector<std::unique_ptr<UI>> _uis;
-	std::unordered_map<std::string, const Unit *> _loadedUnits;
-	std::unordered_map<std::string, const Building *> _loadedBuildings;
+	std::unordered_map<std::string, const GameObject *> _loadedObjects;
 
 	void _tryEndBuild(PlayerQueue &queue);
 
@@ -96,8 +94,7 @@ public:
 	void mouseOnUi();
 	void keyPressed(const sf::Event::KeyPressed &key);
 	const Faction &getPrimaryFaction() const;
-	const std::unordered_map<std::string, const Unit *> &getUnits() const;
-	const std::unordered_map<std::string, const Building *> &getBuildings() const;
+	const std::unordered_map<std::string, const GameObject *> &getObjects() const;
 	void playEVA(UI::EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
 	void checkUnlocked(const Faction &faction);
 	void resetQueue(const std::string &queueId);
@@ -107,8 +104,8 @@ public:
 	void onRightMouseClicked(Vector2i pos);
 	bool credit(const std::string &type, unsigned amount, CreditStrategy strategy);
 	bool consume(const std::string &type, unsigned amount);
-	Building *getPrimaryBuilding(const std::string &queue);
-	Building *getSpawnBuilding(const std::string &queue);
+	GameObject *getPrimaryBuilding(const std::string &queue);
+	GameObject *getSpawnBuilding(const std::string &queue);
 
 	[[nodiscard]] bool isEnabled() const;
 

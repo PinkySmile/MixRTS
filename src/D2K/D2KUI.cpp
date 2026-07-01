@@ -621,7 +621,7 @@ void D2KUI::update()
 				});
 				this->_placementBuilding = nullptr;
 			} else if (bQueue[id].buildProgress == bQueue[id].buildTime) {
-				auto &map = this->_faction.getBuildings();
+				auto &map = this->_faction.getObjects();
 				auto it = map.find(id);
 
 				if (it != map.end())
@@ -674,115 +674,6 @@ void D2KUI::update()
 	this->_redPower->setVisible(percent <= 50);
 
 	this->_upgrade->setVisible(this->_hasUpgrades());
-	this->_updateCursor();
-}
-
-void D2KUI::_updateCursor()
-{
-	Vector2i pos = this->map->absToTileCoord(this->_placementPos);
-
-	if (
-		this->_placementBuilding != nullptr
-	#ifdef _DEBUG
-		|| this->_placementPos.x < 0 || this->_placementPos.y < 0 ||
-		static_cast<unsigned>(this->_placementPos.x) >= this->map->gridSize.x * this->map->tileSize.x ||
-		static_cast<unsigned>(this->_placementPos.y) >= this->map->gridSize.y * this->map->tileSize.y
-	#endif
-	) {
-		this->_cursor = CURSOR_NORMAL;
-		return;
-	}
-	this->_objectBuffer.clear();
-	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
-
-	if (!this->_objectBuffer.empty()) {
-		// TODO: Handle non snap-to-grid units/buildings
-		if (this->state->selectedObjects.size() == 1) {
-			auto obj = *this->state->selectedObjects.begin();
-
-			if (
-				this->ownerState->index == obj->owner->state.index &&
-				obj->isDeployable() &&
-				std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()
-			) {
-				if (obj->canDeploy())
-					this->_cursor = CURSOR_DEPLOY;
-				else
-					this->_cursor = CURSOR_NO_DEPLOY;
-				return;
-			}
-		}
-
-		bool canDeposit = std::ranges::any_of(this->_objectBuffer, [this](const GameObject *o){
-			// We can provide income to our teammate by sending harvesters to their resource dump.
-			return o->owner->state.team == this->ownerState->team && !o->getAcceptResources().empty();
-		});
-		bool canHarvest = std::ranges::any_of(this->state->selectedObjects, [this](const GameObject *o){
-			// TODO: Wrong check. Should have a different index per controlling player.
-			//       This one is only the player index that were declared at the start but
-			//       a player can control multiple in case their ally leaves.
-			return o->owner->state.index == this->ownerState->index && o->getResourceStorage() != 0;
-		});
-
-		if (canDeposit && canHarvest)
-			this->_cursor = CURSOR_DUMP;
-		else if (std::ranges::find(this->state->selectedObjects, this->_objectBuffer.back()) == this->state->selectedObjects.end())
-			this->_cursor = CURSOR_SELECT;
-		else
-			this->_cursor = CURSOR_NORMAL;
-		return;
-	}
-
-	if (std::ranges::all_of(this->state->selectedObjects, [this](const GameObject *o){
-		// TODO: Wrong check. Should have a different index per controlling player.
-		//       This one is only the player index that were declared at the start but
-		//       a player can control multiple in case their ally leaves.
-		return this->ownerState->index != o->owner->state.index;
-	})) {
-		this->_cursor = CURSOR_NORMAL;
-		return;
-	}
-
-	bool canMove = !this->state->selectedObjects.empty();
-
-	for (auto o : this->state->selectedObjects) {
-		if (!o->canMove())
-			canMove = false;
-	}
-
-	if (canMove) {
-		auto obj = *this->state->selectedObjects.begin();
-		auto map = obj->map;
-		auto relPos = map->absToTileCoord(this->_placementPos);
-		auto tl = this->map->topLeftCoordToAbs(pos);
-		auto passFlags = obj->getPassFlags();
-
-		// TODO: Handle non snap-to-grid units
-		if (obj->getResourceStorage() != 0 && map->hasAnyGridBits(relPos, GRIDMASK_RESOURCE)) {
-			auto res = GRID_RESOURCE_TYPE(map->grid[relPos.x + relPos.y * map->gridSize.x]);
-
-			if (res != 0) {
-				this->_cursor = CURSOR_ATTACK;
-				return;
-			}
-		}
-		if (
-			!this->manager->isAreaFree(tl, map->tileSize) ||
-			!map->hasAnyGridBits(relPos, passFlags)
-		)
-			this->_cursor = CURSOR_NO_MOVE;
-		else if (
-			map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_INFANTRY_CAN_PASS) ||
-			map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_VEHICULES_CAN_PASS) || (
-				map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_SHIP_CAN_PASS) &&
-				passFlags != GRIDMASK_SHIP_CAN_PASS
-			)
-		)
-			this->_cursor = CURSOR_MOVE_RESTRICT;
-		else
-			this->_cursor = CURSOR_MOVE;
-	} else
-		this->_cursor = CURSOR_NORMAL;
 }
 
 void D2KUI::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args)
@@ -802,4 +693,69 @@ void D2KUI::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int prio
 			sound = EVA_UNIT_READY;
 	}
 	UI::playEVA(sound, expireIn, priority, cooldown, args);
+}
+
+void D2KUI::_displaySelectedObjectUI(const GameObject &object)
+{
+	auto select = object.getSelectBox();
+	Vector2i size = select.size;
+	Vector2i top = select.position;
+	sf::Sprite sprite{this->_selectCorners[0]};
+	sf::RectangleShape rect;
+
+	top += object.getPosition();
+	rect.setPosition({top.x + 1.f, top.y + 1.f});
+	rect.setSize({size.x - 2.f, 2});
+	rect.setOutlineThickness(1);
+	rect.setOutlineColor(sf::Color::Black);
+	rect.setFillColor(sf::Color{0, 0, 0, 128});
+	game->screen->draw(rect);
+
+	rect.setSize({(size.x - 2.f) * object.animationState.health, 2});
+	if (object.animationState.health >= 0.5)
+		rect.setFillColor(sf::Color::Green);
+	else if (object.animationState.health >= 0.3)
+		rect.setFillColor(sf::Color{0xFF, 0x80, 0x00});
+	else
+		rect.setFillColor(sf::Color::Red);
+	game->screen->draw(rect);
+
+	top.y += 4;
+	sprite.setPosition(Vector2f(top.x, top.y));
+	game->screen->draw(sprite);
+
+	sprite.setTexture(this->_selectCorners[1], true);
+	sprite.setPosition(Vector2f(top.x - this->_selectCorners[1].getSize().x + size.x, top.y));
+	game->screen->draw(sprite);
+
+	sprite.setTexture(this->_selectCorners[2], true);
+	sprite.setPosition(Vector2f(top.x, top.y - this->_selectCorners[2].getSize().y + size.y));
+	game->screen->draw(sprite);
+
+	sprite.setTexture(this->_selectCorners[3], true);
+	sprite.setPosition(Vector2f(
+		top.x - this->_selectCorners[3].getSize().x + size.x,
+		top.y - this->_selectCorners[3].getSize().y + size.y
+	));
+	game->screen->draw(sprite);
+
+	auto percent = object.getStorageDisplay();
+
+	if (percent) {
+		sf::Vector2f pos = {top.x + 2.f, top.y + size.y - 5.f};
+		unsigned count = 7;
+
+		if (size.x >= 64)
+			count = 15;
+		rect.setSize({2, 2});
+		for (size_t i = 0; i < count; i++) {
+			rect.setPosition(pos);
+			if (*percent * count > i && percent != 0)
+				rect.setFillColor(sf::Color{0, 255, 0, 255});
+			else
+				rect.setFillColor(sf::Color{0, 0, 0, 128});
+			game->screen->draw(rect);
+			pos.x += 3;
+		}
+	}
 }

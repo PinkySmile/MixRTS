@@ -5,7 +5,6 @@
 #include <fstream>
 #include "GameManager.hpp"
 #include "Faction.hpp"
-#include "Building.hpp"
 #include "Animation.hpp"
 #include "Upgrade.hpp"
 #include "Player.hpp"
@@ -88,17 +87,11 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned
 	this->_players[index].state.index = index;
 	this->_players[index].state.team = team;
 	this->_players[index].state.systemMoney = faction.getStartingMoney();
-	for (auto &b : faction.getStartingBuildings()) {
+	for (auto &b : faction.getStartingObjects()) {
 		auto start = this->_mapStates[factionIndex].startAreas[startingArea];
 
 		start += b.offset;
-		this->spawnBuilding(index, start, b.queue, b.name);
-	}
-	for (auto &u : faction.getStartingUnits()) {
-		auto start = this->_mapStates[factionIndex].startAreas[startingArea];
-
-		start += u.offset;
-		this->spawnUnit(index, start, u.queue, u.name);
+		this->spawnObject(index, start, b.queue, b.name);
 	}
 	// FIXME: Always teleport to player 0 starting point
 	if (index == 0)
@@ -157,10 +150,8 @@ void GameManager::_checkScroll()
 void GameManager::update()
 {
 	this->_checkScroll();
-	for (auto &b : this->_liveBuildings)
-		b.update();
-	for (auto &u : this->_liveUnits)
-		u.update();
+	for (auto &o : this->_liveObjects)
+		o.update();
 	for (auto &player : this->_players)
 		player.update();
 	for (auto &player : this->_players)
@@ -179,8 +170,8 @@ void GameManager::update()
 				++it;
 	}
 
-	auto itb = this->_liveBuildings.begin();
-	while (itb != this->_liveBuildings.end())
+	auto itb = this->_liveObjects.begin();
+	while (itb != this->_liveObjects.end())
 		if (itb->isDisposable()) {
 			auto &group = itb->getGroup();
 			auto &id = itb->getId();
@@ -188,22 +179,9 @@ void GameManager::update()
 			--itb->owner->state.elementsOwned[group];
 			if (group != id)
 				--itb->owner->state.elementsOwned[id];
-			itb = this->_liveBuildings.erase(itb);
+			itb = this->_liveObjects.erase(itb);
 		} else
 			++itb;
-
-	auto itu = this->_liveUnits.begin();
-	while (itu != this->_liveUnits.end())
-		if (itu->isDisposable()) {
-			auto &group = itu->getGroup();
-			auto &id = itu->getId();
-
-			--itu->owner->state.elementsOwned[group];
-			if (group != id)
-				--itu->owner->state.elementsOwned[id];
-			itu = this->_liveUnits.erase(itu);
-		} else
-			++itu;
 }
 
 void GameManager::updateRender()
@@ -439,11 +417,9 @@ void GameManager::_unlockAll()
 {
 	for (auto &player : this->_players) {
 		for (auto &f : this->_factions) {
-			for (auto &[name, b] : f.getBuildings())
+			for (auto &[name, b] : f.getObjects())
 				player.unlockObject(f, name, b, true);
 			for (auto &[name, u] : f.getUpgrades())
-				player.unlockObject(f, name, u, true);
-			for (auto &[name, u] : f.getUnits())
 				player.unlockObject(f, name, u, true);
 		}
 		for (auto &[name, q] : player.state.buildQueues)
@@ -480,11 +456,9 @@ void GameManager::_recomputeLocked()
 {
 	for (auto &player : this->_players)
 		for (auto &f : this->_factions) {
-			for (auto &[name, b] : f.getBuildings())
-				this->_checkObjectLocked(name, b, player);
+			for (auto &[name, o] : f.getObjects())
+				this->_checkObjectLocked(name, o, player);
 			for (auto &[name, u] : f.getUpgrades())
-				this->_checkObjectLocked(name, u, player);
-			for (auto &[name, u] : f.getUnits())
 				this->_checkObjectLocked(name, u, player);
 		}
 }
@@ -549,9 +523,9 @@ bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::str
 {
 	auto &player = this->_players[owner];
 	auto &map = this->_mapStates[player.state.factionIndex];
-	auto &buildings = player.getBuildings();
-	assert_msg(buildings.contains(id), id);
-	auto &base = *buildings.at(id);
+	auto &objects = player.getObjects();
+	assert_msg(objects.contains(id), id);
+	auto &base = *objects.at(id);
 	auto &tiles = base.getTileData();
 	Vector2i pos = map.absToTileCoord(absPos);
 	Vector2i basePos = map.absToTileCoord(basePosAbs);
@@ -623,9 +597,9 @@ void GameManager::_onObjectSpawned(Vector2i pos, GameObject &obj)
 	auto extra = obj.getExtraSpawn();
 
 	if (extra)
-		this->spawnUnit(obj.owner->state.index, obj.getPosition() + extra->pos, "", extra->unit);
+		this->spawnObject(obj.owner->state.index, obj.getPosition() + extra->pos, "", extra->unit);
 	// FIXME: Dynamic cast
-	auto b = dynamic_cast<Building *>(&obj);
+	auto b = dynamic_cast<GameObject *>(&obj);
 	if (b) {
 		auto &gqueue = b->getGivenQueue();
 
@@ -640,12 +614,12 @@ T *GameManager::_spawnObj(size_t owner, Vector2i absPos, const std::string &buil
 {
 	auto &player = this->_players[owner];
 	auto &map = this->_mapStates[player.state.factionIndex];
-	auto &buildings = player.getBuildings();
+	auto &objects = player.getObjects();
 	std::string concrete = player.getPrimaryFaction().getBase().getName() + ":conc";
 	assert_msg(in.contains(id), id);
-	assert_msg(buildings.contains(concrete), concrete);
+	assert_msg(objects.contains(concrete), concrete);
 	auto &base = *in.at(id);
-	auto &concBase = *buildings.at(concrete);
+	auto &concBase = *objects.at(concrete);
 	auto &tiles = base.getTileData();
 	unsigned nbConcreteTiles = 0;
 	unsigned nbTiles = 0;
@@ -676,9 +650,9 @@ T *GameManager::_spawnObj(size_t owner, Vector2i absPos, const std::string &buil
 				this->_map.grid.setGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
 				for (auto &m : this->_mapStates)
 					m.setGridBits(fullPosAbs, GRIDMASK_HAS_CONCRETE);
-				this->_liveBuildings.emplace_back(concBase);
-				this->_initObject(map, player, this->_liveBuildings.back(), concrete);
-				this->_onObjectSpawned(fullPos, this->_liveBuildings.back());
+				this->_liveObjects.emplace_back(concBase);
+				this->_initObject(map, player, this->_liveObjects.back(), concrete);
+				this->_onObjectSpawned(fullPos, this->_liveObjects.back());
 			}
 			if (line[x].placementRequired) {
 				// OPTIMIZE: Can use a reference instead of calling helpers
@@ -730,40 +704,30 @@ noGrid:
 			}
 		}
 		this->_onObjectSpawned(pos, obj);
-		if constexpr (std::is_same_v<T, Building>) {
-			auto &gqueue = obj.getGivenQueue();
-			auto &bqueue = obj.getBuildQueue();
 
-			if (gqueue && bqueue && !parent && *gqueue == *bqueue)
-				obj.produced();
-		}
+		auto &gqueue = obj.getGivenQueue();
+		auto &bqueue = obj.getBuildQueue();
+
+		if (gqueue && bqueue && !parent && *gqueue == *bqueue)
+			obj.produced();
+
+		auto power = obj.getPower();
+		auto &storage = obj.getStorage();
+
+		if (power < 0)
+			player.state.producedPower += -power;
+		else
+			player.state.consumedPower += power;
+		for (auto &pair : storage)
+			player.state.totalStorage[pair.first] += pair.second;
 		return &obj;
 	}
 	return nullptr;
 }
 
-Building *GameManager::spawnBuilding(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id)
+GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id)
 {
-	Player &p = this->_players[owner];
-	Building *b = this->_spawnObj(owner, absPos, buildQueue, id, this->_liveBuildings, p.getBuildings());
-
-	if (b) {
-		auto power = b->getPower();
-		auto &storage = b->getStorage();
-
-		if (power < 0)
-			p.state.producedPower += -power;
-		else
-			p.state.consumedPower += power;
-		for (auto &pair : storage)
-			p.state.totalStorage[pair.first] += pair.second;
-	}
-	return b;
-}
-
-Unit *GameManager::spawnUnit(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id)
-{
-	return this->_spawnObj(owner, absPos, buildQueue, id, this->_liveUnits, this->_players[owner].getUnits());
+	return this->_spawnObj(owner, absPos, buildQueue, id, this->_liveObjects, this->_players[owner].getObjects());
 }
 
 const std::vector<Faction> &GameManager::getFactions() const
@@ -835,11 +799,8 @@ bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const
 bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size)
 {
 	// OPTIMIZE: Split the map into quadrants
-	for (auto &b : this->_liveBuildings)
-		if (this->_isInArea(b, absPos, size))
-			return false;
-	for (auto &u : this->_liveUnits)
-		if (this->_isInArea(u, absPos, size))
+	for (auto &o : this->_liveObjects)
+		if (this->_isInArea(o, absPos, size))
 			return false;
 	return true;
 }
@@ -847,12 +808,9 @@ bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size)
 void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<GameObject *> &objects)
 {
 	// OPTIMIZE: Split the map into quadrants
-	for (auto &b : this->_liveBuildings)
+	for (auto &b : this->_liveObjects)
 		if (this->_isInArea(b, absPos, size))
 			objects.push_back(&b);
-	for (auto &u : this->_liveUnits)
-		if (this->_isInArea(u, absPos, size))
-			objects.push_back(&u);
 }
 
 void GameManager::registerObject(GameObject *o)
@@ -1024,16 +982,16 @@ std::optional<Vector2i> GameManager::getClosestHarvestableTile(MapState &state, 
 #undef CHECK_RES
 }
 
-Building *GameManager::getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos)
+GameObject *GameManager::getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos)
 {
-	if (this->_liveBuildings.empty())
+	if (this->_liveObjects.empty())
 		return nullptr;
 
-	Building *best = nullptr;
+	GameObject *best = nullptr;
 	double dist = std::numeric_limits<double>::infinity();
 	size_t resourceScore = 0;
 
-	for (auto &b : this->_liveBuildings) {
+	for (auto &b : this->_liveObjects) {
 		if (b.isDead())
 			continue;
 

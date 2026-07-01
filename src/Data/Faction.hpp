@@ -10,7 +10,7 @@
 #include <nlohmann/json.hpp>
 #include "forward.hpp"
 #include "Sprite.hpp"
-#include "Unit.hpp"
+#include "MultiSound.hpp"
 
 struct StartObject {
 	Vector2i offset = {0, 0};
@@ -22,19 +22,16 @@ class Faction {
 private:
 	const Mod &_base;
 	mutable std::array<std::vector<Sprite>, 3> _placementCursors;
-	std::vector<std::string> _units;
 	std::vector<std::string> _sounds;
+	std::vector<std::string> _objects;
 	std::vector<std::string> _upgrades;
-	std::vector<std::string> _buildings;
 	std::vector<std::string> _animations;
-	std::unordered_map<std::string, Unit> _loadedUnits;
 	std::unordered_map<std::string, MultiSound> _loadedSounds;
 	std::unordered_map<std::string, Upgrade> _loadedUpgrades;
-	std::unordered_map<std::string, Building> _loadedBuildings;
+	std::unordered_map<std::string, GameObject> _loadedObjects;
 	std::unordered_map<std::string, std::vector<Animation>> _loadedAnimations;
 	std::unordered_map<std::string, unsigned> _startingMoney;
-	std::vector<StartObject> _startingBuildings;
-	std::vector<StartObject> _startingUnits;
+	std::vector<StartObject> _startingObjects;
 	std::optional<std::string> _primaryQueue;
 	nlohmann::json _uiData;
 	std::string _name;
@@ -52,13 +49,11 @@ public:
 	Faction(const Mod &base, const std::string &name, const nlohmann::json &data);
 	void load();
 	[[nodiscard]] const std::optional<std::string> &getPrimaryQueue() const;
-	[[nodiscard]] const std::unordered_map<std::string, Unit> &getUnits() const;
 	[[nodiscard]] const std::unordered_map<std::string, MultiSound> &getSounds() const;
 	[[nodiscard]] const std::unordered_map<std::string, Upgrade> &getUpgrades() const;
-	[[nodiscard]] const std::unordered_map<std::string, Building> &getBuildings() const;
+	[[nodiscard]] const std::unordered_map<std::string, GameObject> &getObjects() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getStartingMoney() const;
-	[[nodiscard]] const std::vector<StartObject> &getStartingBuildings() const;
-	[[nodiscard]] const std::vector<StartObject> &getStartingUnits() const;
+	[[nodiscard]] const std::vector<StartObject> &getStartingObjects() const;
 	[[nodiscard]] UI *createUI() const;
 	[[nodiscard]] const Mod &getBase() const;
 	[[nodiscard]] std::array<std::vector<Sprite>, 3> &getPlacementCursors() const;

@@ -14,6 +14,7 @@
 #include "Upgrade.hpp"
 #include "Mod.hpp"
 #include "Utils.hpp"
+#include "GameObject.hpp"
 
 Mod::Mod(std::filesystem::path base, const nlohmann::json &metadata) :
 	_name(metadata["name"]),
@@ -198,12 +199,12 @@ void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<s
 #endif
 }
 
-void Mod::loadUnits(
+void Mod::loadObjects(
 	const std::filesystem::path &path,
 	const Faction &base,
 	const std::unordered_map<std::string, std::vector<Animation>> &anims,
 	const std::unordered_map<std::string, MultiSound> &sounds,
-	std::unordered_map<std::string, Unit> &units
+	std::unordered_map<std::string, GameObject> &objects
 ) const
 {
 #ifndef PROPAGATE_CRASH
@@ -219,7 +220,7 @@ void Mod::loadUnits(
 			gen = json["_general"];
 		else
 			gen = nlohmann::json::object();
-		for (auto &[id, junit] : json.items()) {
+		for (auto &[id, jbuilding] : json.items()) {
 		#ifndef PROPAGATE_CRASH
 			try {
 		#endif
@@ -228,8 +229,8 @@ void Mod::loadUnits(
 
 				std::string fullId = RESOURCE(this->_name, id);
 
-				assert_exp(!units.contains(fullId));
-				units.emplace(fullId, Unit{base, fullId, anims, sounds, mergeObjects(junit, gen)});
+				assert_exp(!objects.contains(fullId));
+				objects.emplace(fullId, GameObject{base, fullId, anims, sounds, mergeObjects(jbuilding, gen)});
 		#ifndef PROPAGATE_CRASH
 			} catch (std::exception &e) {
 				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what());
@@ -238,7 +239,7 @@ void Mod::loadUnits(
 		}
 #ifndef PROPAGATE_CRASH
 	} catch (std::exception &e) {
-		throw _AssertionFailedException("While loading units file \"" + path.string() + "\"\n" + e.what());
+		throw _AssertionFailedException("While loading object file \"" + path.string() + "\"\n" + e.what());
 	}
 #endif
 }
@@ -278,51 +279,6 @@ void Mod::loadUpgrades(const std::filesystem::path &path, const Faction &base, s
 #ifndef PROPAGATE_CRASH
 	} catch (std::exception &e) {
 		throw _AssertionFailedException("While loading upgrade file \"" + path.string() + "\"\n" + e.what());
-	}
-#endif
-}
-
-void Mod::loadBuildings(
-	const std::filesystem::path &path,
-	const Faction &base,
-	const std::unordered_map<std::string, std::vector<Animation>> &anims,
-	const std::unordered_map<std::string, MultiSound> &sounds,
-	std::unordered_map<std::string, Building> &buildings
-) const
-{
-#ifndef PROPAGATE_CRASH
-	try {
-#endif
-		std::ifstream stream{this->_base / path};
-		nlohmann::json json;
-		nlohmann::json gen;
-
-		assert_msg(stream, "Failed to open " + path.string());
-		stream >> json;
-		if (json.contains("_general"))
-			gen = json["_general"];
-		else
-			gen = nlohmann::json::object();
-		for (auto &[id, jbuilding] : json.items()) {
-		#ifndef PROPAGATE_CRASH
-			try {
-		#endif
-				if (id.starts_with('_'))
-					continue;
-
-				std::string fullId = RESOURCE(this->_name, id);
-
-				assert_exp(!buildings.contains(fullId));
-				buildings.emplace(fullId, Building{base, fullId, anims, sounds, mergeObjects(jbuilding, gen)});
-		#ifndef PROPAGATE_CRASH
-			} catch (std::exception &e) {
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what());
-			}
-		#endif
-		}
-#ifndef PROPAGATE_CRASH
-	} catch (std::exception &e) {
-		throw _AssertionFailedException("While loading building file \"" + path.string() + "\"\n" + e.what());
 	}
 #endif
 }

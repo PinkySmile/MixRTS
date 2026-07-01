@@ -2,9 +2,11 @@
 // Created by PinkySmile on 11/04/2026.
 //
 
+#include "Resources/Assert.hpp"
 #include "Upgrade.hpp"
 #include "Faction.hpp"
 #include "Mod.hpp"
+#include "Utils.hpp"
 
 Upgrade::Upgrade(const Faction &faction, const std::string &id, const nlohmann::json &json) :
 	_base(faction)

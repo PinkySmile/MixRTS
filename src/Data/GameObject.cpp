@@ -83,63 +83,7 @@ void GameObject::_displayAnim(Animation &anim)
 }
 
 GameObject::GameObject(const GameObject &g) :
-	index(g.index),
-	animationState(g.animationState),
-	pfGrid(g.pfGrid),
-	manager(g.manager),
-	map(g.map),
-	owner(g.owner),
-	_base(g._base),
-	_buildSound(g._buildSound),
-	_doSound(g._doSound),
-	_selectSound(g._selectSound),
-	_checkTiles(g._checkTiles),
-	_tiles(g._tiles),
-	_cost(g._cost),
-	_requirements(g._requirements),
-	_buildQueue(g._buildQueue),
-	_proxy(g._proxy),
-	_pathCache(g._pathCache),
-	_orderQueue(g._orderQueue),
-	_group(g._group),
-	_id(g._id),
-	_selectBox(g._selectBox),
-	_skirt(g._skirt),
-	_size(g._size),
-	_point(g._point),
-	_position(g._position),
-	_gridPos(g._gridPos),
-	_extraSpawn(g._extraSpawn),
-	_spawnOrders(g._spawnOrders),
-	_acceptResources(g._acceptResources),
-	_lastRefinery(g._lastRefinery),
-	_spawnOffset(g._spawnOffset),
-	_exitOffset(g._exitOffset),
-	_resourceStorage(g._resourceStorage),
-	_currentDir(g._currentDir),
-	_turnSpeed(g._turnSpeed),
-	_buildSpeed(g._buildSpeed),
-	_maxHp(g._maxHp),
-	_hp(g._hp),
-	_sight(g._sight),
-	_limit(g._limit),
-	_gpTimer(g._gpTimer),
-	_passFlags(g._passFlags),
-	_harvestTime(g._harvestTime),
-	_harvestDelay(g._harvestDelay),
-	_speed(g._speed),
-	_tileCount(g._tileCount),
-	_requiresQueueBuilding(g._requiresQueueBuilding),
-	_boundToGrid(g._boundToGrid),
-	_disposable(g._disposable),
-	_pathCached(g._pathCached),
-	_initGrid(g._initGrid),
-	_solid(g._solid),
-	_fake(g._fake),
-	_central(g._central),
-	_dumpStop(g._dumpStop),
-	_dumpStart(g._dumpStart),
-	_dumping(g._dumping)
+	GameObjectData(g)
 {
 	this->_harvestAnims.reserve(g._harvestAnims.size());
 	for (auto &anim : g._harvestAnims)
@@ -149,11 +93,18 @@ GameObject::GameObject(const GameObject &g) :
 		this->_dump.emplace(
 			g._dump->dir,
 			g._dump->delay,
-			g._dump->delay_after,
+			g._dump->delayAfter,
 			std::make_unique<ConditionalAnim>(*this, *g._dump->during),
 			std::make_unique<ConditionalAnim>(*this, *g._dump->start),
 			std::make_unique<ConditionalAnim>(*this, *g._dump->stop)
 		);
+
+	if (g._buildAnim)
+		this->_buildAnim.emplace(*this, *g._buildAnim);
+	if (g._producingAnim)
+		this->_producingAnim.emplace(*this, *g._producingAnim);
+	if (g._producedAnim)
+		this->_producedAnim.emplace(*this, *g._producedAnim);
 
 	this->_anims.reserve(g._anims.size());
 	for (auto &animVec : g._anims) {
@@ -171,9 +122,10 @@ GameObject::GameObject(
 	const std::unordered_map<std::string, MultiSound> &sounds,
 	const nlohmann::json &json
 ) :
-	_base(faction)
+	GameObjectData(faction)
 {
 	assert_exp(!json.contains("requires_queue_building") || json["requires_queue_building"].is_boolean());
+	assert_exp(!json.contains("requires_placement") || json["requires_placement"].is_boolean());
 	assert_exp(!json.contains("grid_bound") || json["grid_bound"].is_boolean());
 	assert_exp(!json.contains("central") || json["central"].is_boolean());
 	assert_exp(!json.contains("queue") || json["queue"].is_string());
@@ -204,6 +156,19 @@ GameObject::GameObject(
 	assert_exp(!json.contains("resource_storage") || json["resource_storage"].is_number_unsigned());
 	assert_exp(!json.contains("harvest_time") || json["harvest_time"].is_number_unsigned());
 	assert_exp(!json.contains("harvest_delay") || json["harvest_delay"].is_number_unsigned());
+	assert_exp(!json.contains("build_max_distance") || json["build_max_distance"].is_number());
+	assert_exp(!json.contains("selectable") || json["selectable"].is_boolean());
+	assert_exp(!json.contains("sellable") || json["sellable"].is_boolean());
+	assert_exp(!json.contains("repairable") || json["repairable"].is_boolean());
+	assert_exp(!json.contains("gives_queue") || json["gives_queue"].is_string());
+	assert_exp(!json.contains("storage") || json["storage"].is_object());
+	assert_exp(!json.contains("build_anim") || json["build_anim"].is_null() || json["build_anim"].is_object());
+	assert_exp(!json.contains("producing_anim") || json["producing_anim"].is_null() || json["producing_anim"].is_object());
+	assert_exp(!json.contains("produced_anim") || json["produced_anim"].is_null() || json["produced_anim"].is_object());
+	assert_exp(!json.contains("show_after_build") || json["show_after_build"].is_number());
+	assert_exp(!json.contains("power") || json["power"].is_number());
+	assert_exp(!json.contains("lower_power_when_damaged") || json["lower_power_when_damaged"].is_boolean());
+	assert_exp(!json.contains("deploy") || json["deploy"].is_object());
 	if (json.contains("skirt")) {
 		assert_exp(json["skirt"].is_object());
 		assert_exp(json["skirt"].contains("x") && json["skirt"]["x"].is_number());
@@ -264,6 +229,34 @@ GameObject::GameObject(
 		assert_exp(json["spawn"]["pos"].contains("y"));
 		assert_exp(json["spawn"]["pos"]["y"].is_number_integer());
 	}
+	if (json.contains("storage"))
+		for (auto &[key, value] : json["storage"].items())
+			assert_msg(value.is_number(), "json[\"storage\"][\"" + key + "\"]");
+	if (json.contains("deploy")) {
+		assert_exp(!json["deploy"].contains("direction") || json["deploy"]["direction"].is_number());
+		assert_exp(!json["deploy"].contains("spawn_building") || json["deploy"]["spawn_building"].is_object());
+
+		this->_onDeploy.emplace();
+		if (json["deploy"].contains("direction"))
+			this->_onDeploy->direction = json["deploy"]["direction"];
+		if (json["deploy"].contains("spawn_building")) {
+			this->_onDeploy->spawnBuilding.emplace();
+			assert_exp(json["deploy"]["spawn_building"].contains("name"));
+			assert_exp(json["deploy"]["spawn_building"]["name"].is_string());
+			assert_exp(json["deploy"]["spawn_building"].contains("queue"));
+			assert_exp(json["deploy"]["spawn_building"]["queue"].is_string());
+			assert_exp(json["deploy"]["spawn_building"].contains("offset"));
+			assert_exp(json["deploy"]["spawn_building"]["offset"].is_object());
+			assert_exp(json["deploy"]["spawn_building"]["offset"].contains("x"));
+			assert_exp(json["deploy"]["spawn_building"]["offset"]["x"].is_number());
+			assert_exp(json["deploy"]["spawn_building"]["offset"].contains("y"));
+			assert_exp(json["deploy"]["spawn_building"]["offset"]["y"].is_number());
+			this->_onDeploy->spawnBuilding->building = RESOURCE(faction.getBase().getName(), json["deploy"]["spawn_building"]["name"]);
+			this->_onDeploy->spawnBuilding->queue    = RESOURCE(faction.getBase().getName(), json["deploy"]["spawn_building"]["queue"]);
+			this->_onDeploy->spawnBuilding->offset.x = json["deploy"]["spawn_building"]["offset"]["x"];
+			this->_onDeploy->spawnBuilding->offset.y = json["deploy"]["spawn_building"]["offset"]["y"];
+		}
+	}
 
 	auto &base = faction.getBase();
 
@@ -272,8 +265,17 @@ GameObject::GameObject(
 	this->_maxHp = this->_hp;
 	this->_cost = json["cost"];
 	this->_size = {json["size"]["x"], json["size"]["y"]};
+
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
+	if (json.contains("build_max_distance"))
+		this->_buildMaxDistance = json["build_max_distance"];
+	if (json.contains("selectable"))
+		this->_selectable = json["selectable"];
+	if (json.contains("sellable"))
+		this->_sellable = json["sellable"];
+	if (json.contains("repairable"))
+		this->_repairable = json["repairable"];
 	if (json.contains("spawn"))
 		this->_extraSpawn = {
 			RESOURCE(base.getName(), json["spawn"]["unit"]),
@@ -307,6 +309,8 @@ GameObject::GameObject(
 		this->_point = {json["point"]["x"], json["point"]["y"]};
 	if (json.contains("requires_queue_building"))
 		this->_requiresQueueBuilding = json["requires_queue_building"];
+	if (json.contains("requires_placement"))
+		this->_requiresPlacement = json["requires_placement"];
 	if (json.contains("queue"))
 		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);
 	if (json.contains("tiles")) {
@@ -353,6 +357,23 @@ GameObject::GameObject(
 		this->_group = RESOURCE(base.getName(), "group." + json["group"].get<std::string>());
 	else
 		this->_group = id;
+	if (json.contains("gives_queue"))
+		this->_giveQueue = RESOURCE(base.getName(), json["gives_queue"]);
+	if (json.contains("storage"))
+		this->_storage = json["storage"];
+	if (json.contains("build_anim") && !json["build_anim"].is_null())
+		this->_buildAnim.emplace(*this, animList, json["build_anim"]);
+	if (json.contains("producing_anim") && !json["producing_anim"].is_null())
+		this->_producingAnim.emplace(*this, animList, json["producing_anim"]);
+	if (json.contains("produced_anim") && !json["produced_anim"].is_null())
+		this->_producedAnim.emplace(*this, animList, json["produced_anim"]);
+	if (json.contains("show_after_build"))
+		this->_showAfterBuild = json["show_after_build"];
+	else if (this->_buildAnim)
+		this->_showAfterBuild = this->_buildAnim->size();
+	this->_power = json.contains("power") ? json["power"].get<int>() : 0;
+	this->_fake = json.contains("fake") && json["fake"];
+	this->_lowerPowerWhenDamaged = json.contains("lower_power_when_damaged") && json["lower_power_when_damaged"];
 
 	if (json.contains("turn_speed"))
 		this->_turnSpeed = json["turn_speed"];
@@ -425,6 +446,25 @@ GameObject::GameObject(
 	}
 	this->_sight = json.contains("sight") ? json["sight"].get<int>() : 0;
 	this->animationState.health = 1;
+
+	if (this->_storage.size() == 1)
+		this->animationState.storageKey = this->_storage.begin()->first;
+
+	if (this->_tiles && this->_buildMaxDistance)
+		for (size_t y = 0; y < this->_tiles->size(); y++) {
+			auto &line = (*this->_tiles)[y];
+
+			for (size_t x = 0; x < line.size(); x++) {
+				BuildingMask buildingMask = line[x];
+
+				if (!buildingMask.placementRequired && !buildingMask.placementConcrete)
+					continue;
+
+				for (int i1 = -this->_buildMaxDistance - 1; i1 <= this->_buildMaxDistance + 1; i1++)
+					for (int i2 = -this->_buildMaxDistance - 1; i2 <= this->_buildMaxDistance + 1; i2++)
+						this->_checkTiles.emplace(i1 + x, i2 + y);
+			}
+		}
 }
 
 GameObject::~GameObject() = default;
@@ -604,7 +644,7 @@ bool GameObject::_updateHarvest()
 	return false;
 }
 
-bool GameObject::_updateDump(Building *place)
+bool GameObject::_updateDump(GameObject *place)
 {
 	if (this->_firstEvent) {
 		if (this->_currentDir != this->_dump->dir) {
@@ -661,7 +701,7 @@ bool GameObject::_updateDump(Building *place)
 			this->_lots.pop_front();
 			place->produced();
 		}
-		if (this->dumpTimer >= this->_dump->delay + this->_dump->delay_after) {
+		if (this->dumpTimer >= this->_dump->delay + this->_dump->delayAfter) {
 			if (this->_lots.empty()) {
 				this->_dumpStop = true;
 				this->_dumping = false;
@@ -671,6 +711,26 @@ bool GameObject::_updateDump(Building *place)
 			this->dumpTimer++;
 	}
 	return false;
+}
+
+bool GameObject::_updateDeploy()
+{
+	assert_exp(this->_onDeploy);
+	if (this->_onDeploy->spawnBuilding) {
+		auto &s = *this->_onDeploy->spawnBuilding;
+
+		if (this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position)) {
+			this->deinitGlobalGrid();
+			this->_solid = false;
+			this->_disposable = true;
+
+			GameObject *result = this->manager->spawnObject(this->owner->state.index, this->_position + s.offset, s.queue, s.building);
+
+			result->damage((this->_maxHp - this->_hp) * result->getHealth() / this->_maxHp);
+		} else
+			this->owner->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300);
+	}
+	return true;
 }
 
 bool GameObject::_handleOrder(const Order &o)
@@ -683,6 +743,8 @@ bool GameObject::_handleOrder(const Order &o)
 		return this->_updateHarvest();
 	else if (auto dump = std::get_if<DumpOrder>(&o))
 		return this->_updateDump(dump->target);
+	else if (std::holds_alternative<DeployOrder>(this->_orderQueue.front()))
+		return this->_updateDeploy();
 	return true;
 }
 
@@ -694,6 +756,15 @@ void GameObject::playBuiltSound() const
 
 void GameObject::update()
 {
+	if (this->_building && this->_buildAnim && (*this->_buildAnim)()) {
+		if (this->_buildAnim->update())
+			this->_building = false;
+	} else {
+		if (this->_producing && this->_producingAnim && (*this->_producingAnim)())
+			this->_producingAnim->update();
+		if (this->_produced  && this->_producedAnim  && (*this->_producedAnim)()  && this->_producedAnim->update())
+			this->_produced = false;
+	}
 	if(this->_lastRefinery && this->_lastRefinery->isDisposable())
 		this->_lastRefinery = nullptr;
 	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping)
@@ -779,22 +850,34 @@ void GameObject::render(int layer)
 {
 	if (layer == -1)
 		this->drawSkirt();
-	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping)
-		for (auto &anim : this->_anims[this->_currentDir])
+	if (!this->_building || !this->_buildAnim || this->_buildAnim->current() >= this->_showAfterBuild) {
+		if (!this->_dumpStop && !this->_dumpStart && !this->_dumping)
+			for (auto &anim: this->_anims[this->_currentDir])
+				if (anim() && anim.getLayer() == layer)
+					this->_displayAnim(anim.getAnim());
+		if (this->_dumping && (*this->_dump->during)() && this->_dump->during->getLayer() == layer)
+			this->_displayAnim(this->_dump->during->getAnim());
+		if (this->_dumpStop && (*this->_dump->stop)() && this->_dump->stop->getLayer() == layer)
+			this->_displayAnim(this->_dump->stop->getAnim());
+		if (this->_dumpStart && (*this->_dump->start)() && this->_dump->start->getLayer() == layer)
+			this->_displayAnim(this->_dump->start->getAnim());
+		if (!this->_harvestAnims.empty() && this->_harvesting) {
+			auto dir = this->_currentDir * this->_harvestAnims.size() / this->_anims.size();
+			auto &anim = this->_harvestAnims[dir];
+
 			if (anim() && anim.getLayer() == layer)
 				this->_displayAnim(anim.getAnim());
-	if (this->_dumping && (*this->_dump->during)() && this->_dump->during->getLayer() == layer)
-		this->_displayAnim(this->_dump->during->getAnim());
-	if (this->_dumpStop && (*this->_dump->stop)() && this->_dump->stop->getLayer() == layer)
-		this->_displayAnim(this->_dump->stop->getAnim());
-	if (this->_dumpStart && (*this->_dump->start)() && this->_dump->start->getLayer() == layer)
-		this->_displayAnim(this->_dump->start->getAnim());
-	if (!this->_harvestAnims.empty() && this->_harvesting) {
-		auto dir = this->_currentDir * this->_harvestAnims.size() / this->_anims.size();
-		auto &anim = this->_harvestAnims[dir];
+		}
+	}
 
-		if (anim() && anim.getLayer() == layer)
-			this->_displayAnim(anim.getAnim());
+	if (this->_building && this->_buildAnim && (*this->_buildAnim)()) {
+		if (layer == this->_buildAnim->getLayer())
+			this->_displayAnim(this->_buildAnim->getAnim());
+	} else {
+		if (this->_produced &&  this->_producedAnim && (*this->_producedAnim)() && layer == this->_producedAnim->getLayer())
+			this->_displayAnim(this->_producedAnim->getAnim());
+		if (this->_producing && this->_producingAnim && (*this->_producingAnim)() && layer == this->_producingAnim->getLayer())
+			this->_displayAnim(this->_producingAnim->getAnim());
 	}
 }
 
@@ -820,6 +903,12 @@ void GameObject::setColor(const HSLColor &color)
 		this->_dump->start->setColor(color);
 		this->_dump->stop->setColor(color);
 	}
+	if (this->_buildAnim)
+		this->_buildAnim->setColor(color);
+	if (this->_producingAnim)
+		this->_producingAnim->setColor(color);
+	if (this->_producedAnim)
+		this->_producedAnim->setColor(color);
 }
 
 const std::string &GameObject::getId() const
@@ -901,7 +990,7 @@ const ReqAndCombinator &GameObject::getRequirements() const
 
 const Mod &GameObject::getBase() const
 {
-	return this->_base.getBase();
+	return this->_base.get().getBase();
 }
 
 const Faction &GameObject::getFaction() const
@@ -941,6 +1030,8 @@ const std::unordered_map<std::string, unsigned> &GameObject::getCost() const
 
 bool GameObject::isDeployable() const
 {
+	if (this->_onDeploy)
+		return true;
 	return false;
 }
 
@@ -953,12 +1044,24 @@ void GameObject::select() const
 
 void GameObject::deploy()
 {
+	if (this->_onDeploy) {
+		if (this->_onDeploy->direction)
+			this->_orderQueue.emplace_back(TurnOrder{*this->_onDeploy->direction});
+		this->_orderQueue.emplace_back(DeployOrder{});
+	}
 	if (this->_doSound)
 		this->_doSound->play();
 }
 
 bool GameObject::canDeploy() const
 {
+	if (this->_onDeploy) {
+		if (this->_onDeploy->spawnBuilding) {
+			auto &s = *this->_onDeploy->spawnBuilding;
+
+			return this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position);
+		}
+	}
 	return false;
 }
 
@@ -998,7 +1101,7 @@ void GameObject::moveTo(const Vector2i &pos, bool automatic)
 	}
 }
 
-void GameObject::dumpResourcesTo(Building *dump, bool automatic)
+void GameObject::dumpResourcesTo(GameObject *dump, bool automatic)
 {
 	if (!dump)
 		dump = this->_lastRefinery;
@@ -1130,7 +1233,15 @@ std::optional<float> GameObject::getStorageDisplay() const
 {
 	if (this->_resourceStorage != 0)
 		return static_cast<float>(this->_lots.size()) / static_cast<float>(this->_resourceStorage);
-	return {};
+	if (this->_storage.empty())
+		return {};
+
+	float percent = 0;
+
+	for (auto &key: this->_storage | std::ranges::views::keys)
+		percent += static_cast<float>(this->owner->state.money[key]) / this->owner->state.totalStorage[key];
+	percent /= this->_storage.size();
+	return percent;
 }
 
 bool GameObject::isSolid() const
@@ -1173,12 +1284,17 @@ bool GameObject::requiresQueueBuilding() const
 	return this->_requiresQueueBuilding;
 }
 
+bool GameObject::requiresPlacement() const
+{
+	return this->_requiresPlacement;
+}
+
 const std::optional<std::string> &GameObject::getProxy() const
 {
 	return this->_proxy;
 }
 
-const std::optional<std::vector<std::vector<GameObject::BuildingMask>>> &GameObject::getTileData() const
+const std::optional<std::vector<std::vector<BuildingMask>>> &GameObject::getTileData() const
 {
 	return this->_tiles;
 }
@@ -1193,10 +1309,6 @@ unsigned GameObject::getBottom() const
 const std::set<Vector2i> &GameObject::getCheckTiles() const
 {
 	return this->_checkTiles;
-}
-
-void GameObject::built()
-{
 }
 
 const std::optional<std::string> &GameObject::getBuildQueue() const
@@ -1253,3 +1365,87 @@ bool GameObject::isCentral() const
 {
 	return this->_central;
 }
+
+void GameObject::built()
+{
+	this->_building = true;
+	if (this->_buildAnim)
+		this->_buildAnim->reset();
+}
+
+void GameObject::produced()
+{
+	this->_produced = true;
+	if (this->_producedAnim)
+		this->_producedAnim->reset();
+}
+
+void GameObject::producing(bool producing)
+{
+	this->_producing = producing;
+}
+
+int GameObject::getPower() const
+{
+	if (!this->_lowerPowerWhenDamaged)
+		return this->_power;
+	return this->_power * static_cast<int>(this->_hp) / static_cast<int>(this->_maxHp);
+}
+
+const std::unordered_map<std::string, unsigned> &GameObject::getStorage() const
+{
+	return this->_storage;
+}
+
+const std::optional<std::string> &GameObject::getGivenQueue() const
+{
+	return this->_giveQueue;
+}
+
+unsigned char GameObject::getBuildMaxDistance() const
+{
+	return this->_buildMaxDistance;
+}
+
+bool GameObject::isSelectable() const
+{
+	return this->_selectable;
+}
+
+bool GameObject::isSellable() const
+{
+	return this->_sellable;
+}
+
+bool GameObject::isRepairable() const
+{
+	return this->_repairable;
+}
+
+bool GameObject::isPrimary() const
+{
+	return this->_isPrimary;
+}
+
+void GameObject::setPrimary(bool primary)
+{
+	this->_isPrimary = primary;
+}
+
+const std::optional<UnitDeployParams> &GameObject::getOnDeploy() const
+{
+	return this->_onDeploy;
+}
+
+unsigned GameObject::getSpeed() const
+{
+	return this->_speed;
+}
+
+
+GameObjectData::GameObjectData(const Faction &base) :
+	_base(base)
+{
+}
+
+GameObjectData::GameObjectData(const GameObjectData &) = default;

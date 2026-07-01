@@ -160,16 +160,17 @@ protected:
 
 	CursorAnimation &getCurrentCursor();
 
+	void _updateCursor();
 	void _handleTryPlace();
 	void _displayPlacementPreview();
-	void _displaySelectedObjectUI(const GameObject &object);
 	bool _isSelectionTooFar() const;
+	virtual void _displaySelectedObjectUI(const GameObject &object) = 0;
 
 	const Faction &_faction;
 	std::array<sf::Texture, 4> _selectCorners;
 	unsigned _placementAnimation[3] = {0, 0, 0};
 	Vector2i _placementPos;
-	const Building *_placementBuilding = nullptr;
+	const GameObject *_placementBuilding = nullptr;
 	unsigned _globalEvaCooldown = 0;
 	std::list<EVAQueue> _evaQueue;
 	std::array<unsigned, EVA_COUNT> _evaCooldown{0};

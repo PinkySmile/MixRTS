@@ -10,6 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <filesystem>
+#include <SFML/Graphics/Sprite.hpp>
 #include <SFML/Graphics/RenderTexture.hpp>
 #include "Vector.hpp"
 #include "FindPath.hpp"

@@ -5,7 +5,6 @@
 #include "Player.hpp"
 #include "Faction.hpp"
 #include "Upgrade.hpp"
-#include "Building.hpp"
 #include "GameManager.hpp"
 #include "../Resources/Game.hpp"
 #include "../UI.hpp"
@@ -45,15 +44,11 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 		game->gui.add(this->_uis.back()->getPanel());
 		if (i == index)
 			continue;
-		for (auto &[key, val] : f.getBuildings())
-			this->_loadedBuildings[key] = &val;
-		for (auto &[key, val] : f.getUnits())
-			this->_loadedUnits[key] = &val;
+		for (auto &[key, val] : f.getObjects())
+			this->_loadedObjects[key] = &val;
 	}
-	for (auto &[key, val] : this->_primaryFaction.getBuildings())
-		this->_loadedBuildings[key] = &val;
-	for (auto &[key, val] : this->_primaryFaction.getUnits())
-		this->_loadedUnits[key] = &val;
+	for (auto &[key, val] : this->_primaryFaction.getObjects())
+		this->_loadedObjects[key] = &val;
 }
 
 void PlayerState::clean()
@@ -101,12 +96,10 @@ void Player::update()
 			std::unordered_map<std::string, unsigned> expected;
 			std::unordered_map<std::string, unsigned> extra;
 
-			if (q->building)
-				expected = q->building->getCost();
+			if (q->object)
+				expected = q->object->getCost();
 			else if (q->upgrade)
 				expected = q->upgrade->getCost();
-			else if (q->unit)
-				expected = q->unit->getCost();
 			for (auto &f : expected | std::ranges::views::values)
 				f *= percent;
 			for (auto &[n, f] : expected)
@@ -178,14 +171,9 @@ bool Player::isEnabled() const
 	return this->_enabled;
 }
 
-const std::unordered_map<std::string, const Building *> &Player::getBuildings() const
+const std::unordered_map<std::string, const GameObject *> &Player::getObjects() const
 {
-	return this->_loadedBuildings;
-}
-
-const std::unordered_map<std::string, const Unit *> &Player::getUnits() const
-{
-	return this->_loadedUnits;
+	return this->_loadedObjects;
 }
 
 const Faction &Player::getPrimaryFaction() const
@@ -249,7 +237,7 @@ void Player::handleUiEvents()
 			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event)) {
 				auto &sq = this->state.queues[place->queue][place->id];
 
-				this->_parent.spawnBuilding(this->state.index, place->position, place->queue, place->id);
+				this->_parent.spawnObject(this->state.index, place->position, place->queue, place->id);
 				sq.spent.clear();
 				this->resetQueue(place->queue);
 			} else if (auto startBuild = std::get_if<UI::StartBuildEvent>(&*event)) {
@@ -276,7 +264,7 @@ void Player::handleUiEvents()
 					this->state.buildQueues[startBuild->queue] = &queue;
 				}
 
-				Building *building = this->getPrimaryBuilding(startBuild->queue);
+				GameObject *building = this->getPrimaryBuilding(startBuild->queue);
 
 				if (building)
 					building->producing(true);
@@ -318,7 +306,7 @@ void Player::handleUiEvents()
 					obj->playDoSound();
 				}
 			} else if (auto dump = std::get_if<UI::DumpUnitEvent>(&*event)) {
-				checked_cast(hole, Building, this->_parent.getObjectById(dump->hole));
+				GameObject *hole = this->_parent.getObjectById(dump->hole);
 
 				for (auto i: dump->indices) {
 					auto obj = this->_parent.getObjectById(i);
@@ -340,35 +328,33 @@ void Player::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int pri
 
 void Player::checkUnlocked(const Faction &faction)
 {
-	for (auto &[name, building] : faction.getBuildings())
-		this->unlockObject(faction, name, building);
+	for (auto &[name, object] : faction.getObjects())
+		this->unlockObject(faction, name, object);
 	for (auto &[name, upgrade] : faction.getUpgrades())
 		this->unlockObject(faction, name, upgrade);
-	for (auto &[name, units] : faction.getUnits())
-		this->unlockObject(faction, name, units);
 }
 
 void Player::_tryEndBuild(PlayerQueue &queue)
 {
-	if (queue.building) {
-		// TODO: For place-first-build-later factions
-	} else if (queue.upgrade) {
+	if (queue.upgrade) {
 		this->state.elementsOwned[*queue.elementId]++;
 		queue.spent.clear();
 		this->resetQueue(*queue.queueId);
 		this->checkUnlocked(*queue.faction);
-	} else if (queue.unit) {
-		this->_parent.spawnUnit(this->state.index, this->_parent.getLoadedMap().pathFindingGrid.gridSize / 2, *queue.queueId, *queue.elementId);
-		queue.spent.clear();
-		this->resetQueue(*queue.queueId);
-		this->checkUnlocked(*queue.faction);
+	} else if (queue.object) {
+		if (!queue.object->requiresPlacement()) {
+			this->_parent.spawnObject(this->state.index, this->_parent.getLoadedMap().pathFindingGrid.gridSize / 2, *queue.queueId, *queue.elementId);
+			queue.spent.clear();
+			this->resetQueue(*queue.queueId);
+			this->checkUnlocked(*queue.faction);
+		}
 	} else
 		assert_not_reached();
 }
 
 void Player::resetQueue(const std::string &queueId)
 {
-	Building *building = this->getPrimaryBuilding(queueId);
+	GameObject *building = this->getPrimaryBuilding(queueId);
 
 	if (building)
 		building->producing(false);
@@ -430,7 +416,7 @@ std::vector<std::unique_ptr<UI>> &Player::getUIs()
 	return this->_uis;
 }
 
-Building *Player::getPrimaryBuilding(const std::string &queue)
+GameObject *Player::getPrimaryBuilding(const std::string &queue)
 {
 	auto parent = this->state.primaryBuildings[queue];
 
@@ -442,7 +428,7 @@ Building *Player::getPrimaryBuilding(const std::string &queue)
 	return nullptr;
 }
 
-Building *Player::getSpawnBuilding(const std::string &queue)
+GameObject *Player::getSpawnBuilding(const std::string &queue)
 {
 	auto parent = this->state.primaryBuildings[queue];
 
@@ -482,18 +468,12 @@ void Player::unlockObject(const Faction &f, const std::string &name, T &object, 
 	queue.buildProgress = 0;
 	queue.buildTime = debugTime ? 1 : object.getBuildSpeed() * 8;
 	queue.faction = &f;
-	if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*queue.building)>>) {
-		queue.building = &object;
+	if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*queue.object)>>) {
+		queue.object = &object;
 		queue.upgrade = nullptr;
-		queue.unit = nullptr;
 	} else if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*queue.upgrade)>>) {
-		queue.building = nullptr;
+		queue.object = nullptr;
 		queue.upgrade = &object;
-		queue.unit = nullptr;
-	} else if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*queue.unit)>>) {
-		queue.building = nullptr;
-		queue.upgrade = nullptr;
-		queue.unit = &object;
 	} else
 		static_assert(false);
 	queue.elementId = &name;
@@ -501,7 +481,6 @@ void Player::unlockObject(const Faction &f, const std::string &name, T &object, 
 	this->playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
 }
 
-// Only these 3 types are valid for that template
-template void Player::unlockObject(const Faction &f, const std::string &name, Unit &object, bool debugTime);
+// Only these 2 types are valid for that template
 template void Player::unlockObject(const Faction &f, const std::string &name, Upgrade &object, bool debugTime);
-template void Player::unlockObject(const Faction &f, const std::string &name, Building &object, bool debugTime);
+template void Player::unlockObject(const Faction &f, const std::string &name, GameObject &object, bool debugTime);
