@@ -598,14 +598,11 @@ void GameManager::_onObjectSpawned(Vector2i pos, GameObject &obj)
 
 	if (extra)
 		this->spawnObject(obj.owner->state.index, obj.getPosition() + extra->pos, "", extra->unit);
-	// FIXME: Dynamic cast
-	auto b = dynamic_cast<GameObject *>(&obj);
-	if (b) {
-		auto &gqueue = b->getGivenQueue();
 
-		if (gqueue)
-			obj.owner->state.queueBuildings[*gqueue].push_back(b);
-	}
+	auto &gqueue = obj.getGivenQueue();
+
+	if (gqueue)
+		obj.owner->state.queueBuildings[*gqueue].push_back(&obj);
 	obj.owner->checkUnlocked(obj.getFaction());
 }
 
@@ -708,7 +705,9 @@ noGrid:
 		auto &gqueue = obj.getGivenQueue();
 		auto &bqueue = obj.getBuildQueue();
 
-		if (gqueue && bqueue && !parent && *gqueue == *bqueue)
+		if (parent)
+			parent->produced();
+		else if (gqueue && bqueue && !parent && *gqueue == *bqueue)
 			obj.produced();
 
 		auto power = obj.getPower();

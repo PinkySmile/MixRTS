@@ -63,6 +63,7 @@ private:
 	sf::Sound _soundMoveBlocked{this->_moveBlocked};
 	sf::Sound _soundButton{this->_button};
 	sf::Sound _soundMove{this->_move};
+	sf::Texture _primary;
 
 	void _loadEvaSounds(const std::filesystem::path &base, const std::string &folder);
 	bool _hasUpgrades();

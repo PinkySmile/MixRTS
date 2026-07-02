@@ -1385,6 +1385,11 @@ void GameObject::producing(bool producing)
 	this->_producing = producing;
 }
 
+bool GameObject::isProducing() const
+{
+	return this->_producing;
+}
+
 int GameObject::getPower() const
 {
 	if (!this->_lowerPowerWhenDamaged)

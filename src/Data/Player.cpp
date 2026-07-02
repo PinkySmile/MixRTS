@@ -315,6 +315,23 @@ void Player::handleUiEvents()
 					obj->dumpResourcesTo(hole);
 					obj->playDoSound();
 				}
+			} else if (auto primary = std::get_if<UI::SetPrimaryEvent>(&*event)) {
+				GameObject *building = this->_parent.getObjectById(primary->index);
+				auto gq = building->getGivenQueue();
+				assert_exp(gq);
+				auto old = this->state.primaryBuildings[*gq];
+				auto producing = false;
+
+				if (old)
+					old->setPrimary(false);
+				for (auto &o : this->state.queueBuildings[*gq]) {
+					producing |= o->isProducing();
+					o->producing(false);
+				}
+				this->state.primaryBuildings[*gq] = building;
+				building->setPrimary();
+				building->producing(producing);
+				this->playEVA(UI::EVA_PRIMARY_SELECTED, 120, 1, 0, *gq);
 			} else
 				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));
 		}

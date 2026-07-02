@@ -163,12 +163,12 @@ void UI::_updateCursor()
 
 	if (
 		this->_placementBuilding != nullptr
-		#ifdef _DEBUG
+	#ifdef _DEBUG
 		|| this->_placementPos.x < 0 || this->_placementPos.y < 0 ||
 		static_cast<unsigned>(this->_placementPos.x) >= this->map->gridSize.x * this->map->tileSize.x ||
 		static_cast<unsigned>(this->_placementPos.y) >= this->map->gridSize.y * this->map->tileSize.y
-#endif
-		) {
+	#endif
+	) {
 		this->_cursor = CURSOR_NORMAL;
 		return;
 	}
@@ -189,10 +189,13 @@ void UI::_updateCursor()
 						this->_cursor = CURSOR_DEPLOY;
 					else
 						this->_cursor = CURSOR_NO_DEPLOY;
-				} else if (obj->getBuildQueue()) {
-
+					return;
+				} else if (auto &gq = obj->getGivenQueue()) {
+					if (this->ownerState->queueBuildings[*gq].size() > 1 && this->ownerState->primaryBuildings[*gq] != obj) {
+						this->_cursor = CURSOR_DEPLOY;
+						return;
+					}
 				}
-				return;
 			}
 		}
 
@@ -226,12 +229,9 @@ void UI::_updateCursor()
 		return;
 	}
 
-	bool canMove = !this->state->selectedObjects.empty();
-
-	for (auto o : this->state->selectedObjects) {
-		if (!o->canMove())
-			canMove = false;
-	}
+	bool canMove = !this->state->selectedObjects.empty() && std::ranges::all_of(this->state->selectedObjects, [this](const GameObject *o){
+		return o->canMove();
+	});
 
 	if (canMove) {
 		auto obj = *this->state->selectedObjects.begin();
@@ -416,14 +416,20 @@ void UI::tileClicked(Vector2i absPos)
 
 			if (
 				obj->owner->state.index == this->ownerState->index &&
-				obj->isDeployable() &&
 				std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()
 			) {
-				if (!obj->canDeploy())
-					this->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300, "");
-				else
-					this->_eventQueue.emplace_back(DeployUnitEvent{obj->index});
-				return;
+				if (obj->isDeployable()) {
+					if (!obj->canDeploy())
+						this->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300, "");
+					else
+						this->_eventQueue.emplace_back(DeployUnitEvent{obj->index});
+					return;
+				} else if (auto &gq = obj->getGivenQueue()) {
+					if (this->ownerState->queueBuildings[*gq].size() > 1 && this->ownerState->primaryBuildings[*gq] != obj) {
+						this->_eventQueue.emplace_back(SetPrimaryEvent{obj->index});
+						return;
+					}
+				}
 			}
 		}
 
@@ -539,4 +545,29 @@ void UI::onCancel(Vector2i absPos)
 void UI::mouseOnUi()
 {
 	this->_cursor = CURSOR_NORMAL;
+}
+
+void UI::_displaySelectBox(Vector2i top, Vector2u size)
+{
+	sf::Sprite sprite{this->_selectCorners[0]};
+	sf::RectangleShape rect;
+
+	top.y += 4;
+	sprite.setPosition(Vector2f(top.x, top.y));
+	game->screen->draw(sprite);
+
+	sprite.setTexture(this->_selectCorners[1], true);
+	sprite.setPosition(Vector2f(top.x - this->_selectCorners[1].getSize().x + size.x, top.y));
+	game->screen->draw(sprite);
+
+	sprite.setTexture(this->_selectCorners[2], true);
+	sprite.setPosition(Vector2f(top.x, top.y - this->_selectCorners[2].getSize().y + size.y));
+	game->screen->draw(sprite);
+
+	sprite.setTexture(this->_selectCorners[3], true);
+	sprite.setPosition(Vector2f(
+		top.x - this->_selectCorners[3].getSize().x + size.x,
+		top.y - this->_selectCorners[3].getSize().y + size.y
+	));
+	game->screen->draw(sprite);
 }

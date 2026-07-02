@@ -117,6 +117,10 @@ public:
 		unsigned hole;
 	};
 
+	struct SetPrimaryEvent {
+		unsigned index;
+	};
+
 	typedef std::variant<
 		StartBuildEvent,
 		PlaceBuildEvent,
@@ -124,7 +128,8 @@ public:
 		DeployUnitEvent,
 		MoveUnitEvent,
 		HarvestUnitEvent,
-		DumpUnitEvent
+		DumpUnitEvent,
+		SetPrimaryEvent
 	> Event;
 
 	UIState *state;
@@ -164,6 +169,7 @@ protected:
 	void _handleTryPlace();
 	void _displayPlacementPreview();
 	bool _isSelectionTooFar() const;
+	void _displaySelectBox(Vector2i pos, Vector2u size);
 	virtual void _displaySelectedObjectUI(const GameObject &object) = 0;
 
 	const Faction &_faction;

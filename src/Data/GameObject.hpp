@@ -227,6 +227,7 @@ public:
 	[[nodiscard]] bool isSellable() const;
 	[[nodiscard]] bool isRepairable() const;
 	[[nodiscard]] bool isPrimary() const;
+	[[nodiscard]] bool isProducing() const;
 	[[nodiscard]] const std::optional<std::string> &getGivenQueue() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getStorage() const;
 	[[nodiscard]] bool isCentral() const;

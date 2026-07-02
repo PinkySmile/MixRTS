@@ -163,6 +163,8 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	assert_exp(this->_button.loadFromFile(base / "sounds/BUTTON1.ogg"));
 	assert_exp(this->_moveBlocked.loadFromFile(base / "sounds/ENDLIST1.ogg"));
 
+	assert_exp(this->_primary.loadFromFile(base / "ui/common/primary.png"));
+
 	this->_up1->onMousePress([this] {
 		auto amount = this->_buildQueue->getContentOffset();
 
@@ -721,23 +723,7 @@ void D2KUI::_displaySelectedObjectUI(const GameObject &object)
 	game->screen->draw(rect);
 
 	top.y += 4;
-	sprite.setPosition(Vector2f(top.x, top.y));
-	game->screen->draw(sprite);
-
-	sprite.setTexture(this->_selectCorners[1], true);
-	sprite.setPosition(Vector2f(top.x - this->_selectCorners[1].getSize().x + size.x, top.y));
-	game->screen->draw(sprite);
-
-	sprite.setTexture(this->_selectCorners[2], true);
-	sprite.setPosition(Vector2f(top.x, top.y - this->_selectCorners[2].getSize().y + size.y));
-	game->screen->draw(sprite);
-
-	sprite.setTexture(this->_selectCorners[3], true);
-	sprite.setPosition(Vector2f(
-		top.x - this->_selectCorners[3].getSize().x + size.x,
-		top.y - this->_selectCorners[3].getSize().y + size.y
-	));
-	game->screen->draw(sprite);
+	this->_displaySelectBox(top, size);
 
 	auto percent = object.getStorageDisplay();
 
@@ -757,5 +743,11 @@ void D2KUI::_displaySelectedObjectUI(const GameObject &object)
 			game->screen->draw(rect);
 			pos.x += 3;
 		}
+	}
+	if (object.isPrimary()) {
+		sf::Sprite s{this->_primary};
+
+		s.setPosition(top + Vector2i{2, size.y - 5 - 5});
+		game->screen->draw(s);
 	}
 }
