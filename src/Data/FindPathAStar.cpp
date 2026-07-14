@@ -39,10 +39,8 @@ static void reconstructPath(const std::map<Vector2i, Vector2i> &cameFrom, Vector
 
 // A* finds a path from start to goal.
 // h is the heuristic function. h(n) estimates the cost to reach goal from node n.
-static bool aStar(Vector2i start, Vector2i goal, const std::function<bool(Vector2i)> &isObstructed, Vector2u gridSize, Vector2i step, std::vector<Vector2i> &totalPath)
+static bool aStar(Vector2i start, Vector2i goal, IsObstructedCb isObstructed, void *context, Vector2i step, std::vector<Vector2i> &totalPath)
 {
-	__lastGridSize = gridSize;
-
 	std::vector<std::pair<Vector2i, bool>> neighbors;
 	neighbors.reserve(8);
 
@@ -103,7 +101,7 @@ static bool aStar(Vector2i start, Vector2i goal, const std::function<bool(Vector
 		for (auto [neighbor, corner] : neighbors) {
 			if (closedSet.contains(neighbor))
 				continue;
-			if (isObstructed(neighbor))
+			if (isObstructed(neighbor, context))
 				continue;
 			if (neighbor.distance2(start) > 250000)
 				continue;
@@ -143,30 +141,16 @@ void AStar::computePath(
 	const PathFindingGrid &grid,
 	Vector2i currentPos,
 	Vector2i dest,
-	Vector2u hitBoxSize,
 	Vector2u step,
-	uint16_t mask,
+	IsObstructedCb isObstructed,
+	void *context,
 	std::vector<Vector2i> &buffer
 )
 {
-	auto diff = dest - currentPos;
-
 	__lastStepSize = step;
-	diff.y -= diff.x % step.x;
-	diff.y -= diff.y % step.y;
+	__lastGridSize = grid.gridSize;
 	buffer.clear();
-	aStar(currentPos, dest, [&grid, mask, dest, hitBoxSize](Vector2i p) -> float {
-		if (p.x < 0 || p.y < 0 || p.x + hitBoxSize.x > grid.gridSize.x || p.y + hitBoxSize.y > grid.gridSize.y)
-			return true;
-		for (size_t y = 0; y < hitBoxSize.y; y++)
-			for (size_t x = 0; x < hitBoxSize.x; x++) {
-				auto attrs = grid.grid[(p.x + x) + (p.y + y) * grid.gridSize.x];
-
-				if ((attrs & mask) != mask || PFGRIDMASK_NB_UNITS(attrs) != 0)
-					return true;
-			}
-		return false;
-	}, grid.gridSize, step, buffer);
+	aStar(currentPos, dest, isObstructed, context, step, buffer);
 }
 
 sf::Image AStar::getDebugImage()

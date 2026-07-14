@@ -470,6 +470,54 @@ GameObject::GameObject(
 GameObject::~GameObject() = default;
 
 
+struct ObstructionContext {
+	uint32_t mask;
+	Vector2u hitBoxSize;
+	const PathFindingGrid *grid;
+};
+static bool IsPathObstructedUnits(Vector2i p, void *ctx)
+{
+	auto octx = reinterpret_cast<ObstructionContext *>(ctx);
+
+	if (p.x < 0)
+		return true;
+	if (p.y < 0)
+		return true;
+	if (p.x + octx->hitBoxSize.x > octx->grid->gridSize.x)
+		return true;
+	if (p.y + octx->hitBoxSize.y > octx->grid->gridSize.y)
+		return true;
+	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
+		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
+			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
+
+			if (!(attrs & octx->mask) || PFGRIDMASK_NB_UNITS(attrs) != 0)
+				return true;
+		}
+	return false;
+}
+static bool IsPathObstructedTerrain(Vector2i p, void *ctx)
+{
+	auto octx = reinterpret_cast<ObstructionContext *>(ctx);
+
+	if (p.x < 0)
+		return true;
+	if (p.y < 0)
+		return true;
+	if (p.x + octx->hitBoxSize.x > octx->grid->gridSize.x)
+		return true;
+	if (p.y + octx->hitBoxSize.y > octx->grid->gridSize.y)
+		return true;
+	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
+		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
+			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
+
+			if (!(attrs & octx->mask))
+				return true;
+		}
+	return false;
+}
+
 bool GameObject::_updateTurn(unsigned int target)
 {
 	if (this->_currentDir == target)
@@ -495,28 +543,28 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 			this->_pathCache.clear();
 			this->_pathCache.emplace_back(destination);
 		} else {
+			ObstructionContext ctx;
+			Vector2i target;
+			Vector2i pos;
+			Vector2u step = {1, 1};
+			IsObstructedCb isObs = &IsPathObstructedUnits;
+
+			ctx.mask = this->_passFlags;
 			if (this->_boundToGrid) {
-				AStar::computePath(
-					this->map->pathFindingGrid,
-					this->_gridPos,
-					this->map->absToTileCoord(destination),
-					{1, 1},
-					{1, 1},
-					this->_passFlags,
-					this->_pathCache
-				);
+				ctx.hitBoxSize = {1, 1};
+				ctx.grid = &this->map->pathFindingGrid;
+				target = this->map->absToTileCoord(destination);
+				pos = this->_gridPos;
+			} else {
+				ctx.hitBoxSize = this->_size;
+				ctx.grid = this->pfGrid;
+				target = destination;
+				pos = this->_position;
+			}
+			AStar::computePath(*ctx.grid, pos, target, step, isObs, &ctx, this->_pathCache);
+			if (this->_boundToGrid)
 				for (auto &p : this->_pathCache)
-					p = this->map->topLeftCoordToAbs(p);
-			} else
-				AStar::computePath(
-					*this->pfGrid,
-					this->_position,
-					destination,
-					this->_size,
-					{1, 1},
-					this->_passFlags,
-					this->_pathCache
-				);
+					p = this->map->topLeftCoordToAbs(p) - (this->map->tileSize - this->_size) / 2;
 			while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
 				this->_pathCache.pop_back();
 			this->_cachedDebug = AStar::getDebugImage();

@@ -101,15 +101,17 @@ inline void PFGRIDMASK_DEL_UNIT(PathFindingGrid &g, unsigned x, unsigned y, unsi
 	}
 }
 
+typedef bool (*IsObstructedCb)(Vector2i pos, void *context);
+
 namespace AStar
 {
 	void computePath(
 		const PathFindingGrid &grid,
 		Vector2i currentPos,
 		Vector2i dest,
-		Vector2u hitBoxSize,
 		Vector2u step,
-		uint16_t mask,
+		IsObstructedCb isObstructed,
+		void *context,
 		std::vector<Vector2i> &buffer
 	);
 	sf::Image getDebugImage();
@@ -120,9 +122,9 @@ namespace CrashAndTurn
 		const PathFindingGrid &grid,
 		Vector2i currentPos,
 		Vector2i dest,
-		Vector2u hitBoxSize,
 		Vector2u step,
-		uint16_t mask,
+		IsObstructedCb isObstructed,
+		void *context,
 		std::vector<Vector2i> &buffer
 	);
 	sf::Image getDebugImage();

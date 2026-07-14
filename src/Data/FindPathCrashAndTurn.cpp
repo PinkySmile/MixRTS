@@ -13,9 +13,9 @@ void CrashAndTurn::computePath(
 	const PathFindingGrid &grid,
 	Vector2i start,
 	Vector2i dest,
-	Vector2u hitBoxSize,
 	Vector2u step,
-	uint16_t mask,
+	IsObstructedCb isObstructed,
+	void *context,
 	std::vector<Vector2i> &buffer
 )
 {
