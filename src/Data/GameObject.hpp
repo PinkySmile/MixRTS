@@ -20,6 +20,23 @@
 #include "FindPath.hpp"
 #include "ConditionalAnim.hpp"
 
+struct TurnOrder;
+struct MoveOrder;
+struct HarvestOrder;
+struct DeployOrder;
+struct DumpOrder;
+struct MoveTargetOrder;
+struct MoveCheckOrder;
+typedef std::variant<
+	TurnOrder,
+	MoveOrder,
+	DeployOrder,
+	HarvestOrder,
+	DumpOrder,
+	MoveTargetOrder,
+	MoveCheckOrder
+> Order;
+
 struct TurnOrder {
 	unsigned resultDir;
 };
@@ -32,14 +49,15 @@ struct DeployOrder {};
 struct DumpOrder {
 	GameObject *target;
 };
+struct MoveTargetOrder {
+	Vector2i destination;
+	bool force;
+};
+struct MoveCheckOrder {
+	void (GameObject::*fail)();
+	Vector2i destination;
+};
 
-typedef std::variant<
-	TurnOrder,
-	MoveOrder,
-	DeployOrder,
-	HarvestOrder,
-	DumpOrder
-> Order;
 
 
 struct ExtraSpawn {
@@ -122,10 +140,11 @@ protected:
 	Vector2i _point;
 	Vector2f _position;
 	Vector2i _gridPos;
+	Vector2i _oldPos = {-1, -1};
 	std::optional<ExtraSpawn> _extraSpawn;
 	std::vector<std::string> _spawnOrders;
 	std::vector<std::string> _acceptResources;
-	GameObject *_lastRefinery = nullptr;
+	GameObject *_lastResourceDump = nullptr;
 	std::deque<ResourceLot> _lots;
 	std::optional<Vector2i> _spawnOffset;
 	std::optional<Vector2i> _exitOffset;
@@ -208,6 +227,7 @@ public:
 	void harvest(const Vector2i &pos, bool automatic = false);
 	void harvest();
 	void moveTo(const Vector2i &pos, bool automatic = false);
+	void ensureMoveTo(const Vector2i &pos, bool automatic = false);
 	void dumpResourcesTo(GameObject *dump, bool automatic = false);
 	void select() const;
 	void playBuiltSound() const;
@@ -276,12 +296,16 @@ protected:
 
 	bool _updateTurn(unsigned target);
 	bool _updateMove(Vector2i pos, bool force);
+	bool _updateTargetMove(Vector2i pos, bool force);
+	bool _updateCheckMove(Vector2i pos, void (GameObject::*fail)());
 	bool _updateHarvest();
 	bool _updateDump(GameObject *place);
 	bool _updateDeploy();
 
+	void _harvestClosestResource();
+	void _dumpInClosestResourceDump();
 	void _goToClosestResource();
-	void _goToClosestRefinery();
+	void _goToClosestResourceDump();
 	bool _shortenOrder(Order &o);
 	void _displayAnim(Animation &anim);
 	virtual bool _handleOrder(const Order &o);

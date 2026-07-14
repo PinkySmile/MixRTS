@@ -69,7 +69,7 @@ public:
 	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePos);
 	const LoadedMap &getLoadedMap() const;
 	void consumeEvent(const sf::Event &event);
-	bool isAreaFree(const Vector2i &pos, const Vector2u &size);
+	bool isAreaFree(const Vector2i &pos, const Vector2u &size) const;
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
 	void registerObject(GameObject *o);
 	void deregisterObject(GameObject *o);
@@ -77,7 +77,7 @@ public:
 	void modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod);
 	std::optional<Vector2i> getFirstHarvestableTile(MapState &state, Vector2i pos) const;
 	std::optional<Vector2i> getClosestHarvestableTile(MapState &state, Vector2i pos) const;
-	GameObject *getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos);
+	GameObject *getClosestResourceDump(const std::vector<std::string> &preferredResources, size_t player, Vector2i pos);
 	MapResource &getResource(Vector2i pos);
 	void consumeResource(Vector2i pos);
 	void centerCameraOn(Vector2f pos);

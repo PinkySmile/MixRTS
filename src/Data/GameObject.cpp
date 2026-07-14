@@ -16,6 +16,7 @@
 #define cancel _gpTimer[1]
 #define harvestDelaying _gpTimer[2]
 #define dumpTimer _gpTimer[0]
+#define waitRetracePath 300
 
 bool GameObject::_shortenOrder(Order &o)
 {
@@ -535,6 +536,38 @@ bool GameObject::_updateTurn(unsigned int target)
 	return false;
 }
 
+bool GameObject::_updateTargetMove(Vector2i pos, bool force)
+{
+	if (this->_position == this->_oldPos && this->_gpTimer[0] < waitRetracePath) {
+		this->_gpTimer[0]++;
+		return false;
+	}
+	if (this->_position == pos)
+		return true;
+	this->_oldPos = this->_position;
+	this->_orderQueue.emplace_front(MoveOrder{pos, force});
+	this->_orderQueue.emplace_front(MoveTargetOrder{pos, force});
+	return true;
+}
+
+bool GameObject::_updateCheckMove(Vector2i pos, void (GameObject::*fail)())
+{
+	if (this->_position == this->_oldPos && this->_gpTimer[0] < waitRetracePath) {
+		this->_gpTimer[0]++;
+		return false;
+	}
+	this->_oldPos = this->_position;
+
+	if (this->_position != pos) {
+		auto front = this->_orderQueue.front();
+
+		this->_orderQueue.pop_front();
+		(this->*fail)();
+		this->_orderQueue.push_front(front);
+	}
+	return true;
+}
+
 bool GameObject::_updateMove(Vector2i destination, bool force)
 {
 	if (!this->_pathCached) {
@@ -571,10 +604,8 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 			this->_cachedDebugTexLoaded = false;
 		}
 		this->_pathCached = true;
-		if (this->_pathCache.empty()) {
-			this->_orderQueue.clear();
-			return false;
-		}
+		if (this->_pathCache.empty())
+			return true;
 	}
 
 	if (this->_pathCache.empty())
@@ -605,7 +636,7 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 	return false;
 }
 
-void GameObject::_goToClosestResource()
+void GameObject::_harvestClosestResource()
 {
 	auto pos = this->_gridPos;
 
@@ -636,11 +667,62 @@ void GameObject::_goToClosestResource()
 	if (tile) return this->harvest(this->map->topLeftCoordToAbs(*tile));
 }
 
-void GameObject::_goToClosestRefinery()
+void GameObject::_goToClosestResource()
 {
-	if (!this->_lastRefinery)
-		this->_lastRefinery = this->manager->getClosestResourceDump(this->_acceptResources, this->_position + this->_size / 2);
+	auto pos = this->_gridPos;
+
+	if (this->_currentDir == 1 * this->_anims.size() / 8) {
+		pos.x++;
+		pos.y--;
+	} else if (this->_currentDir == 3 * this->_anims.size() / 8) {
+		pos.x++;
+		pos.y++;
+	} else if (this->_currentDir == 5 * this->_anims.size() / 8) {
+		pos.x--;
+		pos.y++;
+	} else if (this->_currentDir == 7 * this->_anims.size() / 8) {
+		pos.x--;
+		pos.y--;
+	} else if (this->_currentDir == 0 * this->_anims.size() / 8)
+		pos.y--;
+	else if (this->_currentDir == 2 * this->_anims.size() / 8)
+		pos.x++;
+	else if (this->_currentDir == 4 * this->_anims.size() / 8)
+		pos.y++;
+	else if (this->_currentDir == 6 * this->_anims.size() / 8)
+		pos.x--;
+
+	auto tile = this->manager->getFirstHarvestableTile(*this->map, pos);
+
+	if (!tile) {
+		tile = this->manager->getClosestHarvestableTile(*this->map, this->_gridPos);
+		if (!tile)
+			return;
+		pos = *tile;
+	}
+	pos = this->map->topLeftCoordToAbs(pos);
+	this->_orderQueue.emplace_front(MoveCheckOrder{&GameObject::_goToClosestResource, pos});
+	this->_orderQueue.emplace_front(MoveOrder{pos, false});
+}
+
+void GameObject::_dumpInClosestResourceDump()
+{
+	if (!this->_lastResourceDump)
+		this->_lastResourceDump = this->manager->getClosestResourceDump(this->_acceptResources, this->owner->state.team, this->_position + this->_size / 2);
 	this->dumpResourcesTo(nullptr);
+}
+
+void GameObject::_goToClosestResourceDump()
+{
+	if (!this->_lastResourceDump)
+		this->_lastResourceDump = this->manager->getClosestResourceDump(this->_acceptResources, this->owner->state.team, this->_position + this->_size / 2);
+	if (!this->_lastResourceDump)
+		return;
+
+	auto pos = this->_lastResourceDump->getPosition() + this->_lastResourceDump->getPoint();
+
+	this->_orderQueue.emplace_front(MoveCheckOrder{&GameObject::_goToClosestResourceDump, pos});
+	this->_orderQueue.emplace_front(MoveOrder{pos, false});
 }
 
 bool GameObject::_updateHarvest()
@@ -653,19 +735,19 @@ bool GameObject::_updateHarvest()
 			if (this->cancel)
 				return true;
 			if (this->_lots.size() >= this->_resourceStorage)
-				return this->_goToClosestRefinery(), true;
+				return this->_dumpInClosestResourceDump(), true;
 			auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
 			if (tile)
 				return false;
-			this->_goToClosestResource();
+			this->_harvestClosestResource();
 			return true;
 		}
 	} else {
 		if (this->_lots.size() >= this->_resourceStorage)
-			return this->_goToClosestRefinery(), true;
+			return this->_dumpInClosestResourceDump(), true;
 		auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
 		if (!tile)
-			return this->_goToClosestResource(), true;
+			return this->_harvestClosestResource(), true;
 		if (this->harvestTimer == 0)
 			this->_harvesting = true;
 		this->harvestTimer++;
@@ -701,11 +783,11 @@ bool GameObject::_updateDump(GameObject *place)
 			return true;
 		}
 		if (place == nullptr || place->isDead()) {
-			this->_goToClosestRefinery();
+			this->_dumpInClosestResourceDump();
 			return true;
 		}
 		if (this->_lots.empty()) {
-			this->_goToClosestResource();
+			this->_harvestClosestResource();
 			return true;
 		}
 		if (this->_position != (place->getPosition() + place->getPoint()).to<float>())
@@ -719,9 +801,9 @@ bool GameObject::_updateDump(GameObject *place)
 	} else if (this->_dumpStop) {
 		if (this->_dumpStop && (*this->_dump->stop)() && this->_dump->stop->update()) {
 			if (this->_lots.size() != 0)
-				this->_goToClosestRefinery();
+				this->_dumpInClosestResourceDump();
 			else
-				this->_goToClosestResource();
+				this->_harvestClosestResource();
 			this->_dumpStop = false;
 			return true;
 		}
@@ -787,6 +869,10 @@ bool GameObject::_handleOrder(const Order &o)
 		return this->_updateTurn(turn->resultDir);
 	else if (auto move = std::get_if<MoveOrder>(&o))
 		return this->_updateMove(move->destination, move->force);
+	else if (auto tmove = std::get_if<MoveTargetOrder>(&o))
+		return this->_updateTargetMove(tmove->destination, tmove->force);
+	else if (auto cmove = std::get_if<MoveCheckOrder>(&o))
+		return this->_updateCheckMove(cmove->destination, cmove->fail);
 	else if (std::holds_alternative<HarvestOrder>(o))
 		return this->_updateHarvest();
 	else if (auto dump = std::get_if<DumpOrder>(&o))
@@ -813,8 +899,8 @@ void GameObject::update()
 		if (this->_produced  && this->_producedAnim  && (*this->_producedAnim)()  && this->_producedAnim->update())
 			this->_produced = false;
 	}
-	if(this->_lastRefinery && this->_lastRefinery->isDisposable())
-		this->_lastRefinery = nullptr;
+	if(this->_lastResourceDump && this->_lastResourceDump->isDisposable())
+		this->_lastResourceDump = nullptr;
 	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping)
 		for (auto &anim : this->_anims[this->_currentDir])
 			if (anim())
@@ -1121,12 +1207,13 @@ bool GameObject::canMove() const
 void GameObject::harvest(const Vector2i &pos, bool automatic)
 {
 	this->moveTo(pos, automatic);
+	this->_orderQueue.emplace_back(MoveCheckOrder{&GameObject::_goToClosestResource, pos});
 	this->_orderQueue.emplace_back(HarvestOrder{});
 }
 
 void GameObject::harvest()
 {
-	this->_goToClosestResource();
+	this->_harvestClosestResource();
 }
 
 void GameObject::moveTo(const Vector2i &pos, bool automatic)
@@ -1149,18 +1236,39 @@ void GameObject::moveTo(const Vector2i &pos, bool automatic)
 	}
 }
 
+void GameObject::ensureMoveTo(const Vector2i &pos, bool automatic)
+{
+	if (!automatic) {
+		if (!this->canMove())
+			return;
+		if (this->_boundToGrid)
+			this->_orderQueue.emplace_back(MoveTargetOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), false});
+		else
+			this->_orderQueue.emplace_back(MoveTargetOrder{pos + this->_size / 2, false});
+	} else {
+		MoveTargetOrder order;
+
+		if (this->_boundToGrid)
+			order = MoveTargetOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), true};
+		else
+			order = MoveTargetOrder{pos + this->_size / 2, true};
+		this->_orderQueue.emplace_back(order);
+	}
+}
+
 void GameObject::dumpResourcesTo(GameObject *dump, bool automatic)
 {
 	if (!dump)
-		dump = this->_lastRefinery;
+		dump = this->_lastResourceDump;
 	else
-		this->_lastRefinery = dump;
+		this->_lastResourceDump = dump;
 	if (!dump)
 		return;
 
 	auto pos = dump->getPosition() + dump->getPoint();
 
 	this->moveTo(pos, automatic);
+	this->_orderQueue.emplace_back(MoveCheckOrder{&GameObject::_goToClosestResourceDump, pos});
 	this->_orderQueue.emplace_back(DumpOrder{dump});
 }
 
@@ -1183,7 +1291,7 @@ void GameObject::playDoSound()
 
 void GameObject::clearPrimaryDump()
 {
-	this->_lastRefinery = nullptr;
+	this->_lastResourceDump = nullptr;
 }
 
 void GameObject::initGlobalGrid()

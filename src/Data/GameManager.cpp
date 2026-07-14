@@ -682,7 +682,6 @@ noGrid:
 		this->_initObject(map, player, obj, id);
 		if (nbTiles != nbConcreteTiles)
 			obj.damage(obj.getHealth() * (nbTiles - nbConcreteTiles) / (nbTiles * 2));
-			//obj.damage(obj.getHealth() * (nbTiles - nbConcreteTiles) * 3 / (nbTiles * 4));
 
 		auto parent = player.getSpawnBuilding(buildQueue);
 
@@ -795,7 +794,7 @@ bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const
 	return false;
 }
 
-bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size)
+bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size) const
 {
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &o : this->_liveObjects)
@@ -897,6 +896,7 @@ std::optional<Vector2i> GameManager::getFirstHarvestableTile(MapState &state, Ve
 		break;                                                                                                  \
 	auto r = GRID_RESOURCE_TYPE(grid.grid[(x_) + (y_) * grid.gridSize.x]);                                          \
 	if (r == 0) break;                                                                                              \
+	if (!this->isAreaFree({x_, y_}, grid.tileSize)) break;                                                          \
 	auto &re = this->_map.metadata.resources.at(r);                                                                 \
 	if (re.onlyAdjCollectible.empty()) break;                                                                       \
 	if (std::find(re.onlyAdjCollectible.begin(), re.onlyAdjCollectible.end(), tile) == re.onlyAdjCollectible.end()) \
@@ -981,7 +981,7 @@ std::optional<Vector2i> GameManager::getClosestHarvestableTile(MapState &state, 
 #undef CHECK_RES
 }
 
-GameObject *GameManager::getClosestResourceDump(const std::vector<std::string> &preferredResources, Vector2i pos)
+GameObject *GameManager::getClosestResourceDump(const std::vector<std::string> &preferredResources, size_t player, Vector2i pos)
 {
 	if (this->_liveObjects.empty())
 		return nullptr;
@@ -989,9 +989,10 @@ GameObject *GameManager::getClosestResourceDump(const std::vector<std::string> &
 	GameObject *best = nullptr;
 	double dist = std::numeric_limits<double>::infinity();
 	size_t resourceScore = 0;
+	size_t team = this->_players[player].state.team;
 
 	for (auto &b : this->_liveObjects) {
-		if (b.isDead())
+		if (b.isDead() || b.owner->state.team != team)
 			continue;
 
 		auto &accept = b.getAcceptResources();
@@ -1002,6 +1003,8 @@ GameObject *GameManager::getClosestResourceDump(const std::vector<std::string> &
 		size_t score = 0;
 		auto d = pos.distance2(b.getPosition() + b.getPoint() + b.map->tileSize / 2);
 
+		if (b.owner->state.index == player)
+			score += 1000000;
 		for (auto &r : preferredResources)
 			score += std::ranges::find(accept, r) != accept.end();
 		if (resourceScore > score)
