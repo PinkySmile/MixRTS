@@ -282,6 +282,7 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_cursorMapping[CURSOR_MOVE_RESTRICT]          = "move_inf";
 	this->_cursorMapping[CURSOR_NO_MOVE]                = "no_move";
 	this->_cursorMapping[CURSOR_SELECT]                 = "select";
+	this->_cursorMapping[CURSOR_HARVEST]                = "attack";
 	this->_cursorMapping[CURSOR_ATTACK]                 = "attack";
 	this->_cursorMapping[CURSOR_ATTACK_MOVE]            = ""; // TODO:
 	this->_cursorMapping[CURSOR_ENTER]                  = "enter";
@@ -609,7 +610,7 @@ void D2KUI::update()
 		else
 			this->_creditDigits[i]->getRenderer()->setTexture(this->_creditRawDigits[10]);
 		credits /= 10;
-	};
+	}
 
 	updateList(
 		this->_faction.getBase().getBase(),

@@ -393,6 +393,7 @@ GameObject::GameObject(
 	if (json.contains("directions")) {
 		unsigned directions = json["directions"];
 
+		assert_msg(directions % 8 == 0, "Number of directions must be divisible by 8");
 		this->_anims.resize(directions);
 		for (auto &anim: json["anims"])
 			for (size_t i = 0; i < directions; i++)
@@ -404,7 +405,6 @@ GameObject::GameObject(
 	}
 	if (json.contains("harvest_anim")) {
 		assert_exp(!json["harvest_anim"].contains("dirs") || json["harvest_anim"]["dirs"].is_number_unsigned());
-
 
 		unsigned dirs = json["harvest_anim"]["dirs"];
 
@@ -664,7 +664,7 @@ void GameObject::_harvestClosestResource()
 	auto tile = this->manager->getFirstHarvestableTile(*this->map, pos);
 	if (tile) return this->harvest(this->map->topLeftCoordToAbs(pos));
 	tile = this->manager->getClosestHarvestableTile(*this->map, this->_gridPos);
-	if (tile) return this->harvest(this->map->topLeftCoordToAbs(*tile));
+	if (tile) return this->harvest(this->manager->getLoadedMap().grid.topLeftCoordToAbs(*tile));
 }
 
 void GameObject::_goToClosestResource()
@@ -698,9 +698,9 @@ void GameObject::_goToClosestResource()
 		tile = this->manager->getClosestHarvestableTile(*this->map, this->_gridPos);
 		if (!tile)
 			return;
-		pos = *tile;
-	}
-	pos = this->map->topLeftCoordToAbs(pos);
+		pos = this->manager->getLoadedMap().grid.topLeftCoordToAbs(*tile);
+	} else
+		pos = this->map->topLeftCoordToAbs(pos);
 	this->_orderQueue.emplace_front(MoveCheckOrder{&GameObject::_goToClosestResource, pos});
 	this->_orderQueue.emplace_front(MoveOrder{pos, false});
 }

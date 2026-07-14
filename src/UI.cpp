@@ -232,35 +232,32 @@ void UI::_updateCursor()
 	bool canMove = !this->state->selectedObjects.empty() && std::ranges::all_of(this->state->selectedObjects, [this](const GameObject *o){
 		return o->canMove();
 	});
+	auto &lmap = this->manager->getLoadedMap().grid;
 
 	if (canMove) {
 		auto obj = *this->state->selectedObjects.begin();
-		auto map = obj->map;
-		auto relPos = map->absToTileCoord(this->_placementPos);
+		auto relPos = obj->map->absToTileCoord(this->_placementPos);
 		auto tl = this->map->topLeftCoordToAbs(pos);
 		auto passFlags = obj->getPassFlags();
+		auto abs = obj->map->tileCoordToAbs(relPos);
 
 		// TODO: Handle non snap-to-grid units
-		if (obj->getResourceStorage() != 0 && map->hasAnyGridBits(relPos, GRIDMASK_RESOURCE)) {
-			auto res = GRID_RESOURCE_TYPE(map->grid[relPos.x + relPos.y * map->gridSize.x]);
-
-			if (res != 0) {
-				this->_cursor = CURSOR_ATTACK;
-				return;
-			}
+		if (obj->getResourceStorage() != 0 && lmap.anyHasAnyGridBits(abs, GRIDMASK_RESOURCE)) {
+			this->_cursor = CURSOR_HARVEST;
+			return;
 		}
 		if (
-			!this->manager->isAreaFree(tl, map->tileSize) ||
-			!map->hasAnyGridBits(relPos, passFlags)
-			)
+			!this->manager->isAreaFree(tl, obj->map->tileSize) ||
+			!obj->map->hasAnyGridBits(relPos, passFlags)
+		)
 			this->_cursor = CURSOR_NO_MOVE;
 		else if (
-			map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_INFANTRY_CAN_PASS) ||
-			map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_VEHICULES_CAN_PASS) || (
-				map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_SHIP_CAN_PASS) &&
+			obj->map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_INFANTRY_CAN_PASS) ||
+			obj->map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_VEHICULES_CAN_PASS) || (
+				obj->map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_SHIP_CAN_PASS) &&
 				passFlags != GRIDMASK_SHIP_CAN_PASS
 			)
-			)
+		)
 			this->_cursor = CURSOR_MOVE_RESTRICT;
 		else
 			this->_cursor = CURSOR_MOVE;
@@ -443,7 +440,7 @@ void UI::tileClicked(Vector2i absPos)
 		});
 		bool hasHarvester = false;
 		bool canHarvest = false;
-		unsigned res = 0;
+		auto &lmap = this->manager->getLoadedMap().grid;
 
 		for (auto o : this->state->selectedObjects) {
 			// TODO: Wrong check. Should have a different index per controlling player.
@@ -453,13 +450,9 @@ void UI::tileClicked(Vector2i absPos)
 				continue;
 			hasHarvester = true;
 
-			auto relPos = o->map->absToTileCoord(this->_placementPos);
+			auto absQuad = o->map->tileCoordToAbs(o->map->absToTileCoord(this->_placementPos));
 
-			canHarvest = o->map->hasAnyGridBits(relPos, GRIDMASK_RESOURCE);
-			if (canHarvest) {
-				res = GRID_RESOURCE_TYPE(o->map->grid[relPos.x + relPos.y * o->map->gridSize.x]);
-				canHarvest = res != 0;
-			}
+			canHarvest = lmap.anyHasAnyGridBits(absQuad, GRIDMASK_RESOURCE);
 			if (canHarvest)
 				break;
 		}

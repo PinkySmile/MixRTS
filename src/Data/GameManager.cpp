@@ -1048,7 +1048,6 @@ void GameManager::consumeResource(Vector2i pos)
 		tile |= (this->_map.metadata.resources.at(r.deplete).lots - 1) << 29;
 	}
 	this->_map.refreshTile(pos.x, pos.y);
-	// TODO: Propagate to other maps
 }
 
 std::pair<std::string, unsigned> GameManager::convertResource(const std::string &source, const std::vector<std::string> &expected, unsigned int value)
