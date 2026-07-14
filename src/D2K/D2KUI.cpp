@@ -721,8 +721,6 @@ void D2KUI::_displaySelectedObjectUI(const GameObject &object)
 	else
 		rect.setFillColor(sf::Color::Red);
 	game->screen->draw(rect);
-
-	top.y += 4;
 	this->_displaySelectBox(top, size);
 
 	auto percent = object.getStorageDisplay();

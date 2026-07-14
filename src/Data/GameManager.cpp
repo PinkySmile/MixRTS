@@ -829,7 +829,7 @@ void GameManager::deregisterObject(GameObject *o)
 		l.erase(it);
 }
 
-void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, int count)
+void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, char mod)
 {
 	// TODO: Handle non-square grids
 	Vector2i minv = {
@@ -843,18 +843,18 @@ void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &st
 
 	for (int y = std::max(minv.y, 0); y < std::min<int>(maxv.y, state.gridSize.y); y++)
 		for (int x = std::max(minv.x, 0); x < std::min<int>(maxv.x, state.gridSize.x); x++)
-			if (count < 0)
-				PFGRIDMASK_DEL_UNIT(state, x, y, -count);
-			else if (count > 0)
-				PFGRIDMASK_ADD_UNIT(state, x, y, count);
+			if (mod < 0)
+				PFGRIDMASK_DEL_UNIT(state, x, y, mask);
+			else if (mod > 0)
+				PFGRIDMASK_ADD_UNIT(state, x, y, mask);
 }
 
-void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, int count)
+void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, pfGridType mask, char mod)
 {
-	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, count);
-	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, count);
+	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, mod);
+	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, mod);
 	for (auto &map : this->_mapStates)
-		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, count);
+		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, mod);
 	if (placementCount != 0) {
 		this->_map.grid.updatePlacementGrid(quad, team, placementCount);
 		for (auto &m : this->_mapStates)
@@ -862,17 +862,17 @@ void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int pla
 	}
 }
 
-void GameManager::modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, int count)
+void GameManager::modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod)
 {
-	if (count < 0)
-		PFGRIDMASK_DEL_UNIT(special, rel.x, rel.y, -count);
-	else if (count > 0)
-		PFGRIDMASK_ADD_UNIT(special, rel.x, rel.y, count);
-	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, count);
-	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, count);
+	if (mod < 0)
+		PFGRIDMASK_DEL_UNIT(special, rel.x, rel.y, mask);
+	else if (mod > 0)
+		PFGRIDMASK_ADD_UNIT(special, rel.x, rel.y, mask);
+	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, mod);
+	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, mod);
 	for (auto &map : this->_mapStates)
 		if (&map.pathFindingGrid != &special)
-			this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, count);
+			this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, mod);
 	if (placementCount != 0) {
 		this->_map.grid.updatePlacementGrid(quad, team, placementCount);
 		for (auto &m : this->_mapStates)
@@ -938,12 +938,12 @@ std::optional<Vector2i> GameManager::getClosestHarvestableTile(MapState &state, 
 		if (res == 0)
 			return {};
 		CHECK_RES(x - 1, y - 1);
-		CHECK_RES(x, y - 1);
+		CHECK_RES(x,     y - 1);
 		CHECK_RES(x + 1, y - 1);
 		CHECK_RES(x - 1, y);
 		CHECK_RES(x + 1, y);
 		CHECK_RES(x - 1, y + 1);
-		CHECK_RES(x, y + 1);
+		CHECK_RES(x,     y + 1);
 		CHECK_RES(x + 1, y + 1);
 		return state.absToTileCoord(grid.topLeftCoordToAbs({x, y}));
 	keepGoing:

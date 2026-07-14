@@ -14,46 +14,68 @@
 #include "Resources/Assert.hpp"
 #include "GridMask.hpp"
 
-#define PATHFINDINGGRID_TYPE uint16_t
+typedef uint32_t pfGridType;
+
 struct PathFindingGrid {
 	bool textureOutOfSync;
 	sf::Image gridImage;
 	sf::Texture gridImageTexture;
-	std::vector<PATHFINDINGGRID_TYPE> grid;
+	std::vector<pfGridType> grid;
 	Vector2u gridSize;
 };
 
-#define NB_PATHFINDING_BITS 6
-#define NB_PATHFINDING_OFFSET ((sizeof(PATHFINDINGGRID_TYPE) * 8) - NB_PATHFINDING_BITS)
-#define NB_PATHFINDING_MAX ((1 << NB_PATHFINDING_BITS) - 1)
+constexpr int PATHFINDING_FREE_NB_POS = 5;
+constexpr int PATHFINDING_FREE_BITS = 10;
+constexpr int PATHFINDING_FREE_OFFSET = ((sizeof(pfGridType) * 8) - PATHFINDING_FREE_BITS);
+constexpr int PATHFINDING_FREE_MAX = (1 << (PATHFINDING_FREE_BITS - PATHFINDING_FREE_NB_POS)) - 1;
+constexpr int PATHFINDING_METADATA_MASK = (1 << PATHFINDING_FREE_OFFSET) - 1;
 
+enum PFFreeMask {
+	PFFREEMASK_TOP_LEFT     = 1 << 0,
+	PFFREEMASK_TOP_RIGHT    = 1 << 1,
+	PFFREEMASK_BOTTOM_LEFT  = 1 << 2,
+	PFFREEMASK_BOTTOM_RIGHT = 1 << 3,
+	PFFREEMASK_MIDDLE       = 1 << 4
+};
 
-inline unsigned char PFGRIDMASK_NB_UNITS(PATHFINDINGGRID_TYPE tile)
+inline unsigned char PFGRIDMASK_FREE(pfGridType tile)
 {
-	return tile >> NB_PATHFINDING_OFFSET;
+	return tile >> PATHFINDING_FREE_OFFSET;
 }
-inline Color __getPFDebugColor(PATHFINDINGGRID_TYPE tile)
+inline unsigned char PFGRIDMASK_FREE_NB(pfGridType tile)
+{
+	return tile >> (PATHFINDING_FREE_OFFSET + PATHFINDING_FREE_NB_POS);
+}
+inline unsigned char PFGRIDMASK_FREE_NB(PathFindingGrid &g, unsigned x, unsigned y)
+{
+	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
+	return PFGRIDMASK_FREE_NB(g.grid[x + y * g.gridSize.x]);
+}
+
+inline Color __getPFDebugColor(pfGridType tile)
 {
 	Color color;
+	unsigned char pfFree = PFGRIDMASK_FREE(tile);
+	unsigned char pfFreeNb = PFGRIDMASK_FREE_NB(tile);
 
 	color.r = 0;
 	color.g = 0;
 	color.b = 0;
 	color.a = 128;
-	if (PFGRIDMASK_NB_UNITS(tile) > 5) {
+	if (pfFreeNb >= 2) {
 		color.a = 255;
 		return color;
 	}
-	if (PFGRIDMASK_NB_UNITS(tile) == 5) {
+	if (pfFree == 0b11111 || pfFreeNb) {
 		color.r = 255;
 		return color;
 	}
-	if (PFGRIDMASK_NB_UNITS(tile) != 0) {
+	if (pfFree != 0) {
 		color.r = 255;
 		color.g = 128;
 		return color;
 	}
-	if ((tile & ((1 << NB_PATHFINDING_OFFSET) - 1)) == 0) {
+	if ((tile & PATHFINDING_METADATA_MASK) == 0) {
 		color.r = 255;
 		return color;
 	}
@@ -71,15 +93,16 @@ inline Color __getPFDebugColor(PATHFINDINGGRID_TYPE tile)
 	return color;
 }
 
-inline unsigned char PFGRIDMASK_NB_UNITS(PathFindingGrid &g, unsigned x, unsigned y)
+inline void PFGRIDMASK_ADD_UNIT(PathFindingGrid &g, unsigned x, unsigned y, pfGridType mask)
 {
-	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
-	return PFGRIDMASK_NB_UNITS(g.grid[x + y * g.gridSize.x]);
-}
-inline void PFGRIDMASK_ADD_UNIT(PathFindingGrid &g, unsigned x, unsigned y, unsigned count)
-{
-	assert_exp(PFGRIDMASK_NB_UNITS(g, x, y) + count <= NB_PATHFINDING_MAX);
-	g.grid[x + y * g.gridSize.x] += (count << NB_PATHFINDING_OFFSET);
+	assert_exp(mask < PFFREEMASK_MIDDLE);
+	if (mask == 0) {
+		assert_exp(PFGRIDMASK_FREE_NB(g, x, y) < PATHFINDING_FREE_MAX);
+		g.grid[x + y * g.gridSize.x] += (1 << (PATHFINDING_FREE_OFFSET + PATHFINDING_FREE_NB_POS));
+	} else {
+		assert_exp((g.grid[x + y * g.gridSize.x] & mask) == 0);
+		g.grid[x + y * g.gridSize.x] |= mask;
+	}
 
 	sf::Color color = __getPFDebugColor(g.grid[x + y * g.gridSize.x]);
 
@@ -88,10 +111,16 @@ inline void PFGRIDMASK_ADD_UNIT(PathFindingGrid &g, unsigned x, unsigned y, unsi
 		g.textureOutOfSync = true;
 	}
 }
-inline void PFGRIDMASK_DEL_UNIT(PathFindingGrid &g, unsigned x, unsigned y, unsigned count)
+inline void PFGRIDMASK_DEL_UNIT(PathFindingGrid &g, unsigned x, unsigned y, pfGridType mask)
 {
-	assert_exp(PFGRIDMASK_NB_UNITS(g, x, y) >= count);
-	g.grid[x + y * g.gridSize.x] -= (count << NB_PATHFINDING_OFFSET);
+	assert_exp(mask < PFFREEMASK_MIDDLE);
+	if (mask == 0) {
+		assert_exp(PFGRIDMASK_FREE_NB(g, x, y) != 0);
+		g.grid[x + y * g.gridSize.x] -= (1 << (PATHFINDING_FREE_OFFSET + PATHFINDING_FREE_NB_POS));
+	} else {
+		assert_exp((g.grid[x + y * g.gridSize.x] & mask) == mask);
+		g.grid[x + y * g.gridSize.x] &= mask;
+	}
 
 	sf::Color color = __getPFDebugColor(g.grid[x + y * g.gridSize.x]);
 

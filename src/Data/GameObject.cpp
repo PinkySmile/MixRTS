@@ -491,7 +491,7 @@ static bool IsPathObstructedUnits(Vector2i p, void *ctx)
 		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
 			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
 
-			if (!(attrs & octx->mask) || PFGRIDMASK_NB_UNITS(attrs) != 0)
+			if (!(attrs & octx->mask) || PFGRIDMASK_FREE(attrs) != 0)
 				return true;
 		}
 	return false;
@@ -512,7 +512,7 @@ static bool IsPathObstructedTerrain(Vector2i p, void *ctx)
 		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
 			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
 
-			if (!(attrs & octx->mask))
+			if (!(attrs & octx->mask) || PFGRIDMASK_FREE_NB(attrs) != 0)
 				return true;
 		}
 	return false;
@@ -547,7 +547,7 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 			Vector2i target;
 			Vector2i pos;
 			Vector2u step = {1, 1};
-			IsObstructedCb isObs = &IsPathObstructedUnits;
+			IsObstructedCb isObs = &IsPathObstructedTerrain;
 
 			ctx.mask = this->_passFlags;
 			if (this->_boundToGrid) {
@@ -1204,7 +1204,8 @@ void GameObject::initGlobalGrid()
 						static_cast<int>(this->_gridPos.y + gy)
 					}),
 					this->owner->state.team, 1,
-					line[gx].solid ? this->_tileCount : 0
+					0, // TODO: Handle mask
+					line[gx].solid ? 1 : 0
 				);
 			}
 		}
@@ -1223,10 +1224,16 @@ void GameObject::initGlobalGrid()
 				this->_gridPos,
 				this->map->tileSize,
 				0, 0,
-				this->_tileCount
+				0, // TODO: Handle mask
+				1
 			);
 		else
-			this->manager->modUnitInArea(abs, 0, 0, this->_tileCount);
+			this->manager->modUnitInArea(
+				abs,
+				0, 0,
+			        0, // TODO: Handle mask
+				1
+			);
 	}
 	this->manager->registerObject(this);
 	this->_initGrid = true;
@@ -1249,7 +1256,8 @@ void GameObject::deinitGlobalGrid()
 						static_cast<int>(this->_gridPos.y + gy)
 					}),
 					this->owner->state.team, -1,
-					line[gx].solid ? -this->_tileCount : 0
+					0, // TODO: Handle mask
+					line[gx].solid ? -1 : 0
 				);
 			}
 		}
@@ -1268,10 +1276,16 @@ void GameObject::deinitGlobalGrid()
 				this->_gridPos,
 				this->map->tileSize,
 				0, 0,
-				-this->_tileCount
+				0, // TODO: Handle mask
+				-1
 			);
 		else
-			this->manager->modUnitInArea(abs, 0, 0, -this->_tileCount);
+			this->manager->modUnitInArea(
+				abs,
+				0, 0,
+				0, // TODO: Handle mask
+				-1
+			);
 	}
 	this->manager->deregisterObject(this);
 	this->_initGrid = false;
