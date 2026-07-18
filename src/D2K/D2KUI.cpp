@@ -601,8 +601,8 @@ void D2KUI::update()
 	auto &bQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":building"];
 	auto &pQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":upgrade"];
 	auto &iQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":infantry"];
-	auto &lvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":light_vehicule"];
-	auto &hvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":heavy_vehicule"];
+	auto &lvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":light_vehicle"];
+	auto &hvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":heavy_vehicle"];
 
 	for (unsigned i = 0; i < 8; i++) {
 		if (credits != 0 || i == 0)
@@ -660,7 +660,7 @@ void D2KUI::update()
 		this->_cameos,
 		[&iQueue, &lvQueue, &hvQueue, this](const std::string &id, size_t i, bool rightClick){
 			auto queue = i == 0 ? iQueue : i == 1 ? lvQueue : hvQueue;
-			auto queueId = this->_faction.getBase().getName() + (i == 0 ? ":infantry" : i == 1 ? ":light_vehicule" : ":heavy_vehicule");
+			auto queueId = this->_faction.getBase().getName() + (i == 0 ? ":infantry" : i == 1 ? ":light_vehicle" : ":heavy_vehicle");
 
 			if (rightClick)
 				this->_eventQueue.emplace_back(CancelBuildEvent{id, queueId});

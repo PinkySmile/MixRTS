@@ -252,7 +252,7 @@ static void displayTile(uint32_t tile, sf::RectangleShape &shape)
 		color.b = 255;
 	if (tile & GRIDMASK_WORM_CAN_PASS)
 		color.r = 255;
-	if (tile & GRIDMASK_VEHICULES_CAN_PASS)
+	if (tile & GRIDMASK_VEHICLES_CAN_PASS)
 		color.g = 255;
 	if (tile & GRIDMASK_INFANTRY_CAN_PASS) {
 		color.r /= 2;

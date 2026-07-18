@@ -253,7 +253,7 @@ void UI::_updateCursor()
 			this->_cursor = CURSOR_NO_MOVE;
 		else if (
 			obj->map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_INFANTRY_CAN_PASS) ||
-			obj->map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_VEHICULES_CAN_PASS) || (
+			obj->map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_VEHICLES_CAN_PASS) || (
 				obj->map->hasExactlySomeGridBits(relPos, GRIDMASK_ALL_CAN_PASS, GRIDMASK_SHIP_CAN_PASS) &&
 				passFlags != GRIDMASK_SHIP_CAN_PASS
 			)
