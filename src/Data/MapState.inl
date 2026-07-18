@@ -32,6 +32,11 @@ inline Vector2i MapState::topLeftCoordToAbs(const Vector2i &p) const
 	return {static_cast<int>(p.x * this->tileSize.x), static_cast<int>(p.y * this->tileSize.y)};
 }
 
+inline Vector2i MapState::topLeftCoordToAbs(size_t index) const
+{
+	return this->topLeftCoordToAbs(this->indexToRelPos(index));
+}
+
 inline Vector2i MapState::relCoordToAbs(const Vector2f &p) const
 {
 	return {static_cast<int>(p.x * this->tileSize.x), static_cast<int>(p.y * this->tileSize.y)};
@@ -44,6 +49,19 @@ inline MapState::Quad MapState::tileCoordToAbs(const Vector2i &p) const
 		{static_cast<float>(p.x + 1) * this->tileSize.x, static_cast<float>(p.y)     * this->tileSize.y},
 		{static_cast<float>(p.x + 1) * this->tileSize.x, static_cast<float>(p.y + 1) * this->tileSize.y},
 		{static_cast<float>(p.x)     * this->tileSize.x, static_cast<float>(p.y + 1) * this->tileSize.y}
+	};
+}
+
+inline MapState::Quad MapState::tileCoordToAbs(size_t index) const
+{
+	return this->tileCoordToAbs(this->indexToRelPos(index));
+}
+
+inline Vector2i MapState::indexToRelPos(size_t index) const
+{
+	return {
+		static_cast<int>(index % this->gridSize.x),
+		static_cast<int>(index / this->gridSize.x)
 	};
 }
 

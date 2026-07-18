@@ -794,11 +794,11 @@ bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const
 	return false;
 }
 
-bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size) const
+bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const std::vector<unsigned> &exclusion) const
 {
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &o : this->_liveObjects)
-		if (this->_isInArea(o, absPos, size))
+		if (std::ranges::find(exclusion, o.index) == exclusion.end() && this->_isInArea(o, absPos, size))
 			return false;
 	return true;
 }

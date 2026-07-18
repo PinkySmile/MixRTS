@@ -166,8 +166,18 @@ void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<s
 				assert_exp(janimArr.is_array() || janimArr.is_object());
 				if (janimArr.is_array()) {
 					v.reserve(janimArr.size());
-					for (auto &janim: janimArr)
-						v.emplace_back(this->_base, mergeObjects(janim, gen));
+					for (auto &janim: janimArr) {
+						auto animJson = mergeObjects(janim, gen);
+						size_t count = 1;
+
+						if (animJson.contains("repeat")) {
+							assert_exp(animJson["repeat"].is_number_unsigned());
+							count = animJson["repeat"];
+							assert_exp(count != 0);
+						}
+						while (count--)
+							v.emplace_back(this->_base, animJson);
+					}
 				} else {
 					assert_exp(janimArr.contains("copy") && janimArr["copy"].is_string());
 					assert_exp(janimArr.contains("inverted") && janimArr["inverted"].is_boolean());

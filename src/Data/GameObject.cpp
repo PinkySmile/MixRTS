@@ -597,7 +597,7 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 			AStar::computePath(*ctx.grid, pos, target, step, isObs, &ctx, this->_pathCache);
 			if (this->_boundToGrid)
 				for (auto &p : this->_pathCache)
-					p = this->map->topLeftCoordToAbs(p) - (this->map->tileSize - this->_size) / 2;
+					p = this->map->topLeftCoordToAbs(p) + (this->map->tileSize - this->_size) / 2;
 			while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
 				this->_pathCache.pop_back();
 			this->_cachedDebug = AStar::getDebugImage();
@@ -620,6 +620,7 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 		return false;
 
 	auto pos = this->_position;
+	Vector2i oldP = pos;
 	auto diff = dest - pos;
 
 	diff.normalize();
@@ -627,12 +628,23 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 	pos += diff;
 
 	auto diff2 = dest - pos;
+	Vector2i newP = pos;
 
 	if (pos == dest || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
-		this->setPosition(dest);
+		pos = dest;
 		this->_pathCache.pop_back();
-	} else
-		this->setPosition(pos);
+	}
+	if (!force) {
+		bool blocked = false;
+
+		if (this->_boundToGrid) {
+
+		} else
+			blocked = !this->manager->isAreaFree(pos, this->_size, {this->index});
+		if (blocked)
+			return true;
+	}
+	this->setPosition(pos);
 	return false;
 }
 
@@ -1510,7 +1522,7 @@ void GameObject::renderPathFindingPath() const
 
 	arr2[0].position = this->_position + this->_size / 2;
 	arr2[0].color = sf::Color::Green;
-	arr2[1].position = this->_cachedDest + this->_size / 2;
+	arr2[1].position = this->_cachedDest + this->map->tileSize / 2;
 	arr2[1].color = sf::Color::Green;
 	game->screen->draw(arr2);
 

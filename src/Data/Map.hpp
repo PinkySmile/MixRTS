@@ -52,8 +52,11 @@ struct MapState {
 	[[nodiscard]] Vector2i absToTileCoord(const Vector2i &) const;
 	[[nodiscard]] Vector2f absToRelCoord(const Vector2i &) const;
 	[[nodiscard]] Vector2i topLeftCoordToAbs(const Vector2i &) const;
+	[[nodiscard]] Vector2i topLeftCoordToAbs(size_t index) const;
 	[[nodiscard]] Vector2i relCoordToAbs(const Vector2f &) const;
+	[[nodiscard]] Vector2i indexToRelPos(size_t index) const;
 	[[nodiscard]] Quad tileCoordToAbs(const Vector2i &) const;
+	[[nodiscard]] Quad tileCoordToAbs(size_t index) const;
 };
 
 struct MapResource {

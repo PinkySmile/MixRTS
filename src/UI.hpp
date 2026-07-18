@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_map>
 #include <TGUI/Widgets/Panel.hpp>
+#include <SFML/Graphics/Texture.hpp>
 #include <SFML/Audio/SoundBuffer.hpp>
 #include <SFML/Audio/Sound.hpp>
 #include "../forward.hpp"
