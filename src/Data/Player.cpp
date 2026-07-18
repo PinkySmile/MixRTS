@@ -92,7 +92,7 @@ void Player::update()
 		if (q->buildProgress == q->buildTime) {
 			this->_tryEndBuild(*q);
 		} else if (!q->paused) {
-			float percent = static_cast<float>(q->buildProgress + 1) / q->buildTime;
+			double percent = static_cast<double>(q->buildProgress + 1) / q->buildTime;
 			std::unordered_map<std::string, unsigned> expected;
 			std::unordered_map<std::string, unsigned> extra;
 
@@ -101,7 +101,7 @@ void Player::update()
 			else if (q->upgrade)
 				expected = q->upgrade->getCost();
 			for (auto &f : expected | std::ranges::views::values)
-				f *= percent;
+				f = round(f * percent);
 			for (auto &[n, f] : expected)
 				extra[n] = f - q->spent[n];
 			if (std::ranges::any_of(extra, [this](const std::pair<std::string, unsigned> &p){
@@ -117,7 +117,7 @@ void Player::update()
 
 			unsigned amount;
 
-			percent = 100 + (static_cast<float>(this->state.producedPower) - this->state.consumedPower) / 2;
+			percent = 100 + (static_cast<double>(this->state.producedPower) - this->state.consumedPower) / 2;
 			if (percent >= 100)
 				amount = 8;
 			else if (percent >= 50)
