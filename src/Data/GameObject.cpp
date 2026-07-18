@@ -89,10 +89,6 @@ void GameObject::_displayAnim(Animation &anim)
 GameObject::GameObject(const GameObject &g) :
 	GameObjectData(g)
 {
-	this->_harvestAnims.reserve(g._harvestAnims.size());
-	for (auto &anim : g._harvestAnims)
-		this->_harvestAnims.emplace_back(*this, anim);
-
 	if (g._dump)
 		this->_dump.emplace(
 			g._dump->dir,
@@ -109,6 +105,30 @@ GameObject::GameObject(const GameObject &g) :
 		this->_producingAnim.emplace(*this, *g._producingAnim);
 	if (g._producedAnim)
 		this->_producedAnim.emplace(*this, *g._producedAnim);
+
+	this->_moveAnim.reserve(g._moveAnim.size());
+	for (auto &anim : g._moveAnim)
+		this->_moveAnim.emplace_back(*this, anim);
+	this->_fireAnim.reserve(g._fireAnim.size());
+	for (auto &anim : g._fireAnim)
+		this->_fireAnim.emplace_back(*this, anim);
+	this->_crouchAnim.reserve(g._crouchAnim.size());
+	for (auto &anim : g._crouchAnim)
+		this->_crouchAnim.emplace_back(*this, anim);
+	this->_crawlAnim.reserve(g._crawlAnim.size());
+	for (auto &anim : g._crawlAnim)
+		this->_crawlAnim.emplace_back(*this, anim);
+	this->_crawlFireAnim.reserve(g._crawlFireAnim.size());
+	for (auto &anim : g._crawlFireAnim)
+		this->_crawlFireAnim.emplace_back(*this, anim);
+
+	this->_harvestAnims.reserve(g._harvestAnims.size());
+	for (auto &anim : g._harvestAnims)
+		this->_harvestAnims.emplace_back(*this, anim);
+
+	this->_idleAnims.reserve(g._harvestAnims.size());
+	for (auto &anim : g._idleAnims)
+		this->_idleAnims.emplace_back(*this, anim);
 
 	this->_anims.reserve(g._anims.size());
 	for (auto &animVec : g._anims) {
@@ -169,6 +189,16 @@ GameObject::GameObject(
 	assert_exp(!json.contains("build_anim") || json["build_anim"].is_null() || json["build_anim"].is_object());
 	assert_exp(!json.contains("producing_anim") || json["producing_anim"].is_null() || json["producing_anim"].is_object());
 	assert_exp(!json.contains("produced_anim") || json["produced_anim"].is_null() || json["produced_anim"].is_object());
+	if (json.contains("anim_idles")) {
+		assert_exp(json["anim_idles"].is_array());
+		for (size_t i = 0; i < json["anim_idles"].size(); i++)
+			assert_msg(json["anim_idles"][i].is_object(), "json[\"anim_idles\"][" + std::to_string(i) + "]");
+	}
+	assert_exp(!json.contains("anim_move") || json["anim_move"].is_object());
+	assert_exp(!json.contains("anim_fire") || json["anim_fire"].is_object());
+	assert_exp(!json.contains("anim_crouch") || json["anim_crouch"].is_object());
+	assert_exp(!json.contains("anim_crawl") || json["anim_crawl"].is_object());
+	assert_exp(!json.contains("anim_crawl_fire") || json["anim_crawl_fire"].is_object());
 	assert_exp(!json.contains("show_after_build") || json["show_after_build"].is_number());
 	assert_exp(!json.contains("power") || json["power"].is_number());
 	assert_exp(!json.contains("lower_power_when_damaged") || json["lower_power_when_damaged"].is_boolean());
@@ -263,6 +293,7 @@ GameObject::GameObject(
 	}
 
 	auto &base = faction.getBase();
+	std::optional<unsigned> directions;
 
 	this->_id = id;
 	this->_hp = json["hp"];
@@ -272,6 +303,10 @@ GameObject::GameObject(
 
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
+	if (json.contains("directions")) {
+		directions = json["directions"].get<unsigned>();
+		assert_msg(*directions % 8 == 0, "Number of directions must be divisible by 8");
+	}
 	if (json.contains("build_max_distance"))
 		this->_buildMaxDistance = json["build_max_distance"];
 	if (json.contains("selectable"))
@@ -393,18 +428,40 @@ GameObject::GameObject(
 		assert_msg(sounds.contains(doSound), doSound);
 		this->_doSound = &sounds.at(doSound);
 	}
-	if (json.contains("directions")) {
-		unsigned directions = json["directions"];
-
-		assert_msg(directions % 8 == 0, "Number of directions must be divisible by 8");
-		this->_anims.resize(directions);
+	if (directions) {
+		this->_anims.resize(*directions);
 		for (auto &anim: json["anims"])
-			for (size_t i = 0; i < directions; i++)
+			for (size_t i = 0; i < *directions; i++)
 				this->_anims[i].emplace_back(*this, animList, anim, i);
+		if (json.contains("anim_move"))
+			for (size_t i = 0; i < *directions; i++)
+				this->_moveAnim.emplace_back(*this, animList, json["anim_move"], i);
+		if (json.contains("anim_fire"))
+			for (size_t i = 0; i < *directions; i++)
+				this->_fireAnim.emplace_back(*this, animList, json["anim_fire"], i);
+		if (json.contains("anim_crouch"))
+			for (size_t i = 0; i < *directions; i++)
+				this->_crouchAnim.emplace_back(*this, animList, json["anim_crouch"], i);
+		if (json.contains("anim_crawl"))
+			for (size_t i = 0; i < *directions; i++)
+				this->_crawlAnim.emplace_back(*this, animList, json["anim_crawl"], i);
+		if (json.contains("anim_crawl_fire"))
+			for (size_t i = 0; i < *directions; i++)
+				this->_crawlFireAnim.emplace_back(*this, animList, json["anim_crawl_fire"], i);
 	} else {
 		this->_anims.emplace_back();
 		for (auto &anim: json["anims"])
 			this->_anims.front().emplace_back(*this, animList, anim);
+		if (json.contains("anim_move"))
+			this->_moveAnim.emplace_back(*this, animList, json["anim_move"]);
+		if (json.contains("anim_fire"))
+			this->_fireAnim.emplace_back(*this, animList, json["anim_fire"]);
+		if (json.contains("anim_crouch"))
+			this->_crouchAnim.emplace_back(*this, animList, json["anim_crouch"]);
+		if (json.contains("anim_crawl"))
+			this->_crawlAnim.emplace_back(*this, animList, json["anim_crawl"]);
+		if (json.contains("anim_crawl_fire"))
+			this->_crawlFireAnim.emplace_back(*this, animList, json["anim_crawl_fire"]);
 	}
 	if (json.contains("harvest_anim")) {
 		assert_exp(!json["harvest_anim"].contains("dirs") || json["harvest_anim"]["dirs"].is_number_unsigned());
@@ -760,6 +817,7 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 	auto pos = this->_position;
 	auto diff = dest - pos;
 
+	this->_moving = true;
 	diff.normalize();
 	diff *= this->_speed;
 	pos += diff;
@@ -1028,36 +1086,7 @@ void GameObject::playBuiltSound() const
 
 void GameObject::update()
 {
-	if (this->_building && this->_buildAnim && (*this->_buildAnim)()) {
-		if (this->_buildAnim->update())
-			this->_building = false;
-	} else {
-		if (this->_producing && this->_producingAnim && (*this->_producingAnim)())
-			this->_producingAnim->update();
-		if (this->_produced  && this->_producedAnim  && (*this->_producedAnim)()  && this->_producedAnim->update())
-			this->_produced = false;
-	}
-	if(this->_lastResourceDump && this->_lastResourceDump->isDisposable())
-		this->_lastResourceDump = nullptr;
-	if (this->_asideCooldown != 0)
-		this->_asideCooldown--;
-	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping)
-		for (auto &anim : this->_anims[this->_currentDir])
-			if (anim())
-				anim.update();
-	for (auto &o : this->_orderQueue)
-		if (auto dump = std::get_if<DumpOrder>(&o))
-			if (dump->target->isDisposable())
-				dump->target = nullptr;
-	if (this->_dumping && (*this->_dump->during)())
-		this->_dump->during->update();
-	if (!this->_harvestAnims.empty() && this->_harvesting) {
-		auto dir = this->_currentDir * this->_harvestAnims.size() / this->_anims.size();
-		auto &anim = this->_harvestAnims[dir];
-
-		if (!anim() || anim.update())
-			this->_harvesting = false;
-	}
+	this->_moving = false;
 	if (!this->_orderQueue.empty()) {
 		if (this->_firstEvent) {
 			this->_pathCached = false;
@@ -1071,6 +1100,40 @@ void GameObject::update()
 			this->_firstEvent = true;
 		} else
 			this->_firstEvent = false;
+	}
+	if (this->_building && this->_buildAnim && (*this->_buildAnim)()) {
+		if (this->_buildAnim->update())
+			this->_building = false;
+	} else {
+		if (this->_producing && this->_producingAnim && (*this->_producingAnim)())
+			this->_producingAnim->update();
+		if (this->_produced  && this->_producedAnim  && (*this->_producedAnim)()  && this->_producedAnim->update())
+			this->_produced = false;
+	}
+	if(this->_lastResourceDump && this->_lastResourceDump->isDisposable())
+		this->_lastResourceDump = nullptr;
+	if (this->_asideCooldown != 0)
+		this->_asideCooldown--;
+	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping) {
+		if (this->_moving && !this->_moveAnim.empty()) {
+			if (this->_moveAnim[this->_currentDir]())
+				this->_moveAnim[this->_currentDir].update();
+		} else for (auto &anim: this->_anims[this->_currentDir])
+			if (anim())
+				anim.update();
+	}
+	for (auto &o : this->_orderQueue)
+		if (auto dump = std::get_if<DumpOrder>(&o))
+			if (dump->target->isDisposable())
+				dump->target = nullptr;
+	if (this->_dumping && (*this->_dump->during)())
+		this->_dump->during->update();
+	if (!this->_harvestAnims.empty() && this->_harvesting) {
+		auto dir = this->_currentDir * this->_harvestAnims.size() / this->_anims.size();
+		auto &anim = this->_harvestAnims[dir];
+
+		if (!anim() || anim.update())
+			this->_harvesting = false;
 	}
 }
 
@@ -1125,10 +1188,14 @@ void GameObject::render(int layer)
 	if (layer == -1)
 		this->drawSkirt();
 	if (!this->_building || !this->_buildAnim || this->_buildAnim->current() >= this->_showAfterBuild) {
-		if (!this->_dumpStop && !this->_dumpStart && !this->_dumping)
-			for (auto &anim: this->_anims[this->_currentDir])
+		if (!this->_dumpStop && !this->_dumpStart && !this->_dumping) {
+			if (this->_moving && !this->_moveAnim.empty()) {
+				if (this->_moveAnim[this->_currentDir]() && this->_moveAnim[this->_currentDir].getLayer() == layer)
+					this->_displayAnim(this->_moveAnim[this->_currentDir].getAnim());
+			} else for (auto &anim: this->_anims[this->_currentDir])
 				if (anim() && anim.getLayer() == layer)
 					this->_displayAnim(anim.getAnim());
+		}
 		if (this->_dumping && (*this->_dump->during)() && this->_dump->during->getLayer() == layer)
 			this->_displayAnim(this->_dump->during->getAnim());
 		if (this->_dumpStop && (*this->_dump->stop)() && this->_dump->stop->getLayer() == layer)
@@ -1172,6 +1239,19 @@ void GameObject::setColor(const HSLColor &color)
 	for (auto &block : this->_anims)
 		for (auto &anim : block)
 			anim.setColor(color);
+
+	for (auto &anim : this->_harvestAnims)
+		anim.setColor(color);
+	for (auto &anim : this->_moveAnim)
+		anim.setColor(color);
+	for (auto &anim : this->_fireAnim)
+		anim.setColor(color);
+	for (auto &anim : this->_crouchAnim)
+		anim.setColor(color);
+	for (auto &anim : this->_crawlAnim)
+		anim.setColor(color);
+	for (auto &anim : this->_crawlFireAnim)
+		anim.setColor(color);
 	if (this->_dump) {
 		this->_dump->during->setColor(color);
 		this->_dump->start->setColor(color);

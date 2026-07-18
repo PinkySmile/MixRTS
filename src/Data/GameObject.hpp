@@ -189,6 +189,7 @@ protected:
 	bool _dumpStop = false;
 	bool _dumpStart = false;
 	bool _dumping = false;
+	bool _moving = false;
 	bool _selectable = true;
 	bool _sellable = false;
 	bool _repairable = false;
@@ -301,6 +302,12 @@ protected:
 	std::optional<ConditionalAnim> _buildAnim;
 	std::optional<ConditionalAnim> _producingAnim;
 	std::optional<ConditionalAnim> _producedAnim;
+	std::vector<ConditionalAnim> _moveAnim;
+	std::vector<ConditionalAnim> _fireAnim;
+	std::vector<ConditionalAnim> _crouchAnim;
+	std::vector<ConditionalAnim> _crawlAnim;
+	std::vector<ConditionalAnim> _crawlFireAnim;
+	std::vector<ConditionalAnim> _idleAnims;
 	std::vector<ConditionalAnim> _harvestAnims;
 
 	bool _updateTurn(unsigned target);
