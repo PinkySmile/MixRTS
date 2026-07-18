@@ -18,9 +18,8 @@
 #define dumpTimer _gpTimer[0]
 #define blockTimer _gpTimer[3]
 #define waitRetracePath 300
-// Frames a grid-bound unit waits (re-asking a mobile blocker to step aside)
-// before recomputing a path around a blocked tile.
 #define waitBlocked 60
+#define PATH_UNIT_PENALTY 1000
 
 bool GameObject::_shortenOrder(Order &o)
 {
@@ -480,7 +479,8 @@ struct ObstructionContext {
 	Vector2u hitBoxSize;
 	const PathFindingGrid *grid;
 };
-static bool IsPathObstructedUnits(Vector2i p, void *ctx)
+
+static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 {
 	auto octx = reinterpret_cast<ObstructionContext *>(ctx);
 
@@ -496,31 +496,25 @@ static bool IsPathObstructedUnits(Vector2i p, void *ctx)
 		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
 			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
 
-			if (!(attrs & octx->mask) || PFGRIDMASK_FREE(attrs) != 0)
+			if (!(attrs & octx->mask) || PFGRIDMASK_IS_STATIC(attrs))
 				return true;
 		}
 	return false;
 }
-static bool IsPathObstructedTerrain(Vector2i p, void *ctx)
+
+static float GetTileCostMovableUnits(Vector2i p, void *ctx)
 {
 	auto octx = reinterpret_cast<ObstructionContext *>(ctx);
+	float cost = 0;
 
-	if (p.x < 0)
-		return true;
-	if (p.y < 0)
-		return true;
-	if (p.x + octx->hitBoxSize.x > octx->grid->gridSize.x)
-		return true;
-	if (p.y + octx->hitBoxSize.y > octx->grid->gridSize.y)
-		return true;
 	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
 		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
 			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
 
-			if (!(attrs & octx->mask) || PFGRIDMASK_FREE_NB(attrs) != 0)
-				return true;
+			if (PFGRIDMASK_FREE_NB(attrs) != 0)
+				cost += PATH_UNIT_PENALTY;
 		}
-	return false;
+	return cost;
 }
 
 bool GameObject::_updateTurn(unsigned int target)
@@ -578,7 +572,6 @@ void GameObject::_computeMovePath(Vector2i destination)
 	Vector2i target;
 	Vector2i pos;
 	Vector2u step = {1, 1};
-	IsObstructedCb isObs = &IsPathObstructedTerrain;
 
 	ctx.mask = this->_passFlags;
 	if (this->_boundToGrid) {
@@ -592,7 +585,7 @@ void GameObject::_computeMovePath(Vector2i destination)
 		target = destination;
 		pos = this->_position;
 	}
-	AStar::computePath(*ctx.grid, pos, target, step, isObs, &ctx, this->_pathCache);
+	AStar::computePath(*ctx.grid, pos, target, step, &IsPathObstructedStatic, &GetTileCostMovableUnits, &ctx, this->_pathCache);
 	if (this->_boundToGrid)
 		for (auto &p : this->_pathCache)
 			p = this->map->topLeftCoordToAbs(p) + (this->map->tileSize - this->_size) / 2;
@@ -606,16 +599,13 @@ bool GameObject::_tileAvailableFor(Vector2i tile) const
 {
 	auto &grid = this->map->pathFindingGrid;
 
-	// Callers must never probe a tile outside the grid.
 	assert_exp(tile.x >= 0 && tile.y >= 0);
 	assert_exp(tile.x < static_cast<int>(grid.gridSize.x) && tile.y < static_cast<int>(grid.gridSize.y));
 
 	auto attrs = grid.grid[tile.x + tile.y * grid.gridSize.x];
 
-	// The terrain must be passable for this unit...
 	if (!(attrs & this->_passFlags))
 		return false;
-	// ...and no other unit may already occupy the tile.
 	if (PFGRIDMASK_FREE_NB(attrs) != 0)
 		return false;
 	return true;
@@ -630,7 +620,6 @@ GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size)
 	for (auto *o : objects) {
 		if (o == this)
 			continue;
-		// A mobile blocker is the interesting case, so prefer returning one.
 		if (o->canMove())
 			return o;
 		fallback = o;
@@ -642,16 +631,11 @@ CollisionResolution GameObject::_resolveGridCollision()
 {
 	Vector2i nextTile = this->map->absToTileCoord(this->_pathCache.back());
 
-	// (1) If we are staying inside our current tile, or the next tile is free,
-	// there is nothing blocking us: keep going.
 	if (nextTile == this->_gridPos || this->_tileAvailableFor(nextTile)) {
 		this->blockTimer = 0;
 		return COLLISION_PROCEED;
 	}
 
-	// Throttle the expensive work: while waiting for a blocker to vacate we only
-	// react every waitBlocked frames (the tile-free check above still lets us
-	// resume immediately once the way clears).
 	if (this->blockTimer != 0) {
 		this->blockTimer++;
 		if (this->blockTimer >= waitBlocked)
@@ -659,8 +643,6 @@ CollisionResolution GameObject::_resolveGridCollision()
 		return COLLISION_WAIT;
 	}
 
-	// (2) Try to find a new path around the obstacle. Occupied tiles are treated
-	// as obstructed by the pathfinder, so a fresh path naturally avoids them.
 	std::vector<Vector2i> saved = this->_pathCache;
 
 	this->_computeMovePath(this->_cachedDest);
@@ -670,27 +652,18 @@ CollisionResolution GameObject::_resolveGridCollision()
 		if (newNext == this->_gridPos || this->_tileAvailableFor(newNext))
 			return COLLISION_PROCEED;
 	}
-
-	// No clear detour was found. Restore the original path so we keep aiming at
-	// the same tile while we wait for it to free up.
 	this->_pathCache = saved;
 
-	// (3) Inspect what is actually blocking the tile.
 	GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize);
 
 	if (blocker == nullptr || !blocker->canMove())
 		return COLLISION_ABORT;
-
-	// (4) A mobile unit is in the way: ask it to step aside while keeping its own
-	// goals queued for later. If it has nowhere to go, we give up.
 	if (!blocker->moveAside(this))
 		return COLLISION_ABORT;
 	this->blockTimer = 1;
 	return COLLISION_WAIT;
 }
 
-// Same four-step resolution as _resolveGridCollision, but for free-moving (not
-// grid-bound) units, where positions are pixel-accurate rather than tile-based.
 CollisionResolution GameObject::_resolveFreeCollision()
 {
 	auto stepPos = [this](Vector2f dest) -> Vector2i {
@@ -709,13 +682,11 @@ CollisionResolution GameObject::_resolveFreeCollision()
 	};
 	Vector2i nextPos = stepPos(this->_pathCache.back());
 
-	// (1) The spot we are about to occupy is free: keep going.
 	if (this->manager->isAreaFree(nextPos, this->_size, {this->index})) {
 		this->blockTimer = 0;
 		return COLLISION_PROCEED;
 	}
 
-	// Throttle heavy work while waiting for a blocker to move.
 	if (this->blockTimer != 0) {
 		this->blockTimer++;
 		if (this->blockTimer >= waitBlocked)
@@ -723,7 +694,6 @@ CollisionResolution GameObject::_resolveFreeCollision()
 		return COLLISION_WAIT;
 	}
 
-	// (2) Try to find a new path around the obstacle.
 	std::vector<Vector2i> saved = this->_pathCache;
 
 	this->_computeMovePath(this->_cachedDest);
@@ -733,17 +703,12 @@ CollisionResolution GameObject::_resolveFreeCollision()
 		if (this->manager->isAreaFree(newNext, this->_size, {this->index}))
 			return COLLISION_PROCEED;
 	}
-
-	// No clear detour: restore the original path and wait on the same spot.
 	this->_pathCache = saved;
 
-	// (3) Inspect what is blocking us.
 	GameObject *blocker = this->_findBlockingUnit(nextPos, this->_size);
 
 	if (blocker == nullptr || !blocker->canMove())
 		return COLLISION_ABORT;
-
-	// (4) Ask the mobile blocker to step aside, keeping its goals for later.
 	if (!blocker->moveAside(this))
 		return COLLISION_ABORT;
 	this->blockTimer = 1;
@@ -767,8 +732,6 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 	if (this->_pathCache.empty())
 		return true;
 
-	// Dynamic collision handling: react to units that moved into our way after
-	// the path was computed. Forced moves ignore obstacles on purpose.
 	if (!force) {
 		switch (this->_boundToGrid ? this->_resolveGridCollision() : this->_resolveFreeCollision()) {
 		case COLLISION_ABORT:
@@ -778,6 +741,12 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 		case COLLISION_PROCEED:
 			break;
 		}
+	}
+
+	while (this->_position == this->_pathCache.back()) {
+		this->_pathCache.pop_back();
+		if (this->_pathCache.empty())
+			return true;
 	}
 
 	auto &dest = this->_pathCache.back();
@@ -1429,10 +1398,9 @@ void GameObject::ensureMoveTo(const Vector2i &pos, bool automatic)
 
 bool GameObject::moveAside(GameObject *asker)
 {
-	// We must never ask something that cannot move to step aside.
 	assert_exp(this->canMove());
-	// Already stepping aside from a previous request: let the asker keep waiting
-	// instead of stacking another detour on top.
+	if (this->_dumpStart || this->_dumping || this->_dumpStop || this->_harvesting)
+		return false;
 	if (this->_asideCooldown != 0)
 		return true;
 
@@ -1454,7 +1422,6 @@ bool GameObject::moveAside(GameObject *asker)
 		for (auto &d : dirs) {
 			Vector2i tile = this->_gridPos + d;
 
-			// _tileAvailableFor asserts in-bounds, so skip edge tiles first.
 			if (tile.x < 0 || tile.y < 0)
 				continue;
 			if (tile.x >= static_cast<int>(grid.gridSize.x) || tile.y >= static_cast<int>(grid.gridSize.y))
@@ -1488,7 +1455,6 @@ bool GameObject::moveAside(GameObject *asker)
 				continue;
 			if (candidate.y + static_cast<int>(this->_size.y) > mapPixels.y)
 				continue;
-			// The spot must be clear of other units...
 			if (!this->manager->isAreaFree(candidate, this->_size, {this->index}))
 				continue;
 
@@ -1499,7 +1465,6 @@ bool GameObject::moveAside(GameObject *asker)
 				{static_cast<float>(candidate.x), static_cast<float>(candidate.y + this->_size.y)}
 			};
 
-			// ...and every tile it covers must be passable terrain.
 			if (!this->map->allHasAnyGridBits(footprint, this->_passFlags))
 				continue;
 
@@ -1515,7 +1480,6 @@ bool GameObject::moveAside(GameObject *asker)
 	if (!found)
 		return false;
 
-	// Push the detour in front of the current goals so they resume afterwards.
 	this->_orderQueue.emplace_front(MoveOrder{destination, false});
 	this->_firstEvent = true;
 	this->_pathCached = false;
@@ -1580,7 +1544,8 @@ void GameObject::initGlobalGrid()
 					}),
 					this->owner->state.team, 1,
 					0, // TODO: Handle mask
-					line[gx].solid ? 1 : 0
+					line[gx].solid ? 1 : 0,
+					!this->canMove()
 				);
 			}
 		}
@@ -1600,14 +1565,16 @@ void GameObject::initGlobalGrid()
 				this->map->tileSize,
 				0, 0,
 				0, // TODO: Handle mask
-				1
+				1,
+				!this->canMove()
 			);
 		else
 			this->manager->modUnitInArea(
 				abs,
 				0, 0,
 			        0, // TODO: Handle mask
-				1
+				1,
+				!this->canMove()
 			);
 	}
 	this->manager->registerObject(this);
@@ -1632,7 +1599,8 @@ void GameObject::deinitGlobalGrid()
 					}),
 					this->owner->state.team, -1,
 					0, // TODO: Handle mask
-					line[gx].solid ? -1 : 0
+					line[gx].solid ? -1 : 0,
+					!this->canMove()
 				);
 			}
 		}
@@ -1652,14 +1620,16 @@ void GameObject::deinitGlobalGrid()
 				this->map->tileSize,
 				0, 0,
 				0, // TODO: Handle mask
-				-1
+				-1,
+				!this->canMove()
 			);
 		else
 			this->manager->modUnitInArea(
 				abs,
 				0, 0,
 				0, // TODO: Handle mask
-				-1
+				-1,
+				!this->canMove()
 			);
 	}
 	this->manager->deregisterObject(this);

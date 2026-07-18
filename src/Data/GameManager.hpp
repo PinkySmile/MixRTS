@@ -51,7 +51,7 @@ private:
 	void _onObjectSpawned(Vector2i pos, GameObject &obj);
 	template<typename T>
 	T *_spawnObj(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, std::list<T> &out, const std::unordered_map<std::string, const T *> &in);
-	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, char mod);
+	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, char mod, bool isStatic);
 	void _pushOrder(GameObject &obj, const std::string &order);
 
 public:
@@ -73,8 +73,8 @@ public:
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
 	void registerObject(GameObject *o);
 	void deregisterObject(GameObject *o);
-	void modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, pfGridType mask, char mod);
-	void modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod);
+	void modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic);
+	void modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic);
 	std::optional<Vector2i> getFirstHarvestableTile(MapState &state, Vector2i pos) const;
 	std::optional<Vector2i> getClosestHarvestableTile(MapState &state, Vector2i pos) const;
 	GameObject *getClosestResourceDump(const std::vector<std::string> &preferredResources, size_t player, Vector2i pos);

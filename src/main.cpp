@@ -1,5 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include <nlohmann/json.hpp>
+#include <cfenv>
 #include "Data/Animation.hpp"
 #include "Data/Upgrade.hpp"
 #include "Resources/Game.hpp"
@@ -55,6 +56,7 @@ void dispFPS(float frameTime)
 
 int main()
 {
+	feenableexcept(FE_INVALID);
 #ifndef PROPAGATE_CRASH
 	try {
 #endif

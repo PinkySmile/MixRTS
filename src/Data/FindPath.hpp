@@ -29,6 +29,7 @@ constexpr int PATHFINDING_FREE_BITS = 10;
 constexpr int PATHFINDING_FREE_OFFSET = ((sizeof(pfGridType) * 8) - PATHFINDING_FREE_BITS);
 constexpr int PATHFINDING_FREE_MAX = (1 << (PATHFINDING_FREE_BITS - PATHFINDING_FREE_NB_POS)) - 1;
 constexpr int PATHFINDING_METADATA_MASK = (1 << PATHFINDING_FREE_OFFSET) - 1;
+constexpr int PFGRIDMASK_STATIC_BIT = 1 << 10;
 
 enum PFFreeMask {
 	PFFREEMASK_TOP_LEFT     = 1 << 0,
@@ -38,6 +39,20 @@ enum PFFreeMask {
 	PFFREEMASK_MIDDLE       = 1 << 4
 };
 
+inline bool PFGRIDMASK_IS_STATIC(pfGridType tile)
+{
+	return (tile & PFGRIDMASK_STATIC_BIT) != 0;
+}
+inline void PFGRIDMASK_ADD_STATIC(PathFindingGrid &g, unsigned x, unsigned y)
+{
+	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
+	g.grid[x + y * g.gridSize.x] |= PFGRIDMASK_STATIC_BIT;
+}
+inline void PFGRIDMASK_DEL_STATIC(PathFindingGrid &g, unsigned x, unsigned y)
+{
+	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
+	g.grid[x + y * g.gridSize.x] &= ~PFGRIDMASK_STATIC_BIT;
+}
 inline unsigned char PFGRIDMASK_FREE(pfGridType tile)
 {
 	return tile >> PATHFINDING_FREE_OFFSET;
@@ -131,6 +146,7 @@ inline void PFGRIDMASK_DEL_UNIT(PathFindingGrid &g, unsigned x, unsigned y, pfGr
 }
 
 typedef bool (*IsObstructedCb)(Vector2i pos, void *context);
+typedef float (*GetTileCostCb)(Vector2i pos, void *context);
 
 namespace AStar
 {
@@ -140,6 +156,7 @@ namespace AStar
 		Vector2i dest,
 		Vector2u step,
 		IsObstructedCb isObstructed,
+		GetTileCostCb getCost,
 		void *context,
 		std::vector<Vector2i> &buffer
 	);
@@ -153,6 +170,7 @@ namespace CrashAndTurn
 		Vector2i dest,
 		Vector2u step,
 		IsObstructedCb isObstructed,
+		GetTileCostCb getCost,
 		void *context,
 		std::vector<Vector2i> &buffer
 	);

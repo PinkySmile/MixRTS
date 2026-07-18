@@ -33,7 +33,7 @@ public:
 		: x(v.x), y(v.y) {}
 
 	template <typename T2>
-	operator sf::Vector2<T2>() const noexcept
+	[[nodiscard]] operator sf::Vector2<T2>() const noexcept
 	{
 		return sf::Vector2<T2>(this->x, this->y);
 	}
@@ -43,14 +43,14 @@ public:
 		: x(v.x), y(v.y) {}
 
 	template <typename T2>
-	operator tgui::Vector2<T2>() const noexcept
+	[[nodiscard]] operator tgui::Vector2<T2>() const noexcept
 	{
 		return tgui::Vector2<T2>(this->x, this->y);
 	}
 #endif
 
 	template<typename T2>
-	Vector2<T2> to() const noexcept
+	[[nodiscard]] Vector2<T2> to() const noexcept
 	{
 		return {
 			static_cast<T2>(this->x),
@@ -59,19 +59,19 @@ public:
 	}
 
 	template <typename T2>
-	bool operator==(const Vector2<T2> &other) const
+	[[nodiscard]] bool operator==(const Vector2<T2> &other) const
 	{
 		return other.x == this->x && this->y == other.y;
 	}
 
 	template <typename T2>
-	bool operator!=(const Vector2<T2> &other) const
+	[[nodiscard]] bool operator!=(const Vector2<T2> &other) const
 	{
 		return other.x != this->x || this->y != other.y;
 	}
 
 	template <typename T2>
-	bool operator<(const Vector2<T2> &other) const
+	[[nodiscard]] bool operator<(const Vector2<T2> &other) const
 	{
 		if (this->x != other.x)
 			return this->x < other.x;
@@ -87,7 +87,7 @@ public:
 	}
 
 	template<typename T2>
-	auto operator+(const Vector2<T2> &vec) const noexcept
+	[[nodiscard]] auto operator+(const Vector2<T2> &vec) const noexcept
 	{
 		return Vector2<decltype(this->x + vec.x)>(this->x + vec.x, this->y + vec.y);
 	}
@@ -101,7 +101,7 @@ public:
 	}
 
 	template<typename T2>
-	auto operator-(const Vector2<T2> &vec) const noexcept
+	[[nodiscard]] auto operator-(const Vector2<T2> &vec) const noexcept
 	{
 		return Vector2<decltype(this->x - vec.x)>(this->x - vec.x, this->y - vec.y);
 	}
@@ -115,13 +115,13 @@ public:
 	}
 
 	template<typename T2>
-	auto operator*(const Vector2<T2> &b) const noexcept
+	[[nodiscard]] auto operator*(const Vector2<T2> &b) const noexcept
 	{
 		return this->x * b.x + this->y * b.y;
 	}
 
 	template<typename T2>
-	auto operator*(T2 d) const noexcept
+	[[nodiscard]] auto operator*(T2 d) const noexcept
 	{
 		return Vector2<decltype(this->x * d)>(this->x * d, this->y * d);
 	}
@@ -135,7 +135,7 @@ public:
 	}
 
 	template<typename T2>
-	auto operator/(Vector2<T2> &b) const noexcept
+	[[nodiscard]] auto operator/(Vector2<T2> &b) const noexcept
 	{
 		return Vector2<decltype(this->x / b)>(this->x / b.x, this->y / b.y);
 	}
@@ -149,7 +149,7 @@ public:
 	}
 
 	template<typename T2>
-	auto operator/(T2 b) const noexcept
+	[[nodiscard]] auto operator/(T2 b) const noexcept
 	{
 		return Vector2<decltype(this->x / b)>(this->x / b, this->y / b);
 	}
@@ -160,33 +160,33 @@ public:
 	}
 
 	template<typename T2>
-	double distance(const Vector2<T2> &o) const noexcept
+	[[nodiscard]] double distance(const Vector2<T2> &o) const noexcept
 	{
 		return (*this - o).magnitude();
 	}
 
-	double magnitude() const noexcept
+	[[nodiscard]] double magnitude() const noexcept
 	{
 		return std::sqrt(this->x * this->x + this->y * this->y);
 	}
 
 	template<typename T2>
-	double distance2(const Vector2<T2> &o) const noexcept
+	[[nodiscard]] double distance2(const Vector2<T2> &o) const noexcept
 	{
 		return (*this - o).magnitude2();
 	}
 
-	double magnitude2() const noexcept
+	[[nodiscard]] double magnitude2() const noexcept
 	{
 		return this->x * this->x + this->y * this->y;
 	}
 
-	double angle(const Vector2<T> &o) const noexcept
+	[[nodiscard]] double angle(const Vector2<T> &o) const noexcept
 	{
 		return std::atan2(o.y - this->y, o.x - this->x);
 	}
 
-	Vector2<float> normal(const Vector2<T> &p2)
+	[[nodiscard]] Vector2<float> normal(const Vector2<T> &p2)
 	{
 		return Vector2<float>{this->y - p2.y, p2.x - this->x}.normalized();
 	}
@@ -200,7 +200,7 @@ public:
 		return *this;
 	}
 
-	Vector2<T> normalized() const noexcept
+	[[nodiscard]] Vector2<T> normalized() const noexcept
 	{
 		T mag = this->magnitude();
 
@@ -212,7 +212,7 @@ public:
 		*this = this->projection(point);
 	}
 
-	Vector2<float> projection(const Vector2<T> &point) const noexcept
+	[[nodiscard]] Vector2<float> projection(const Vector2<T> &point) const noexcept
 	{
 		return (point * this) / std::pow(this->magnitude(), 2) * *this;
 	}
@@ -230,7 +230,7 @@ public:
 		this->x = newX;
 	}
 
-	Vector2<float> rotation(float angle, const Vector2<T> &center) const noexcept
+	[[nodiscard]] Vector2<float> rotation(float angle, const Vector2<T> &center) const noexcept
 	{
 		Vector2<float> result = *this;
 

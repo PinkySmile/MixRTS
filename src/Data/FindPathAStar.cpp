@@ -16,8 +16,8 @@ static bool compare(const Node &a, const Node &b)
 	return a.second > b.second;
 }
 
-static Vector2u __lastGridSize;
-static Vector2u __lastStepSize;
+static Vector2u lastGridSize;
+static Vector2u lastStepSize;
 static std::set<Vector2i> closedSet;
 static std::priority_queue<Node, std::vector<Node>, decltype(&compare)> openSet{compare};
 
@@ -39,7 +39,7 @@ static void reconstructPath(const std::map<Vector2i, Vector2i> &cameFrom, Vector
 
 // A* finds a path from start to goal.
 // h is the heuristic function. h(n) estimates the cost to reach goal from node n.
-static bool aStar(Vector2i start, Vector2i goal, IsObstructedCb isObstructed, void *context, Vector2i step, std::vector<Vector2i> &totalPath)
+static bool aStar(Vector2i start, Vector2i goal, IsObstructedCb isObstructed, GetTileCostCb getCost, void *context, Vector2i step, std::vector<Vector2i> &totalPath)
 {
 	std::vector<std::pair<Vector2i, bool>> neighbors;
 	neighbors.reserve(8);
@@ -108,7 +108,7 @@ static bool aStar(Vector2i start, Vector2i goal, IsObstructedCb isObstructed, vo
 
 			// d(current,neighbor) is the weight of the edge from current to neighbor
 			// tentative_g_score is the distance from start to the neighbor through current
-			float tentativeGScore = GET_OPTIONAL(gScore, current) + (corner ? 14 : 10);
+			float tentativeGScore = GET_OPTIONAL(gScore, current) + (corner ? 14.f : 10.f) + getCost(neighbor, context);
 
 			if (tentativeGScore >= GET_OPTIONAL(gScore, neighbor))
 				continue;
@@ -143,34 +143,35 @@ void AStar::computePath(
 	Vector2i dest,
 	Vector2u step,
 	IsObstructedCb isObstructed,
+	GetTileCostCb getCost,
 	void *context,
 	std::vector<Vector2i> &buffer
 )
 {
-	__lastStepSize = step;
-	__lastGridSize = grid.gridSize;
+	lastStepSize = step;
+	lastGridSize = grid.gridSize;
 	buffer.clear();
-	aStar(currentPos, dest, isObstructed, context, step, buffer);
+	aStar(currentPos, dest, isObstructed, getCost, context, step, buffer);
 }
 
 sf::Image AStar::getDebugImage()
 {
-	Vector2u size = __lastGridSize;
-	size.x /= __lastStepSize.x;
-	size.y /= __lastStepSize.y;
+	Vector2u size = lastGridSize;
+	size.x /= lastStepSize.x;
+	size.y /= lastStepSize.y;
 	sf::Image img{size, sf::Color{0, 0, 0xFF, 0}};
 
 	while (!openSet.empty()) {
 		auto pos = openSet.top().first;
 
-		pos.x /= __lastStepSize.x;
-		pos.y /= __lastStepSize.y;
+		pos.x /= lastStepSize.x;
+		pos.y /= lastStepSize.y;
 		img.setPixel(pos, sf::Color{0, 0, 0xFF, 0x80});
 		openSet.pop();
 	}
 	for (auto pos : closedSet) {
-		pos.x /= __lastStepSize.x;
-		pos.y /= __lastStepSize.y;
+		pos.x /= lastStepSize.x;
+		pos.y /= lastStepSize.y;
 
 		auto color = img.getPixel(pos);
 

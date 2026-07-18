@@ -828,7 +828,7 @@ void GameManager::deregisterObject(GameObject *o)
 		l.erase(it);
 }
 
-void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, char mod)
+void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, char mod, bool isStatic)
 {
 	// TODO: Handle non-square grids
 	Vector2i minv = {
@@ -842,18 +842,23 @@ void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &st
 
 	for (int y = std::max(minv.y, 0); y < std::min<int>(maxv.y, state.gridSize.y); y++)
 		for (int x = std::max(minv.x, 0); x < std::min<int>(maxv.x, state.gridSize.x); x++)
-			if (mod < 0)
+			if (mod < 0) {
 				PFGRIDMASK_DEL_UNIT(state, x, y, mask);
-			else if (mod > 0)
+				if (isStatic)
+					PFGRIDMASK_DEL_STATIC(state, x, y);
+			} else if (mod > 0) {
 				PFGRIDMASK_ADD_UNIT(state, x, y, mask);
+				if (isStatic)
+					PFGRIDMASK_ADD_STATIC(state, x, y);
+			}
 }
 
-void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, pfGridType mask, char mod)
+void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic)
 {
-	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, mod);
-	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, mod);
+	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, mod, isStatic);
+	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, mod, isStatic);
 	for (auto &map : this->_mapStates)
-		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, mod);
+		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, mod, isStatic);
 	if (placementCount != 0) {
 		this->_map.grid.updatePlacementGrid(quad, team, placementCount);
 		for (auto &m : this->_mapStates)
@@ -861,17 +866,22 @@ void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int pla
 	}
 }
 
-void GameManager::modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod)
+void GameManager::modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic)
 {
-	if (mod < 0)
+	if (mod < 0) {
 		PFGRIDMASK_DEL_UNIT(special, rel.x, rel.y, mask);
-	else if (mod > 0)
+		if (isStatic)
+			PFGRIDMASK_DEL_STATIC(special, rel.x, rel.y);
+	} else if (mod > 0) {
 		PFGRIDMASK_ADD_UNIT(special, rel.x, rel.y, mask);
-	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, mod);
-	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, mod);
+		if (isStatic)
+			PFGRIDMASK_ADD_STATIC(special, rel.x, rel.y);
+	}
+	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, mod, isStatic);
+	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, mod, isStatic);
 	for (auto &map : this->_mapStates)
 		if (&map.pathFindingGrid != &special)
-			this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, mod);
+			this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, mod, isStatic);
 	if (placementCount != 0) {
 		this->_map.grid.updatePlacementGrid(quad, team, placementCount);
 		for (auto &m : this->_mapStates)
