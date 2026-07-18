@@ -106,6 +106,9 @@ GameObject::GameObject(const GameObject &g) :
 	if (g._producedAnim)
 		this->_producedAnim.emplace(*this, *g._producedAnim);
 
+	this->_idleAnims.reserve(g._idleAnims.size());
+	for (auto &anim : g._idleAnims)
+		this->_idleAnims.emplace_back(*this, anim);
 	this->_moveAnim.reserve(g._moveAnim.size());
 	for (auto &anim : g._moveAnim)
 		this->_moveAnim.emplace_back(*this, anim);
@@ -126,10 +129,6 @@ GameObject::GameObject(const GameObject &g) :
 	for (auto &anim : g._harvestAnims)
 		this->_harvestAnims.emplace_back(*this, anim);
 
-	this->_idleAnims.reserve(g._harvestAnims.size());
-	for (auto &anim : g._idleAnims)
-		this->_idleAnims.emplace_back(*this, anim);
-
 	this->_anims.reserve(g._anims.size());
 	for (auto &animVec : g._anims) {
 		this->_anims.emplace_back();
@@ -137,6 +136,9 @@ GameObject::GameObject(const GameObject &g) :
 		for (auto &anim : animVec)
 			this->_anims.back().emplace_back(*this, anim);
 	}
+
+	if (!this->_idleAnims.empty())
+		this->_idleTimer = random_distrib(game->gameRandom, this->_idleTimerRange.first, this->_idleTimerRange.second);
 }
 
 GameObject::GameObject(
@@ -199,6 +201,12 @@ GameObject::GameObject(
 	assert_exp(!json.contains("anim_crouch") || json["anim_crouch"].is_object());
 	assert_exp(!json.contains("anim_crawl") || json["anim_crawl"].is_object());
 	assert_exp(!json.contains("anim_crawl_fire") || json["anim_crawl_fire"].is_object());
+	assert_exp(!json.contains("idle_time") || json["idle_time"].is_array());
+	if (json.contains("idle_time")) {
+		assert_exp(json["idle_time"].size() == 2);
+		for (size_t i = 0; i < json["idle_time"].size(); i++)
+			assert_msg(json["idle_time"][i].is_number_unsigned(), "json[\"idle_time\"][" + std::to_string(i) + "]");
+	}
 	assert_exp(!json.contains("show_after_build") || json["show_after_build"].is_number());
 	assert_exp(!json.contains("power") || json["power"].is_number());
 	assert_exp(!json.contains("lower_power_when_damaged") || json["lower_power_when_damaged"].is_boolean());
@@ -406,6 +414,8 @@ GameObject::GameObject(
 		this->_producingAnim.emplace(*this, animList, json["producing_anim"]);
 	if (json.contains("produced_anim") && !json["produced_anim"].is_null())
 		this->_producedAnim.emplace(*this, animList, json["produced_anim"]);
+	if (json.contains("idle_time"))
+		this->_idleTimerRange = {json["idle_time"][0], json["idle_time"][1]};
 	if (json.contains("show_after_build"))
 		this->_showAfterBuild = json["show_after_build"];
 	else if (this->_buildAnim)
@@ -428,6 +438,9 @@ GameObject::GameObject(
 		assert_msg(sounds.contains(doSound), doSound);
 		this->_doSound = &sounds.at(doSound);
 	}
+	if (json.contains("anim_idles"))
+		for (auto &j : json["anim_idles"])
+			this->_idleAnims.emplace_back(*this, animList, j);
 	if (directions) {
 		this->_anims.resize(*directions);
 		for (auto &anim: json["anims"])
@@ -1101,6 +1114,20 @@ void GameObject::update()
 		} else
 			this->_firstEvent = false;
 	}
+	if (!this->_moving && !this->_dumpStop && !this->_dumping && !this->_dumpStart && !this->_idleAnims.empty()) {
+		if (this->_currentIdle) {
+			if (this->_idleAnims[this->_currentIdle - 1].update())
+				this->_currentIdle = 0;
+		} else {
+			if (this->_idleTimer != 0)
+				this->_idleTimer--;
+			if (this->_idleTimer == 0) {
+				this->_idleTimer = random_distrib(game->gameRandom, this->_idleTimerRange.first, this->_idleTimerRange.second);
+				this->_currentIdle = random_distrib(game->gameRandom, 1, this->_idleAnims.size() + 1);
+			}
+		}
+	} else
+		this->_currentIdle = 0;
 	if (this->_building && this->_buildAnim && (*this->_buildAnim)()) {
 		if (this->_buildAnim->update())
 			this->_building = false;
@@ -1110,11 +1137,11 @@ void GameObject::update()
 		if (this->_produced  && this->_producedAnim  && (*this->_producedAnim)()  && this->_producedAnim->update())
 			this->_produced = false;
 	}
-	if(this->_lastResourceDump && this->_lastResourceDump->isDisposable())
+	if (this->_lastResourceDump && this->_lastResourceDump->isDisposable())
 		this->_lastResourceDump = nullptr;
 	if (this->_asideCooldown != 0)
 		this->_asideCooldown--;
-	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping) {
+	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping && !this->_currentIdle) {
 		if (this->_moving && !this->_moveAnim.empty()) {
 			if (this->_moveAnim[this->_currentDir]())
 				this->_moveAnim[this->_currentDir].update();
@@ -1190,8 +1217,15 @@ void GameObject::render(int layer)
 	if (!this->_building || !this->_buildAnim || this->_buildAnim->current() >= this->_showAfterBuild) {
 		if (!this->_dumpStop && !this->_dumpStart && !this->_dumping) {
 			if (this->_moving && !this->_moveAnim.empty()) {
-				if (this->_moveAnim[this->_currentDir]() && this->_moveAnim[this->_currentDir].getLayer() == layer)
-					this->_displayAnim(this->_moveAnim[this->_currentDir].getAnim());
+				auto &anim = this->_moveAnim[this->_currentDir];
+
+				if (anim() && anim.getLayer() == layer)
+					this->_displayAnim(anim.getAnim());
+			} else if (this->_currentIdle) {
+				auto &anim = this->_idleAnims[this->_currentIdle - 1];
+
+				if (anim() && anim.getLayer() == layer)
+					this->_displayAnim(anim.getAnim());
 			} else for (auto &anim: this->_anims[this->_currentDir])
 				if (anim() && anim.getLayer() == layer)
 					this->_displayAnim(anim.getAnim());
@@ -1240,6 +1274,8 @@ void GameObject::setColor(const HSLColor &color)
 		for (auto &anim : block)
 			anim.setColor(color);
 
+	for (auto &anim : this->_idleAnims)
+		anim.setColor(color);
 	for (auto &anim : this->_harvestAnims)
 		anim.setColor(color);
 	for (auto &anim : this->_moveAnim)

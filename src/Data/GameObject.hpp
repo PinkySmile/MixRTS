@@ -169,6 +169,9 @@ protected:
 	unsigned _harvestTime = 0;
 	unsigned _harvestDelay = 0;
 	unsigned _showAfterBuild = 0;
+	unsigned _idleTimer = 0;
+	unsigned _currentIdle = 0;
+	std::pair<unsigned, unsigned> _idleTimerRange;
 	int _power;
 	float _speed = 0;
 	unsigned char _tileCount = 5;
