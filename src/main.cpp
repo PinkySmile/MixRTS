@@ -56,7 +56,12 @@ void dispFPS(float frameTime)
 
 int main()
 {
+#ifdef __linux__
 	feenableexcept(FE_INVALID);
+#elif defined(_WIN32) || defined(_WIN64)
+	unsigned int current_word;
+	_controlfp_s(&current_word, 0, _EM_INVALID);
+#endif
 #ifndef PROPAGATE_CRASH
 	try {
 #endif
