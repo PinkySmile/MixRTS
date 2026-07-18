@@ -16,7 +16,11 @@
 #define cancel _gpTimer[1]
 #define harvestDelaying _gpTimer[2]
 #define dumpTimer _gpTimer[0]
+#define blockTimer _gpTimer[3]
 #define waitRetracePath 300
+// Frames a grid-bound unit waits (re-asking a mobile blocker to step aside)
+// before recomputing a path around a blocked tile.
+#define waitBlocked 60
 
 bool GameObject::_shortenOrder(Order &o)
 {
@@ -568,6 +572,184 @@ bool GameObject::_updateCheckMove(Vector2i pos, void (GameObject::*fail)())
 	return true;
 }
 
+void GameObject::_computeMovePath(Vector2i destination)
+{
+	ObstructionContext ctx;
+	Vector2i target;
+	Vector2i pos;
+	Vector2u step = {1, 1};
+	IsObstructedCb isObs = &IsPathObstructedTerrain;
+
+	ctx.mask = this->_passFlags;
+	if (this->_boundToGrid) {
+		ctx.hitBoxSize = {1, 1};
+		ctx.grid = &this->map->pathFindingGrid;
+		target = this->map->absToTileCoord(destination);
+		pos = this->_gridPos;
+	} else {
+		ctx.hitBoxSize = this->_size;
+		ctx.grid = this->pfGrid;
+		target = destination;
+		pos = this->_position;
+	}
+	AStar::computePath(*ctx.grid, pos, target, step, isObs, &ctx, this->_pathCache);
+	if (this->_boundToGrid)
+		for (auto &p : this->_pathCache)
+			p = this->map->topLeftCoordToAbs(p) + (this->map->tileSize - this->_size) / 2;
+	while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
+		this->_pathCache.pop_back();
+	this->_cachedDebug = AStar::getDebugImage();
+	this->_cachedDebugTexLoaded = false;
+}
+
+bool GameObject::_tileAvailableFor(Vector2i tile) const
+{
+	auto &grid = this->map->pathFindingGrid;
+
+	// Callers must never probe a tile outside the grid.
+	assert_exp(tile.x >= 0 && tile.y >= 0);
+	assert_exp(tile.x < static_cast<int>(grid.gridSize.x) && tile.y < static_cast<int>(grid.gridSize.y));
+
+	auto attrs = grid.grid[tile.x + tile.y * grid.gridSize.x];
+
+	// The terrain must be passable for this unit...
+	if (!(attrs & this->_passFlags))
+		return false;
+	// ...and no other unit may already occupy the tile.
+	if (PFGRIDMASK_FREE_NB(attrs) != 0)
+		return false;
+	return true;
+}
+
+GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size)
+{
+	std::vector<GameObject *> objects;
+	GameObject *fallback = nullptr;
+
+	this->manager->getObjectsInArea(absPos, size, objects);
+	for (auto *o : objects) {
+		if (o == this)
+			continue;
+		// A mobile blocker is the interesting case, so prefer returning one.
+		if (o->canMove())
+			return o;
+		fallback = o;
+	}
+	return fallback;
+}
+
+CollisionResolution GameObject::_resolveGridCollision()
+{
+	Vector2i nextTile = this->map->absToTileCoord(this->_pathCache.back());
+
+	// (1) If we are staying inside our current tile, or the next tile is free,
+	// there is nothing blocking us: keep going.
+	if (nextTile == this->_gridPos || this->_tileAvailableFor(nextTile)) {
+		this->blockTimer = 0;
+		return COLLISION_PROCEED;
+	}
+
+	// Throttle the expensive work: while waiting for a blocker to vacate we only
+	// react every waitBlocked frames (the tile-free check above still lets us
+	// resume immediately once the way clears).
+	if (this->blockTimer != 0) {
+		this->blockTimer++;
+		if (this->blockTimer >= waitBlocked)
+			this->blockTimer = 0;
+		return COLLISION_WAIT;
+	}
+
+	// (2) Try to find a new path around the obstacle. Occupied tiles are treated
+	// as obstructed by the pathfinder, so a fresh path naturally avoids them.
+	std::vector<Vector2i> saved = this->_pathCache;
+
+	this->_computeMovePath(this->_cachedDest);
+	if (!this->_pathCache.empty()) {
+		Vector2i newNext = this->map->absToTileCoord(this->_pathCache.back());
+
+		if (newNext == this->_gridPos || this->_tileAvailableFor(newNext))
+			return COLLISION_PROCEED;
+	}
+
+	// No clear detour was found. Restore the original path so we keep aiming at
+	// the same tile while we wait for it to free up.
+	this->_pathCache = saved;
+
+	// (3) Inspect what is actually blocking the tile.
+	GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize);
+
+	if (blocker == nullptr || !blocker->canMove())
+		return COLLISION_ABORT;
+
+	// (4) A mobile unit is in the way: ask it to step aside while keeping its own
+	// goals queued for later. If it has nowhere to go, we give up.
+	if (!blocker->moveAside(this))
+		return COLLISION_ABORT;
+	this->blockTimer = 1;
+	return COLLISION_WAIT;
+}
+
+// Same four-step resolution as _resolveGridCollision, but for free-moving (not
+// grid-bound) units, where positions are pixel-accurate rather than tile-based.
+CollisionResolution GameObject::_resolveFreeCollision()
+{
+	auto stepPos = [this](Vector2f dest) -> Vector2i {
+		Vector2f pos = this->_position;
+		Vector2f diff = dest - pos;
+
+		diff.normalize();
+		diff *= this->_speed;
+		pos += diff;
+
+		Vector2f diff2 = dest - pos;
+
+		if (pos == dest || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0))
+			pos = dest;
+		return pos.to<int>();
+	};
+	Vector2i nextPos = stepPos(this->_pathCache.back());
+
+	// (1) The spot we are about to occupy is free: keep going.
+	if (this->manager->isAreaFree(nextPos, this->_size, {this->index})) {
+		this->blockTimer = 0;
+		return COLLISION_PROCEED;
+	}
+
+	// Throttle heavy work while waiting for a blocker to move.
+	if (this->blockTimer != 0) {
+		this->blockTimer++;
+		if (this->blockTimer >= waitBlocked)
+			this->blockTimer = 0;
+		return COLLISION_WAIT;
+	}
+
+	// (2) Try to find a new path around the obstacle.
+	std::vector<Vector2i> saved = this->_pathCache;
+
+	this->_computeMovePath(this->_cachedDest);
+	if (!this->_pathCache.empty()) {
+		Vector2i newNext = stepPos(this->_pathCache.back());
+
+		if (this->manager->isAreaFree(newNext, this->_size, {this->index}))
+			return COLLISION_PROCEED;
+	}
+
+	// No clear detour: restore the original path and wait on the same spot.
+	this->_pathCache = saved;
+
+	// (3) Inspect what is blocking us.
+	GameObject *blocker = this->_findBlockingUnit(nextPos, this->_size);
+
+	if (blocker == nullptr || !blocker->canMove())
+		return COLLISION_ABORT;
+
+	// (4) Ask the mobile blocker to step aside, keeping its goals for later.
+	if (!blocker->moveAside(this))
+		return COLLISION_ABORT;
+	this->blockTimer = 1;
+	return COLLISION_WAIT;
+}
+
 bool GameObject::_updateMove(Vector2i destination, bool force)
 {
 	if (!this->_pathCached) {
@@ -575,34 +757,8 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 		if (force) {
 			this->_pathCache.clear();
 			this->_pathCache.emplace_back(destination);
-		} else {
-			ObstructionContext ctx;
-			Vector2i target;
-			Vector2i pos;
-			Vector2u step = {1, 1};
-			IsObstructedCb isObs = &IsPathObstructedTerrain;
-
-			ctx.mask = this->_passFlags;
-			if (this->_boundToGrid) {
-				ctx.hitBoxSize = {1, 1};
-				ctx.grid = &this->map->pathFindingGrid;
-				target = this->map->absToTileCoord(destination);
-				pos = this->_gridPos;
-			} else {
-				ctx.hitBoxSize = this->_size;
-				ctx.grid = this->pfGrid;
-				target = destination;
-				pos = this->_position;
-			}
-			AStar::computePath(*ctx.grid, pos, target, step, isObs, &ctx, this->_pathCache);
-			if (this->_boundToGrid)
-				for (auto &p : this->_pathCache)
-					p = this->map->topLeftCoordToAbs(p) + (this->map->tileSize - this->_size) / 2;
-			while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
-				this->_pathCache.pop_back();
-			this->_cachedDebug = AStar::getDebugImage();
-			this->_cachedDebugTexLoaded = false;
-		}
+		} else
+			this->_computeMovePath(destination);
 		this->_pathCached = true;
 		if (this->_pathCache.empty())
 			return true;
@@ -610,6 +766,19 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 
 	if (this->_pathCache.empty())
 		return true;
+
+	// Dynamic collision handling: react to units that moved into our way after
+	// the path was computed. Forced moves ignore obstacles on purpose.
+	if (!force) {
+		switch (this->_boundToGrid ? this->_resolveGridCollision() : this->_resolveFreeCollision()) {
+		case COLLISION_ABORT:
+			return true;
+		case COLLISION_WAIT:
+			return false;
+		case COLLISION_PROCEED:
+			break;
+		}
+	}
 
 	auto &dest = this->_pathCache.back();
 	float a = this->_position.angle(dest);
@@ -620,7 +789,6 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 		return false;
 
 	auto pos = this->_position;
-	Vector2i oldP = pos;
 	auto diff = dest - pos;
 
 	diff.normalize();
@@ -628,21 +796,10 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 	pos += diff;
 
 	auto diff2 = dest - pos;
-	Vector2i newP = pos;
 
 	if (pos == dest || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
 		pos = dest;
 		this->_pathCache.pop_back();
-	}
-	if (!force) {
-		bool blocked = false;
-
-		if (this->_boundToGrid) {
-
-		} else
-			blocked = !this->manager->isAreaFree(pos, this->_size, {this->index});
-		if (blocked)
-			return true;
 	}
 	this->setPosition(pos);
 	return false;
@@ -913,6 +1070,8 @@ void GameObject::update()
 	}
 	if(this->_lastResourceDump && this->_lastResourceDump->isDisposable())
 		this->_lastResourceDump = nullptr;
+	if (this->_asideCooldown != 0)
+		this->_asideCooldown--;
 	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping)
 		for (auto &anim : this->_anims[this->_currentDir])
 			if (anim())
@@ -1266,6 +1425,102 @@ void GameObject::ensureMoveTo(const Vector2i &pos, bool automatic)
 			order = MoveTargetOrder{pos + this->_size / 2, true};
 		this->_orderQueue.emplace_back(order);
 	}
+}
+
+bool GameObject::moveAside(GameObject *asker)
+{
+	// We must never ask something that cannot move to step aside.
+	assert_exp(this->canMove());
+	// Already stepping aside from a previous request: let the asker keep waiting
+	// instead of stacking another detour on top.
+	if (this->_asideCooldown != 0)
+		return true;
+
+	static const Vector2i dirs[8] = {
+		{ 0, -1}, { 1, -1}, { 1,  0}, { 1,  1},
+		{ 0,  1}, {-1,  1}, {-1,  0}, {-1, -1}
+	};
+	// Prefer moving away from whoever asked us to move (compare centers, which
+	// are valid regardless of whether either unit is grid-bound).
+	Vector2f selfCenter = this->_position + this->_size / 2;
+	Vector2f away = asker ? (selfCenter - (asker->_position + asker->_size / 2)) : Vector2f{0, 0};
+	Vector2i destination;
+	float bestScore = 0;
+	bool found = false;
+
+	if (this->_boundToGrid) {
+		auto &grid = this->map->pathFindingGrid;
+
+		for (auto &d : dirs) {
+			Vector2i tile = this->_gridPos + d;
+
+			// _tileAvailableFor asserts in-bounds, so skip edge tiles first.
+			if (tile.x < 0 || tile.y < 0)
+				continue;
+			if (tile.x >= static_cast<int>(grid.gridSize.x) || tile.y >= static_cast<int>(grid.gridSize.y))
+				continue;
+			if (!this->_tileAvailableFor(tile))
+				continue;
+
+			float score = d.x * away.x + d.y * away.y;
+
+			if (!found || score > bestScore) {
+				found = true;
+				destination = this->map->topLeftCoordToAbs(tile);
+				bestScore = score;
+			}
+		}
+	} else {
+		Vector2i mapPixels = {
+			static_cast<int>(this->map->gridSize.x * this->map->tileSize.x),
+			static_cast<int>(this->map->gridSize.y * this->map->tileSize.y)
+		};
+
+		for (auto &d : dirs) {
+			Vector2i candidate = this->_position + Vector2f{
+				static_cast<float>(d.x) * this->_size.x,
+				static_cast<float>(d.y) * this->_size.y
+			};
+
+			if (candidate.x < 0 || candidate.y < 0)
+				continue;
+			if (candidate.x + static_cast<int>(this->_size.x) > mapPixels.x)
+				continue;
+			if (candidate.y + static_cast<int>(this->_size.y) > mapPixels.y)
+				continue;
+			// The spot must be clear of other units...
+			if (!this->manager->isAreaFree(candidate, this->_size, {this->index}))
+				continue;
+
+			MapState::Quad footprint = {
+				candidate.to<float>(),
+				{static_cast<float>(candidate.x + this->_size.x), static_cast<float>(candidate.y)},
+				{static_cast<float>(candidate.x + this->_size.x), static_cast<float>(candidate.y + this->_size.y)},
+				{static_cast<float>(candidate.x), static_cast<float>(candidate.y + this->_size.y)}
+			};
+
+			// ...and every tile it covers must be passable terrain.
+			if (!this->map->allHasAnyGridBits(footprint, this->_passFlags))
+				continue;
+
+			float score = d.x * away.x + d.y * away.y;
+
+			if (!found || score > bestScore) {
+				found = true;
+				destination = candidate;
+				bestScore = score;
+			}
+		}
+	}
+	if (!found)
+		return false;
+
+	// Push the detour in front of the current goals so they resume afterwards.
+	this->_orderQueue.emplace_front(MoveOrder{destination, false});
+	this->_firstEvent = true;
+	this->_pathCached = false;
+	this->_asideCooldown = waitBlocked;
+	return true;
 }
 
 void GameObject::dumpResourcesTo(GameObject *dump, bool automatic)

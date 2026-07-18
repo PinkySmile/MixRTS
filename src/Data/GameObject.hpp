@@ -58,6 +58,13 @@ struct MoveCheckOrder {
 	Vector2i destination;
 };
 
+// Result of resolving a dynamic collision while a grid-bound unit moves.
+enum CollisionResolution {
+	COLLISION_PROCEED, // The way ahead is clear (possibly on a freshly found path).
+	COLLISION_WAIT,    // Blocked for now; keep the order and retry next frame.
+	COLLISION_ABORT    // Nothing can be done; the unit must stop here.
+};
+
 
 
 struct ExtraSpawn {
@@ -157,6 +164,7 @@ protected:
 	unsigned _sight;
 	unsigned _limit = UINT32_MAX;
 	std::array<unsigned, 4> _gpTimer = {};
+	unsigned _asideCooldown = 0;
 	unsigned _passFlags = 0;
 	unsigned _harvestTime = 0;
 	unsigned _harvestDelay = 0;
@@ -228,6 +236,7 @@ public:
 	void harvest();
 	void moveTo(const Vector2i &pos, bool automatic = false);
 	void ensureMoveTo(const Vector2i &pos, bool automatic = false);
+	bool moveAside(GameObject *asker);
 	void dumpResourcesTo(GameObject *dump, bool automatic = false);
 	void select() const;
 	void playBuiltSound() const;
@@ -295,6 +304,11 @@ protected:
 	std::vector<ConditionalAnim> _harvestAnims;
 
 	bool _updateTurn(unsigned target);
+	void _computeMovePath(Vector2i destination);
+	bool _tileAvailableFor(Vector2i tile) const;
+	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size);
+	CollisionResolution _resolveGridCollision();
+	CollisionResolution _resolveFreeCollision();
 	bool _updateMove(Vector2i pos, bool force);
 	bool _updateTargetMove(Vector2i pos, bool force);
 	bool _updateCheckMove(Vector2i pos, void (GameObject::*fail)());
