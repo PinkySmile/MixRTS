@@ -550,6 +550,27 @@ struct ObstructionContext {
 	const PathFindingGrid *grid;
 };
 
+static bool IsPathObstructedTerrain(Vector2i p, void *ctx)
+{
+	auto octx = reinterpret_cast<ObstructionContext *>(ctx);
+
+	if (p.x < 0)
+		return true;
+	if (p.y < 0)
+		return true;
+	if (p.x + octx->hitBoxSize.x > octx->grid->gridSize.x)
+		return true;
+	if (p.y + octx->hitBoxSize.y > octx->grid->gridSize.y)
+		return true;
+	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
+		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
+			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
+
+			if (!(attrs & octx->mask))
+				return true;
+		}
+	return false;
+}
 static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 {
 	auto octx = reinterpret_cast<ObstructionContext *>(ctx);
@@ -604,20 +625,6 @@ bool GameObject::_updateTurn(unsigned int target)
 	return false;
 }
 
-bool GameObject::_updateTargetMove(Vector2i pos, bool force)
-{
-	if (this->_position == this->_oldPos && this->_gpTimer[0] < waitRetracePath) {
-		this->_gpTimer[0]++;
-		return false;
-	}
-	if (this->_position == pos)
-		return true;
-	this->_oldPos = this->_position;
-	this->_orderQueue.emplace_front(MoveOrder{pos, force});
-	this->_orderQueue.emplace_front(MoveTargetOrder{pos, force});
-	return true;
-}
-
 bool GameObject::_updateCheckMove(Vector2i pos, void (GameObject::*fail)())
 {
 	if (this->_position == this->_oldPos && this->_gpTimer[0] < waitRetracePath) {
@@ -636,7 +643,7 @@ bool GameObject::_updateCheckMove(Vector2i pos, void (GameObject::*fail)())
 	return true;
 }
 
-void GameObject::_computeMovePath(Vector2i destination)
+void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid)
 {
 	ObstructionContext ctx;
 	Vector2i target;
@@ -655,7 +662,14 @@ void GameObject::_computeMovePath(Vector2i destination)
 		target = destination;
 		pos = this->_position;
 	}
-	AStar::computePath(*ctx.grid, pos, target, step, &IsPathObstructedStatic, &GetTileCostMovableUnits, &ctx, this->_pathCache);
+	AStar::computePath(
+		*ctx.grid,
+		pos, target, step,
+		ignoreSolid ? &IsPathObstructedTerrain : &IsPathObstructedStatic,
+		&GetTileCostMovableUnits,
+		&ctx,
+		this->_pathCache
+	);
 	if (this->_boundToGrid)
 		for (auto &p : this->_pathCache)
 			p = this->map->topLeftCoordToAbs(p) + (this->map->tileSize - this->_size) / 2;
@@ -697,7 +711,7 @@ GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size)
 	return fallback;
 }
 
-CollisionResolution GameObject::_resolveGridCollision()
+CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid)
 {
 	Vector2i nextTile = this->map->absToTileCoord(this->_pathCache.back());
 
@@ -713,28 +727,50 @@ CollisionResolution GameObject::_resolveGridCollision()
 		return COLLISION_WAIT;
 	}
 
-	std::vector<Vector2i> saved = this->_pathCache;
+	std::vector<Vector2i> saved;
 
-	this->_computeMovePath(this->_cachedDest);
-	if (!this->_pathCache.empty()) {
-		Vector2i newNext = this->map->absToTileCoord(this->_pathCache.back());
+	if (ignoreSolid) {
+		GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize);
 
-		if (newNext == this->_gridPos || this->_tileAvailableFor(newNext))
+		if (!blocker || !blocker->canMove())
 			return COLLISION_PROCEED;
+		if (blocker->moveAside(this)) {
+			this->blockTimer = 1;
+			return COLLISION_WAIT;
+		}
+
+		saved = this->_pathCache;
+		this->_computeMovePath(this->_cachedDest, ignoreSolid);
+		if (!this->_pathCache.empty()) {
+			Vector2i newNext = this->map->absToTileCoord(this->_pathCache.back());
+
+			if (newNext == this->_gridPos || this->_tileAvailableFor(newNext))
+				return COLLISION_PROCEED;
+		}
+		this->_pathCache = saved;
+		this->blockTimer = 1;
+		return COLLISION_WAIT;
+	} else {
+		saved = this->_pathCache;
+		this->_computeMovePath(this->_cachedDest, ignoreSolid);
+		if (!this->_pathCache.empty()) {
+			Vector2i newNext = this->map->absToTileCoord(this->_pathCache.back());
+
+			if (newNext == this->_gridPos || this->_tileAvailableFor(newNext))
+				return COLLISION_PROCEED;
+		}
+		this->_pathCache = saved;
+
+		GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize);
+
+		if (blocker == nullptr || !blocker->canMove() || !blocker->moveAside(this))
+			return COLLISION_ABORT;
+		this->blockTimer = 1;
+		return COLLISION_WAIT;
 	}
-	this->_pathCache = saved;
-
-	GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize);
-
-	if (blocker == nullptr || !blocker->canMove())
-		return COLLISION_ABORT;
-	if (!blocker->moveAside(this))
-		return COLLISION_ABORT;
-	this->blockTimer = 1;
-	return COLLISION_WAIT;
 }
 
-CollisionResolution GameObject::_resolveFreeCollision()
+CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid)
 {
 	auto stepPos = [this](Vector2f dest) -> Vector2i {
 		Vector2f pos = this->_position;
@@ -752,6 +788,7 @@ CollisionResolution GameObject::_resolveFreeCollision()
 	};
 	Vector2i nextPos = stepPos(this->_pathCache.back());
 
+	// TODO: ignoreSolid
 	if (this->manager->isAreaFree(nextPos, this->_size, {this->index})) {
 		this->blockTimer = 0;
 		return COLLISION_PROCEED;
@@ -766,10 +803,11 @@ CollisionResolution GameObject::_resolveFreeCollision()
 
 	std::vector<Vector2i> saved = this->_pathCache;
 
-	this->_computeMovePath(this->_cachedDest);
+	this->_computeMovePath(this->_cachedDest, ignoreSolid);
 	if (!this->_pathCache.empty()) {
 		Vector2i newNext = stepPos(this->_pathCache.back());
 
+		// TODO: ignoreSolid
 		if (this->manager->isAreaFree(newNext, this->_size, {this->index}))
 			return COLLISION_PROCEED;
 	}
@@ -777,9 +815,7 @@ CollisionResolution GameObject::_resolveFreeCollision()
 
 	GameObject *blocker = this->_findBlockingUnit(nextPos, this->_size);
 
-	if (blocker == nullptr || !blocker->canMove())
-		return COLLISION_ABORT;
-	if (!blocker->moveAside(this))
+	if (blocker == nullptr || !blocker->canMove() || !blocker->moveAside(this))
 		return COLLISION_ABORT;
 	this->blockTimer = 1;
 	return COLLISION_WAIT;
@@ -789,11 +825,7 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 {
 	if (!this->_pathCached) {
 		this->_cachedDest = destination;
-		if (force) {
-			this->_pathCache.clear();
-			this->_pathCache.emplace_back(destination);
-		} else
-			this->_computeMovePath(destination);
+		this->_computeMovePath(destination, force);
 		this->_pathCached = true;
 		if (this->_pathCache.empty())
 			return true;
@@ -802,15 +834,13 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 	if (this->_pathCache.empty())
 		return true;
 
-	if (!force) {
-		switch (this->_boundToGrid ? this->_resolveGridCollision() : this->_resolveFreeCollision()) {
-		case COLLISION_ABORT:
-			return true;
-		case COLLISION_WAIT:
-			return false;
-		case COLLISION_PROCEED:
-			break;
-		}
+	switch (this->_boundToGrid ? this->_resolveGridCollision(force) : this->_resolveFreeCollision(force)) {
+	case COLLISION_ABORT:
+		return true;
+	case COLLISION_WAIT:
+		return false;
+	case COLLISION_PROCEED:
+		break;
 	}
 
 	while (this->_position == this->_pathCache.back()) {
@@ -1078,8 +1108,6 @@ bool GameObject::_handleOrder(const Order &o)
 		return this->_updateTurn(turn->resultDir);
 	else if (auto move = std::get_if<MoveOrder>(&o))
 		return this->_updateMove(move->destination, move->force);
-	else if (auto tmove = std::get_if<MoveTargetOrder>(&o))
-		return this->_updateTargetMove(tmove->destination, tmove->force);
 	else if (auto cmove = std::get_if<MoveCheckOrder>(&o))
 		return this->_updateCheckMove(cmove->destination, cmove->fail);
 	else if (std::holds_alternative<HarvestOrder>(o))
@@ -1474,42 +1502,11 @@ void GameObject::harvest()
 
 void GameObject::moveTo(const Vector2i &pos, bool automatic)
 {
-	if (!automatic) {
-		if (!this->canMove())
-			return;
-		if (this->_boundToGrid)
-			this->_orderQueue.emplace_back(MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), false});
-		else
-			this->_orderQueue.emplace_back(MoveOrder{pos + this->_size / 2, false});
-	} else {
-		MoveOrder order;
-
-		if (this->_boundToGrid)
-			order = MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), true};
-		else
-			order = MoveOrder{pos + this->_size / 2, true};
-		this->_orderQueue.emplace_back(order);
-	}
-}
-
-void GameObject::ensureMoveTo(const Vector2i &pos, bool automatic)
-{
-	if (!automatic) {
-		if (!this->canMove())
-			return;
-		if (this->_boundToGrid)
-			this->_orderQueue.emplace_back(MoveTargetOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), false});
-		else
-			this->_orderQueue.emplace_back(MoveTargetOrder{pos + this->_size / 2, false});
-	} else {
-		MoveTargetOrder order;
-
-		if (this->_boundToGrid)
-			order = MoveTargetOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), true};
-		else
-			order = MoveTargetOrder{pos + this->_size / 2, true};
-		this->_orderQueue.emplace_back(order);
-	}
+	assert_exp(this->canMove());
+	if (this->_boundToGrid)
+		this->_orderQueue.emplace_back(MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), automatic});
+	else
+		this->_orderQueue.emplace_back(MoveOrder{pos + this->_size / 2, automatic});
 }
 
 bool GameObject::moveAside(GameObject *asker)

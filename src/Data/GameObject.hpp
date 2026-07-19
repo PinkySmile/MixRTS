@@ -25,7 +25,6 @@ struct MoveOrder;
 struct HarvestOrder;
 struct DeployOrder;
 struct DumpOrder;
-struct MoveTargetOrder;
 struct MoveCheckOrder;
 typedef std::variant<
 	TurnOrder,
@@ -33,7 +32,6 @@ typedef std::variant<
 	DeployOrder,
 	HarvestOrder,
 	DumpOrder,
-	MoveTargetOrder,
 	MoveCheckOrder
 > Order;
 
@@ -48,10 +46,6 @@ struct HarvestOrder {};
 struct DeployOrder {};
 struct DumpOrder {
 	GameObject *target;
-};
-struct MoveTargetOrder {
-	Vector2i destination;
-	bool force;
 };
 struct MoveCheckOrder {
 	void (GameObject::*fail)();
@@ -239,7 +233,6 @@ public:
 	void harvest(const Vector2i &pos, bool automatic = false);
 	void harvest();
 	void moveTo(const Vector2i &pos, bool automatic = false);
-	void ensureMoveTo(const Vector2i &pos, bool automatic = false);
 	bool moveAside(GameObject *asker);
 	void dumpResourcesTo(GameObject *dump, bool automatic = false);
 	void select() const;
@@ -314,11 +307,11 @@ protected:
 	std::vector<ConditionalAnim> _harvestAnims;
 
 	bool _updateTurn(unsigned target);
-	void _computeMovePath(Vector2i destination);
+	void _computeMovePath(Vector2i destination, bool ignoreSolid);
 	bool _tileAvailableFor(Vector2i tile) const;
 	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size);
-	CollisionResolution _resolveGridCollision();
-	CollisionResolution _resolveFreeCollision();
+	CollisionResolution _resolveGridCollision(bool force);
+	CollisionResolution _resolveFreeCollision(bool force);
 	bool _updateMove(Vector2i pos, bool force);
 	bool _updateTargetMove(Vector2i pos, bool force);
 	bool _updateCheckMove(Vector2i pos, void (GameObject::*fail)());

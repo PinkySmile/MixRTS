@@ -606,9 +606,10 @@ void GameManager::_onObjectSpawned(Vector2i pos, GameObject &obj)
 	obj.owner->checkUnlocked(obj.getFaction());
 }
 
-template<typename T>
-T *GameManager::_spawnObj(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id, std::list<T> &out, const std::unordered_map<std::string, const T *> &in)
+GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id)
 {
+	auto &in = this->_players[owner].getObjects();
+	auto &out = this->_liveObjects;
 	auto &player = this->_players[owner];
 	auto &map = this->_mapStates[player.state.factionIndex];
 	auto &objects = player.getObjects();
@@ -642,7 +643,7 @@ T *GameManager::_spawnObj(size_t owner, Vector2i absPos, const std::string &buil
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				map.hasAllGridBits(fullPos, GRIDMASK_CAN_BUILD) &&
 				this->isAreaFree(map.topLeftCoordToAbs(fullPos), map.tileSize)
-			) {
+				) {
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				this->_map.grid.setGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
 				for (auto &m : this->_mapStates)
@@ -665,7 +666,7 @@ T *GameManager::_spawnObj(size_t owner, Vector2i absPos, const std::string &buil
 		}
 	}
 
-noGrid:
+	noGrid:
 	auto proxy = base.getProxy();
 
 	if (proxy)
@@ -721,11 +722,6 @@ noGrid:
 		return &obj;
 	}
 	return nullptr;
-}
-
-GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id)
-{
-	return this->_spawnObj(owner, absPos, buildQueue, id, this->_liveObjects, this->_players[owner].getObjects());
 }
 
 const std::vector<Faction> &GameManager::getFactions() const
