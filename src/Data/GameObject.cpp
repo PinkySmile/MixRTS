@@ -1428,6 +1428,14 @@ const std::string &GameObject::getGroup() const
 
 bool GameObject::isObstructed() const
 {
+	auto spawn = this->getSpawnOffset();
+
+	if (spawn)
+		return !this->manager->isAreaFree(
+			*spawn + this->getPosition(),
+			this->map->tileSize,
+			{this->index}
+		);
 	return false;
 }
 

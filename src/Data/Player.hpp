@@ -71,7 +71,7 @@ private:
 	std::vector<std::unique_ptr<UI>> _uis;
 	std::unordered_map<std::string, const GameObject *> _loadedObjects;
 
-	void _tryEndBuild(PlayerQueue &queue);
+	void _tryEndBuild(const std::string &name, PlayerQueue &queue);
 
 public:
 	PlayerState state;

@@ -666,7 +666,7 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 		}
 	}
 
-	noGrid:
+noGrid:
 	auto proxy = base.getProxy();
 
 	if (proxy)

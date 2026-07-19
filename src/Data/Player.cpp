@@ -90,7 +90,7 @@ void Player::update()
 		if (!q)
 			continue;
 		if (q->buildProgress == q->buildTime) {
-			this->_tryEndBuild(*q);
+			this->_tryEndBuild(qname, *q);
 		} else if (!q->paused) {
 			double percent = static_cast<double>(q->buildProgress + 1) / q->buildTime;
 			std::unordered_map<std::string, unsigned> expected;
@@ -351,7 +351,7 @@ void Player::checkUnlocked(const Faction &faction)
 		this->unlockObject(faction, name, upgrade);
 }
 
-void Player::_tryEndBuild(PlayerQueue &queue)
+void Player::_tryEndBuild(const std::string &name, PlayerQueue &queue)
 {
 	if (queue.upgrade) {
 		this->state.elementsOwned[*queue.elementId]++;
@@ -359,8 +359,13 @@ void Player::_tryEndBuild(PlayerQueue &queue)
 		this->resetQueue(*queue.queueId);
 		this->checkUnlocked(*queue.faction);
 	} else if (queue.object) {
-		if (!queue.object->requiresPlacement()) {
-			this->_parent.spawnObject(this->state.index, this->_parent.getLoadedMap().pathFindingGrid.gridSize / 2, *queue.queueId, *queue.elementId);
+		if (
+			!queue.object->requiresPlacement() &&
+			(!this->getPrimaryBuilding(name) || this->getSpawnBuilding(name))
+		) {
+			auto defaultPos = this->_parent.getLoadedMap().pathFindingGrid.gridSize / 2;
+
+			this->_parent.spawnObject(this->state.index, defaultPos, *queue.queueId, *queue.elementId);
 			queue.spent.clear();
 			this->resetQueue(*queue.queueId);
 			this->checkUnlocked(*queue.faction);
@@ -449,7 +454,7 @@ GameObject *Player::getSpawnBuilding(const std::string &queue)
 {
 	auto parent = this->state.primaryBuildings[queue];
 
-	if (parent)
+	if (parent && !parent->isObstructed())
 		return parent;
 	if (this->state.queueBuildings.contains(queue))
 		for (auto p: this->state.queueBuildings[queue])
