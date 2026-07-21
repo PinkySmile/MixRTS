@@ -149,6 +149,9 @@ void GameManager::_checkScroll()
 
 void GameManager::update()
 {
+	if (this->_paused && !this->_forceStep)
+		return;
+	this->_forceStep = false;
 	this->_checkScroll();
 	for (auto &o : this->_liveObjects)
 		o.update();
@@ -486,6 +489,10 @@ void GameManager::consumeEvent(const Event &event)
 			DEBUG_MODE = this->_isDebugUnlocked;
 		} else if (keyPressed->code == sf::Keyboard::Key::F5)
 			this->_limitCamera = !this->_limitCamera;
+		else if (keyPressed->code == sf::Keyboard::Key::F11)
+			this->_paused = !this->_paused;
+		else if (keyPressed->code == sf::Keyboard::Key::F12)
+			this->_forceStep = true;
 	#endif
 		for (auto &p : this->_players)
 			p.keyPressed(*keyPressed);
@@ -643,7 +650,7 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				map.hasAllGridBits(fullPos, GRIDMASK_CAN_BUILD) &&
 				this->isAreaFree(map.topLeftCoordToAbs(fullPos), map.tileSize)
-				) {
+			) {
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				this->_map.grid.setGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
 				for (auto &m : this->_mapStates)
@@ -790,12 +797,23 @@ bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const
 	return false;
 }
 
-bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const std::vector<unsigned> &exclusion) const
+bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const std::vector<unsigned> &exclusion, bool stackable) const
 {
 	// OPTIMIZE: Split the map into quadrants
-	for (auto &o : this->_liveObjects)
-		if (std::ranges::find(exclusion, o.index) == exclusion.end() && this->_isInArea(o, absPos, size))
+	unsigned stackCount = 0;
+
+	for (auto &o : this->_liveObjects) {
+		if (std::ranges::find(exclusion, o.index) != exclusion.end())
+			continue;
+		if (!this->_isInArea(o, absPos, size))
+			continue;
+		// A stackable mover can share the area with other stackable units,
+		// up to PATHFINDING_STACK_LIMIT of them; anything else blocks it.
+		if (!stackable || !o.isStackable())
 			return false;
+		if (++stackCount >= PATHFINDING_STACK_LIMIT)
+			return false;
+	}
 	return true;
 }
 
@@ -862,22 +880,19 @@ void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int pla
 	}
 }
 
-void GameManager::modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic)
+void GameManager::modUnitInArea(Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic)
 {
-	if (mod < 0) {
-		PFGRIDMASK_DEL_UNIT(special, rel.x, rel.y, mask);
-		if (isStatic)
-			PFGRIDMASK_DEL_STATIC(special, rel.x, rel.y);
-	} else if (mod > 0) {
-		PFGRIDMASK_ADD_UNIT(special, rel.x, rel.y, mask);
-		if (isStatic)
-			PFGRIDMASK_ADD_STATIC(special, rel.x, rel.y);
-	}
+	const MapState::Quad quad = {
+		rel,
+		Vector2f(rel.x + tileSize.x, rel.y),
+		Vector2f(rel.x + tileSize.x, rel.y + tileSize.y),
+		Vector2f(rel.x, rel.y + tileSize.y),
+	};
+
 	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, mod, isStatic);
 	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, mod, isStatic);
 	for (auto &map : this->_mapStates)
-		if (&map.pathFindingGrid != &special)
-			this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, mod, isStatic);
+		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, mod, isStatic);
 	if (placementCount != 0) {
 		this->_map.grid.updatePlacementGrid(quad, team, placementCount);
 		for (auto &m : this->_mapStates)

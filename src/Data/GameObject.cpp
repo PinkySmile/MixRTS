@@ -34,7 +34,7 @@ bool GameObject::_shortenOrder(Order &o)
 			return true;
 		this->_pathCache.erase(this->_pathCache.begin() + 1, this->_pathCache.end());
 
-		Vector2f pos = this->_position;
+		Vector2f pos = this->_position + this->_size / 2;
 
 		// TODO: Handle non-square grids
 		if (this->_currentDir == 1 * this->_anims.size() / 8) {
@@ -191,6 +191,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("build_anim") || json["build_anim"].is_null() || json["build_anim"].is_object());
 	assert_exp(!json.contains("producing_anim") || json["producing_anim"].is_null() || json["producing_anim"].is_object());
 	assert_exp(!json.contains("produced_anim") || json["produced_anim"].is_null() || json["produced_anim"].is_object());
+	assert_exp(!json.contains("stackable") || json["stackable"].is_boolean());
 	if (json.contains("anim_idles")) {
 		assert_exp(json["anim_idles"].is_array());
 		for (size_t i = 0; i < json["anim_idles"].size(); i++)
@@ -315,6 +316,8 @@ GameObject::GameObject(
 		directions = json["directions"].get<unsigned>();
 		assert_msg(*directions % 8 == 0, "Number of directions must be divisible by 8");
 	}
+	if (json.contains("lower_power_when_damaged"))
+		this->_lowerPowerWhenDamaged = json["lower_power_when_damaged"];
 	if (json.contains("build_max_distance"))
 		this->_buildMaxDistance = json["build_max_distance"];
 	if (json.contains("selectable"))
@@ -323,6 +326,12 @@ GameObject::GameObject(
 		this->_sellable = json["sellable"];
 	if (json.contains("repairable"))
 		this->_repairable = json["repairable"];
+	if (json.contains("power"))
+		this->_power = json["power"];
+	if (json.contains("sight"))
+		this->_sight = json["sight"];
+	if (json.contains("fake"))
+		this->_fake = json["fake"];
 	if (json.contains("spawn"))
 		this->_extraSpawn = {
 			RESOURCE(base.getName(), json["spawn"]["unit"]),
@@ -360,6 +369,28 @@ GameObject::GameObject(
 		this->_requiresPlacement = json["requires_placement"];
 	if (json.contains("queue"))
 		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);
+	if (json.contains("fake"))
+		this->_fake = json["fake"];
+	if (json.contains("proxy"))
+		this->_proxy = json["proxy"];
+	if (json.contains("stackable"))
+		this->_stackable = json["stackable"];
+	if (json.contains("speed"))
+		this->_speed = json["speed"];
+	if (json.contains("gives_queue"))
+		this->_giveQueue = RESOURCE(base.getName(), json["gives_queue"]);
+	if (json.contains("storage"))
+		this->_storage = json["storage"];
+	if (json.contains("build_anim") && !json["build_anim"].is_null())
+		this->_buildAnim.emplace(*this, animList, json["build_anim"]);
+	if (json.contains("producing_anim") && !json["producing_anim"].is_null())
+		this->_producingAnim.emplace(*this, animList, json["producing_anim"]);
+	if (json.contains("produced_anim") && !json["produced_anim"].is_null())
+		this->_producedAnim.emplace(*this, animList, json["produced_anim"]);
+	if (json.contains("idle_time"))
+		this->_idleTimerRange = {json["idle_time"][0], json["idle_time"][1]};
+	if (json.contains("turn_speed"))
+		this->_turnSpeed = json["turn_speed"];
 	if (json.contains("tiles")) {
 		std::vector<std::vector<uint8_t>> b = json["tiles"];
 		std::vector<std::vector<BuildingMask>> r;
@@ -376,10 +407,6 @@ GameObject::GameObject(
 		}
 		this->_tiles = r;
 	}
-	if (json.contains("fake"))
-		this->_fake = json["fake"];
-	if (json.contains("proxy"))
-		this->_proxy = json["proxy"];
 	if (json.contains("build")) {
 		auto buildSound = RESOURCE(base.getName(), json["build"]);
 
@@ -398,34 +425,15 @@ GameObject::GameObject(
 		} else
 			this->_passFlags = json["pass_flags"];
 	}
-	if (json.contains("speed"))
-		this->_speed = json["speed"];
 	if (json.contains("group"))
 		this->_group = RESOURCE(base.getName(), "group." + json["group"].get<std::string>());
 	else
 		this->_group = id;
-	if (json.contains("gives_queue"))
-		this->_giveQueue = RESOURCE(base.getName(), json["gives_queue"]);
-	if (json.contains("storage"))
-		this->_storage = json["storage"];
-	if (json.contains("build_anim") && !json["build_anim"].is_null())
-		this->_buildAnim.emplace(*this, animList, json["build_anim"]);
-	if (json.contains("producing_anim") && !json["producing_anim"].is_null())
-		this->_producingAnim.emplace(*this, animList, json["producing_anim"]);
-	if (json.contains("produced_anim") && !json["produced_anim"].is_null())
-		this->_producedAnim.emplace(*this, animList, json["produced_anim"]);
-	if (json.contains("idle_time"))
-		this->_idleTimerRange = {json["idle_time"][0], json["idle_time"][1]};
 	if (json.contains("show_after_build"))
 		this->_showAfterBuild = json["show_after_build"];
 	else if (this->_buildAnim)
 		this->_showAfterBuild = this->_buildAnim->size();
-	this->_power = json.contains("power") ? json["power"].get<int>() : 0;
-	this->_fake = json.contains("fake") && json["fake"];
-	this->_lowerPowerWhenDamaged = json.contains("lower_power_when_damaged") && json["lower_power_when_damaged"];
 
-	if (json.contains("turn_speed"))
-		this->_turnSpeed = json["turn_speed"];
 	if (json.contains("select_sound")) {
 		std::string selectSound = RESOURCE(base.getName(), json["select_sound"]);
 
@@ -518,7 +526,6 @@ GameObject::GameObject(
 			this->_selectBox.size = this->_size;
 		}
 	}
-	this->_sight = json.contains("sight") ? json["sight"].get<int>() : 0;
 	this->animationState.health = 1;
 
 	if (this->_storage.size() == 1)
@@ -539,6 +546,13 @@ GameObject::GameObject(
 						this->_checkTiles.emplace(i1 + x, i2 + y);
 			}
 		}
+
+	if (this->_stackable)
+		this->_currentTilePosition = PFFREEMASK_TOP_LEFT;
+	else
+		this->_currentTilePosition = PFFREEMASK_NONE;
+	this->_oldTilePosition = this->_currentTilePosition;
+	assert_exp(!this->_stackable || this->_boundToGrid);
 }
 
 GameObject::~GameObject() = default;
@@ -548,11 +562,12 @@ struct ObstructionContext {
 	uint32_t mask;
 	Vector2u hitBoxSize;
 	const PathFindingGrid *grid;
+	bool stackable;
 };
 
 static bool IsPathObstructedTerrain(Vector2i p, void *ctx)
 {
-	auto octx = reinterpret_cast<ObstructionContext *>(ctx);
+	auto octx = static_cast<ObstructionContext *>(ctx);
 
 	if (p.x < 0)
 		return true;
@@ -573,7 +588,7 @@ static bool IsPathObstructedTerrain(Vector2i p, void *ctx)
 }
 static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 {
-	auto octx = reinterpret_cast<ObstructionContext *>(ctx);
+	auto octx = static_cast<ObstructionContext *>(ctx);
 
 	if (p.x < 0)
 		return true;
@@ -589,13 +604,20 @@ static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 
 			if (!(attrs & octx->mask) || PFGRIDMASK_IS_STATIC(attrs))
 				return true;
+
+			auto stackCount = PFGRIDMASK_STACK_COUNT(attrs);
+
+			if (!octx->stackable && stackCount != 0)
+				return true;
+			if (octx->stackable && stackCount >= PATHFINDING_STACK_LIMIT)
+				return true;
 		}
 	return false;
 }
 
 static float GetTileCostMovableUnits(Vector2i p, void *ctx)
 {
-	auto octx = reinterpret_cast<ObstructionContext *>(ctx);
+	auto octx = static_cast<ObstructionContext *>(ctx);
 	float cost = 0;
 
 	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
@@ -606,6 +628,40 @@ static float GetTileCostMovableUnits(Vector2i p, void *ctx)
 				cost += PATH_UNIT_PENALTY;
 		}
 	return cost;
+}
+
+Vector2f GameObject::_getTileOffsetFromCenter() const
+{
+	switch (this->_currentTilePosition) {
+	case PFFREEMASK_TOP_LEFT:
+		return {
+			this->map->tileSize.x / -2.f,
+			this->map->tileSize.y / -2.f
+		};
+	case PFFREEMASK_TOP_RIGHT:
+		return {
+			this->map->tileSize.x / 2.f - this->_size.x,
+			this->map->tileSize.y / -2.f
+		};
+	case PFFREEMASK_BOTTOM_LEFT:
+		return {
+			this->map->tileSize.x / -2.f,
+			this->map->tileSize.y / 2.f - this->_size.y
+		};
+	case PFFREEMASK_BOTTOM_RIGHT:
+		return {
+			this->map->tileSize.x / 2.f - this->_size.x,
+			this->map->tileSize.y / 2.f - this->_size.y
+		};
+	case PFFREEMASK_MIDDLE:
+	case PFFREEMASK_NONE:
+		return {
+			this->_size.x / -2.f,
+			this->_size.y / -2.f
+		};
+	default:
+		assert_not_reached();
+	}
 }
 
 bool GameObject::_updateTurn(unsigned int target)
@@ -651,6 +707,7 @@ void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid)
 	Vector2u step = {1, 1};
 
 	ctx.mask = this->_passFlags;
+	ctx.stackable = this->_stackable;
 	if (this->_boundToGrid) {
 		ctx.hitBoxSize = {1, 1};
 		ctx.grid = &this->map->pathFindingGrid;
@@ -672,7 +729,7 @@ void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid)
 	);
 	if (this->_boundToGrid)
 		for (auto &p : this->_pathCache)
-			p = this->map->topLeftCoordToAbs(p) + (this->map->tileSize - this->_size) / 2;
+			p = this->map->topLeftCoordToAbs(p) + this->map->tileSize / 2;
 	while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
 		this->_pathCache.pop_back();
 	this->_cachedDebug = AStar::getDebugImage();
@@ -692,7 +749,9 @@ bool GameObject::_tileAvailableFor(Vector2i tile) const
 		return false;
 	if (PFGRIDMASK_FREE_NB(attrs) != 0)
 		return false;
-	return true;
+	if (this->_stackable)
+		return PFGRIDMASK_STACK_COUNT(attrs) < PATHFINDING_STACK_LIMIT;
+	return PFGRIDMASK_STACK_COUNT(attrs) == 0;
 }
 
 GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size)
@@ -715,7 +774,18 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid)
 {
 	Vector2i nextTile = this->map->absToTileCoord(this->_pathCache.back());
 
-	if (nextTile == this->_gridPos || this->_tileAvailableFor(nextTile)) {
+	if (nextTile == this->_gridPos) {
+		this->blockTimer = 0;
+		return COLLISION_PROCEED;
+	}
+	if (this->_tileAvailableFor(nextTile)) {
+		if (this->_stackable && !PFGRIDMASK_IS_SLOT_FREE(this->map->pathFindingGrid, nextTile.x, nextTile.y, this->_currentTilePosition)) {
+			this->_oldTilePosition = this->_currentTilePosition;
+			this->deinitGlobalGrid();
+			this->_currentTilePosition = PFGRIDMASK_FIND_FREE_SLOT(this->map->pathFindingGrid, nextTile.x, nextTile.y);
+			this->initGlobalGrid();
+			assert_exp(this->_currentTilePosition);
+		}
 		this->blockTimer = 0;
 		return COLLISION_PROCEED;
 	}
@@ -789,7 +859,7 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid)
 	Vector2i nextPos = stepPos(this->_pathCache.back());
 
 	// TODO: ignoreSolid
-	if (this->manager->isAreaFree(nextPos, this->_size, {this->index})) {
+	if (this->manager->isAreaFree(nextPos, this->_size, {this->index}, this->_stackable)) {
 		this->blockTimer = 0;
 		return COLLISION_PROCEED;
 	}
@@ -808,7 +878,7 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid)
 		Vector2i newNext = stepPos(this->_pathCache.back());
 
 		// TODO: ignoreSolid
-		if (this->manager->isAreaFree(newNext, this->_size, {this->index}))
+		if (this->manager->isAreaFree(newNext, this->_size, {this->index}, this->_stackable))
 			return COLLISION_PROCEED;
 	}
 	this->_pathCache = saved;
@@ -849,20 +919,40 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 			return true;
 	}
 
-	auto &dest = this->_pathCache.back();
-	float a = this->_position.angle(dest);
-	unsigned angle = round((a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+	auto dest = this->_pathCache.back() + this->_getTileOffsetFromCenter();
+	std::optional<float> a;
 
-	angle %= this->_anims.size();
-	if (angle != this->_currentDir && !this->_handleOrder(TurnOrder{angle}))
-		return false;
+	if (this->_boundToGrid) {
+		auto d = this->map->absToTileCoord(dest + this->_size / 2);
+
+		if (d != this->_gridPos)
+			a = this->_gridPos.angle(d);
+	} else
+		a = this->_position.angle(dest);
+
+	if (a) {
+		unsigned angle = round((*a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+
+		angle %= this->_anims.size();
+		if (angle != this->_currentDir && !this->_handleOrder(TurnOrder{angle}))
+			return false;
+	}
 
 	auto pos = this->_position;
 	auto diff = dest - pos;
 
+	//if (this->_stackable) {
+	//	//if (std::abs(diff.x))
+	//	//qddqzzqddzq
+	//}
 	this->_moving = true;
-	diff.normalize();
-	diff *= this->_speed;
+	//if (this->_boundToGrid) {
+	//	diff.x = std::copysign(this->_speed, diff.x);
+	//	diff.y = std::copysign(this->_speed, diff.y);
+	//} else {
+		diff.normalize();
+		diff *= this->_speed;
+	//}
 	pos += diff;
 
 	auto diff2 = dest - pos;
@@ -1576,7 +1666,7 @@ bool GameObject::moveAside(GameObject *asker)
 				continue;
 			if (candidate.y + static_cast<int>(this->_size.y) > mapPixels.y)
 				continue;
-			if (!this->manager->isAreaFree(candidate, this->_size, {this->index}))
+			if (!this->manager->isAreaFree(candidate, this->_size, {this->index}, this->_stackable))
 				continue;
 
 			MapState::Quad footprint = {
@@ -1664,7 +1754,7 @@ void GameObject::initGlobalGrid()
 						static_cast<int>(this->_gridPos.y + gy)
 					}),
 					this->owner->state.team, 1,
-					0, // TODO: Handle mask
+					this->_currentTilePosition,
 					line[gx].solid ? 1 : 0,
 					!this->canMove()
 				);
@@ -1680,21 +1770,19 @@ void GameObject::initGlobalGrid()
 
 		if (this->_boundToGrid)
 			this->manager->modUnitInArea(
-				abs,
-				this->map->pathFindingGrid,
-				this->_gridPos,
+				this->map->topLeftCoordToAbs(this->_gridPos),
 				this->map->tileSize,
 				0, 0,
-				0, // TODO: Handle mask
-				1,
+				this->_currentTilePosition,
+				this->_solid,
 				!this->canMove()
 			);
 		else
 			this->manager->modUnitInArea(
 				abs,
 				0, 0,
-			        0, // TODO: Handle mask
-				1,
+			        this->_currentTilePosition,
+				this->_solid,
 				!this->canMove()
 			);
 	}
@@ -1735,12 +1823,10 @@ void GameObject::deinitGlobalGrid()
 
 		if (this->_boundToGrid)
 			this->manager->modUnitInArea(
-				abs,
-				this->map->pathFindingGrid,
-				this->_gridPos,
+				this->map->topLeftCoordToAbs(this->_gridPos),
 				this->map->tileSize,
 				0, 0,
-				0, // TODO: Handle mask
+				this->_stackable ? static_cast<pfGridType>(this->_currentTilePosition) : 0,
 				-1,
 				!this->canMove()
 			);
@@ -1775,6 +1861,11 @@ std::optional<float> GameObject::getStorageDisplay() const
 bool GameObject::isSolid() const
 {
 	return this->_solid;
+}
+
+bool GameObject::isStackable() const
+{
+	return this->_stackable;
 }
 
 const std::optional<ExtraSpawn> &GameObject::getExtraSpawn() const
@@ -1857,11 +1948,12 @@ void GameObject::renderPathFindingPath() const
 
 	sf::VertexArray arr{sf::PrimitiveType::LineStrip, this->_pathCache.size() + 1};
 	sf::VertexArray arr2{sf::PrimitiveType::LineStrip, 2};
+	auto off = this->_getTileOffsetFromCenter();
 
 	arr[0].position = this->_position + this->_size / 2;
 	arr[0].color = sf::Color::Blue;
 	for (size_t i = this->_pathCache.size(); i > 0; i--) {
-		arr[i].position = this->_pathCache[i - 1] + this->_size / 2;
+		arr[i].position = this->_pathCache[i - 1] + off + this->_size / 2;
 		arr[i].color = sf::Color::Blue;
 	}
 	game->screen->draw(arr);

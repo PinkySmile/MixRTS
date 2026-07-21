@@ -79,7 +79,7 @@ public:
 	}
 
 	template<typename T2>
-	Vector2<T> &operator+=(const Vector2<T2> &vec) noexcept
+	Vector2 &operator+=(const Vector2<T2> &vec) noexcept
 	{
 		this->x += vec.x;
 		this->y += vec.y;
@@ -93,7 +93,7 @@ public:
 	}
 
 	template<typename T2>
-	Vector2<T> &operator-=(const Vector2<T2> &vec) noexcept
+	Vector2 &operator-=(const Vector2<T2> &vec) noexcept
 	{
 		this->x -= vec.x;
 		this->y -= vec.y;
@@ -107,7 +107,7 @@ public:
 	}
 
 	template<typename T2>
-	Vector2<T> &operator*=(T2 d) noexcept
+	Vector2 &operator*=(T2 d) noexcept
 	{
 		this->x *= d;
 		this->y *= d;
@@ -127,7 +127,7 @@ public:
 	}
 
 	template<typename T2>
-	Vector2<T> &operator/=(Vector2<T2> &b) noexcept
+	Vector2 &operator/=(Vector2<T2> &b) noexcept
 	{
 		this->x /= b.x;
 		this->y /= b.y;
@@ -141,7 +141,7 @@ public:
 	}
 
 	template<typename T2>
-	Vector2<T> &operator/=(T2 b) noexcept
+	Vector2 &operator/=(T2 b) noexcept
 	{
 		this->x /= b;
 		this->y /= b;
@@ -154,9 +154,9 @@ public:
 		return Vector2<decltype(this->x / b)>(this->x / b, this->y / b);
 	}
 
-	Vector2<T> operator-() const noexcept
+	Vector2 operator-() const noexcept
 	{
-		return Vector2<T>(-this->x, -this->y);
+		return Vector2(-this->x, -this->y);
 	}
 
 	template<typename T2>
@@ -191,7 +191,7 @@ public:
 		return Vector2<float>{this->y - p2.y, p2.x - this->x}.normalized();
 	}
 
-	Vector2<T> normalize() noexcept
+	Vector2 normalize() noexcept
 	{
 		double mag = this->magnitude();
 
@@ -200,24 +200,24 @@ public:
 		return *this;
 	}
 
-	[[nodiscard]] Vector2<T> normalized() const noexcept
+	[[nodiscard]] Vector2 normalized() const noexcept
 	{
 		T mag = this->magnitude();
 
-		return Vector2<T>(this->x / mag, this->y / mag);
+		return Vector2(this->x / mag, this->y / mag);
 	}
 
-	void project(const Vector2<T> &point) noexcept
+	void project(const Vector2 &point) noexcept
 	{
 		*this = this->projection(point);
 	}
 
-	[[nodiscard]] Vector2<float> projection(const Vector2<T> &point) const noexcept
+	[[nodiscard]] Vector2<float> projection(const Vector2 &point) const noexcept
 	{
-		return (point * this) / std::pow(this->magnitude(), 2) * *this;
+		return point * this / std::pow(this->magnitude(), 2) * *this;
 	}
 
-	void rotate(float angle, const Vector2<T> &center) noexcept
+	void rotate(float angle, const Vector2 &center) noexcept
 	{
 		if (angle == 0.f)
 			return;
@@ -230,7 +230,7 @@ public:
 		this->x = newX;
 	}
 
-	[[nodiscard]] Vector2<float> rotation(float angle, const Vector2<T> &center) const noexcept
+	[[nodiscard]] Vector2<float> rotation(float angle, const Vector2 &center) const noexcept
 	{
 		Vector2<float> result = *this;
 

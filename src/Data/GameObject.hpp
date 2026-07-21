@@ -155,7 +155,7 @@ protected:
 	unsigned _buildSpeed = -1;
 	unsigned _maxHp;
 	unsigned _hp;
-	unsigned _sight;
+	unsigned _sight = 0;
 	unsigned _limit = UINT32_MAX;
 	std::array<unsigned, 4> _gpTimer = {};
 	unsigned _asideCooldown = 0;
@@ -166,9 +166,10 @@ protected:
 	unsigned _idleTimer = 0;
 	unsigned _currentIdle = 0;
 	std::pair<unsigned, unsigned> _idleTimerRange;
-	int _power;
+	int _power = 0;
 	float _speed = 0;
-	unsigned char _tileCount = 5;
+	PFFreeMask _oldTilePosition;
+	PFFreeMask _currentTilePosition;
 	unsigned char _buildMaxDistance = 0;
 	mutable bool _cachedDebugTexLoaded = false;
 	bool _requiresQueueBuilding = true;
@@ -178,6 +179,7 @@ protected:
 	bool _pathCached = false;
 	bool _firstEvent = true;
 	bool _initGrid = false;
+	bool _stackable = false;
 	bool _solid = true;
 	bool _harvesting = false;
 	bool _fake = false;
@@ -194,7 +196,7 @@ protected:
 	bool _producing = false;
 	bool _produced = false;
 	bool _isPrimary = false;
-	bool _lowerPowerWhenDamaged;
+	bool _lowerPowerWhenDamaged = false;
 
 	GameObjectData(const Faction &base);
 	GameObjectData(const GameObjectData &);
@@ -287,6 +289,7 @@ public:
 	[[nodiscard]] unsigned getLimit() const;
 	[[nodiscard]] unsigned getPassFlags() const;
 	[[nodiscard]] bool isSolid() const;
+	[[nodiscard]] bool isStackable() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getCost() const;
 	[[nodiscard]] const std::set<Vector2i> &getCheckTiles() const;
 	[[nodiscard]] const std::optional<std::string> &getBuildQueue() const;
@@ -306,6 +309,7 @@ protected:
 	std::vector<ConditionalAnim> _idleAnims;
 	std::vector<ConditionalAnim> _harvestAnims;
 
+	[[nodiscard]] Vector2f _getTileOffsetFromCenter() const;
 	bool _updateTurn(unsigned target);
 	void _computeMovePath(Vector2i destination, bool ignoreSolid);
 	bool _tileAvailableFor(Vector2i tile) const;
@@ -313,7 +317,6 @@ protected:
 	CollisionResolution _resolveGridCollision(bool force);
 	CollisionResolution _resolveFreeCollision(bool force);
 	bool _updateMove(Vector2i pos, bool force);
-	bool _updateTargetMove(Vector2i pos, bool force);
 	bool _updateCheckMove(Vector2i pos, void (GameObject::*fail)());
 	bool _updateHarvest();
 	bool _updateDump(GameObject *place);

@@ -39,6 +39,8 @@ private:
 	unsigned char _debugGrid = 255;
 	bool _isDebugUnlocked = false;
 	bool _limitCamera = true;
+	bool _paused = false;
+	bool _forceStep = false;
 
 	template<typename T>
 	void _checkObjectLocked(const std::string &name, T &object, Player &owner);
@@ -67,12 +69,12 @@ public:
 	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePos);
 	const LoadedMap &getLoadedMap() const;
 	void consumeEvent(const sf::Event &event);
-	bool isAreaFree(const Vector2i &pos, const Vector2u &size, const std::vector<unsigned> &exclusion = {}) const;
+	bool isAreaFree(const Vector2i &pos, const Vector2u &size, const std::vector<unsigned> &exclusion = {}, bool stackable = false) const;
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
 	void registerObject(GameObject *o);
 	void deregisterObject(GameObject *o);
 	void modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic);
-	void modUnitInArea(const MapState::Quad &quad, PathFindingGrid &special, Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic);
+	void modUnitInArea(Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic);
 	std::optional<Vector2i> getFirstHarvestableTile(MapState &state, Vector2i pos) const;
 	std::optional<Vector2i> getClosestHarvestableTile(MapState &state, Vector2i pos) const;
 	GameObject *getClosestResourceDump(const std::vector<std::string> &preferredResources, size_t player, Vector2i pos);

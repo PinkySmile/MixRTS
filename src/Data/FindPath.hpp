@@ -6,6 +6,7 @@
 #define MIXRTS_FINDPATH_HPP
 
 
+#include <bit>
 #include <vector>
 #include <SFML/Graphics/Image.hpp>
 #include <SFML/Graphics/Texture.hpp>
@@ -26,18 +27,63 @@ struct PathFindingGrid {
 
 constexpr int PATHFINDING_FREE_NB_POS = 5;
 constexpr int PATHFINDING_FREE_BITS = 10;
-constexpr int PATHFINDING_FREE_OFFSET = ((sizeof(pfGridType) * 8) - PATHFINDING_FREE_BITS);
+constexpr int PATHFINDING_FREE_OFFSET = sizeof(pfGridType) * 8 - PATHFINDING_FREE_BITS;
 constexpr int PATHFINDING_FREE_MAX = (1 << (PATHFINDING_FREE_BITS - PATHFINDING_FREE_NB_POS)) - 1;
 constexpr int PATHFINDING_METADATA_MASK = (1 << PATHFINDING_FREE_OFFSET) - 1;
 constexpr int PFGRIDMASK_STATIC_BIT = 1 << 10;
 
-enum PFFreeMask {
+enum PFFreeMask : unsigned char {
+	PFFREEMASK_NONE         = 0,
 	PFFREEMASK_TOP_LEFT     = 1 << 0,
 	PFFREEMASK_TOP_RIGHT    = 1 << 1,
 	PFFREEMASK_BOTTOM_LEFT  = 1 << 2,
 	PFFREEMASK_BOTTOM_RIGHT = 1 << 3,
 	PFFREEMASK_MIDDLE       = 1 << 4
 };
+
+constexpr unsigned PATHFINDING_STACK_LIMIT = 5;
+constexpr pfGridType PFGRIDMASK_STACK_MASK =
+	PFFREEMASK_TOP_LEFT | PFFREEMASK_TOP_RIGHT |
+	PFFREEMASK_BOTTOM_LEFT | PFFREEMASK_BOTTOM_RIGHT |
+	PFFREEMASK_MIDDLE;
+
+inline unsigned PFGRIDMASK_STACK_COUNT(pfGridType tile)
+{
+	return std::popcount((tile >> PATHFINDING_FREE_OFFSET) & PFGRIDMASK_STACK_MASK);
+}
+inline unsigned PFGRIDMASK_STACK_COUNT(PathFindingGrid &g, unsigned x, unsigned y)
+{
+	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
+	return PFGRIDMASK_STACK_COUNT(g.grid[x + y * g.gridSize.x]);
+}
+inline PFFreeMask PFGRIDMASK_FIND_FREE_SLOT(pfGridType tile)
+{
+	static constexpr PFFreeMask slots[PATHFINDING_STACK_LIMIT] = {
+		PFFREEMASK_TOP_LEFT, PFFREEMASK_TOP_RIGHT,
+		PFFREEMASK_BOTTOM_LEFT, PFFREEMASK_BOTTOM_RIGHT,
+		PFFREEMASK_MIDDLE
+	};
+	pfGridType free = tile >> PATHFINDING_FREE_OFFSET;
+
+	for (auto slot : slots)
+		if (!(free & slot))
+			return slot;
+	return PFFREEMASK_NONE;
+}
+inline PFFreeMask PFGRIDMASK_FIND_FREE_SLOT(PathFindingGrid &g, unsigned x, unsigned y)
+{
+	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
+	return PFGRIDMASK_FIND_FREE_SLOT(g.grid[x + y * g.gridSize.x]);
+}
+inline bool PFGRIDMASK_IS_SLOT_FREE(pfGridType tile, PFFreeMask mask)
+{
+	return ((tile >> PATHFINDING_FREE_OFFSET) & mask) == 0;
+}
+inline bool PFGRIDMASK_IS_SLOT_FREE(PathFindingGrid &g, unsigned x, unsigned y, PFFreeMask mask)
+{
+	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
+	return PFGRIDMASK_IS_SLOT_FREE(g.grid[x + y * g.gridSize.x], mask);
+}
 
 inline bool PFGRIDMASK_IS_STATIC(pfGridType tile)
 {
@@ -110,13 +156,17 @@ inline Color __getPFDebugColor(pfGridType tile)
 
 inline void PFGRIDMASK_ADD_UNIT(PathFindingGrid &g, unsigned x, unsigned y, pfGridType mask)
 {
-	assert_exp(mask < PFFREEMASK_MIDDLE);
+	assert_exp(mask <= PFFREEMASK_MIDDLE);
 	if (mask == 0) {
 		assert_exp(PFGRIDMASK_FREE_NB(g, x, y) < PATHFINDING_FREE_MAX);
 		g.grid[x + y * g.gridSize.x] += (1 << (PATHFINDING_FREE_OFFSET + PATHFINDING_FREE_NB_POS));
 	} else {
-		assert_exp((g.grid[x + y * g.gridSize.x] & mask) == 0);
-		g.grid[x + y * g.gridSize.x] |= mask;
+		// mask is a local slot id (bits 0-4); shift it into the tile's
+		// "free" byte so it doesn't collide with the terrain pass-flag bits.
+		pfGridType bit = mask << PATHFINDING_FREE_OFFSET;
+
+		assert_exp((g.grid[x + y * g.gridSize.x] & bit) == 0);
+		g.grid[x + y * g.gridSize.x] |= bit;
 	}
 
 	sf::Color color = __getPFDebugColor(g.grid[x + y * g.gridSize.x]);
@@ -128,13 +178,15 @@ inline void PFGRIDMASK_ADD_UNIT(PathFindingGrid &g, unsigned x, unsigned y, pfGr
 }
 inline void PFGRIDMASK_DEL_UNIT(PathFindingGrid &g, unsigned x, unsigned y, pfGridType mask)
 {
-	assert_exp(mask < PFFREEMASK_MIDDLE);
+	assert_exp(mask <= PFFREEMASK_MIDDLE);
 	if (mask == 0) {
 		assert_exp(PFGRIDMASK_FREE_NB(g, x, y) != 0);
 		g.grid[x + y * g.gridSize.x] -= (1 << (PATHFINDING_FREE_OFFSET + PATHFINDING_FREE_NB_POS));
 	} else {
-		assert_exp((g.grid[x + y * g.gridSize.x] & mask) == mask);
-		g.grid[x + y * g.gridSize.x] &= mask;
+		pfGridType bit = mask << PATHFINDING_FREE_OFFSET;
+
+		assert_exp((g.grid[x + y * g.gridSize.x] & bit) == bit);
+		g.grid[x + y * g.gridSize.x] &= ~bit;
 	}
 
 	sf::Color color = __getPFDebugColor(g.grid[x + y * g.gridSize.x]);
