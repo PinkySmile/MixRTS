@@ -313,7 +313,7 @@ protected:
 	bool _updateTurn(unsigned target);
 	void _computeMovePath(Vector2i destination, bool ignoreSolid);
 	bool _tileAvailableFor(Vector2i tile) const;
-	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size);
+	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size) const;
 	CollisionResolution _resolveGridCollision(bool force);
 	CollisionResolution _resolveFreeCollision(bool force);
 	bool _updateMove(Vector2i pos, bool force);

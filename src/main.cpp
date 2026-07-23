@@ -81,12 +81,13 @@ int main()
 
 		mod.loadFactions("factions.json", factions);
 
-		std::vector<Faction> allFactions{
+		std::vector allFactions{
 			factions.at("d2k:atreides"),
 			factions.at("d2k:harkonen"),
 			factions.at("d2k:ordos")
 		};
-		bool b = false;
+		float timer = 0;
+		const float speed = 2.5;
 		GameManager manager{allFactions, 3};
 		auto &players = manager.getPlayers();
 		auto &map = manager.getLoadedMap();
@@ -109,15 +110,12 @@ int main()
 			for (size_t k = j + 1; k < numAreas; k++) {
 				if (k == spawn[0]) continue;
 
-				// Calculate total distance between spawn[0], j, and k
 				auto d01 = areas[spawn[0]].distance2(areas[j]); // P1 to P2
 				auto d02 = areas[spawn[0]].distance2(areas[k]); // P1 to P3
 				auto d12 = areas[j].distance2(areas[k]);        // P2 to P3
 
-				// Find the absolute weakest link (shortest distance) in this trio
 				auto currentMinDist = std::min({d01, d02, d12});
 
-				// Track the pair that maximizes the total distance
 				if (currentMinDist > maxDist) {
 					maxDist = currentMinDist;
 					bestJ = j;
@@ -135,7 +133,8 @@ int main()
 		players[1].setEnabled(false);
 		players[2].setEnabled(false);
 
-		//music.play();
+		music.play();
+		music.setLooping(true);
 		reloadViews(game->screen->getSize());
 		while (game->screen->isOpen()) {
 			while (auto event = game->screen->pollEvent()) {
@@ -156,15 +155,15 @@ int main()
 				game->gui.handleEvent(*event);
 			}
 
-			manager.update();
-			manager.update();
-			if (b)
+			timer += speed;
+			while (timer >= 1) {
 				manager.update();
-			b = !b;
+				timer -= 1;
+			}
 			manager.updateRender();
 			game->screen->clear(sf::Color{0x80, 0xFF, 0x40});
 			manager.render();
-			//displayGrid();
+
 			game->gui.draw();
 			manager.renderAbove();
 			dispFPS(clock.restart().asSeconds());

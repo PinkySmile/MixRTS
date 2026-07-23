@@ -754,7 +754,7 @@ bool GameObject::_tileAvailableFor(Vector2i tile) const
 	return PFGRIDMASK_STACK_COUNT(attrs) == 0;
 }
 
-GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size)
+GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size) const
 {
 	std::vector<GameObject *> objects;
 	GameObject *fallback = nullptr;
@@ -783,7 +783,6 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid)
 			this->_oldTilePosition = this->_currentTilePosition;
 			this->deinitGlobalGrid();
 			this->_currentTilePosition = PFGRIDMASK_FIND_FREE_SLOT(this->map->pathFindingGrid, nextTile.x, nextTile.y);
-			this->initGlobalGrid();
 			assert_exp(this->_currentTilePosition);
 		}
 		this->blockTimer = 0;
@@ -1381,6 +1380,8 @@ void GameObject::setPosition(const Vector2f &pos)
 	this->_position = pos;
 	if (this->_tiles)
 		this->_gridPos = this->map->absToTileCoord(pos);
+	else if (this->_stackable)
+		this->_gridPos = this->map->absToTileCoord(pos - this->_getTileOffsetFromCenter());
 	else
 		this->_gridPos = this->map->absToTileCoord(pos + this->_size / 2);
 	this->initGlobalGrid();
