@@ -101,6 +101,8 @@ GameObject::GameObject(const GameObject &g) :
 
 	if (g._buildAnim)
 		this->_buildAnim.emplace(*this, *g._buildAnim);
+	if (g._crushAnim)
+		this->_crushAnim.emplace(*this, *g._crushAnim);
 	if (g._producingAnim)
 		this->_producingAnim.emplace(*this, *g._producingAnim);
 	if (g._producedAnim)
@@ -192,6 +194,8 @@ GameObject::GameObject(
 	assert_exp(!json.contains("producing_anim") || json["producing_anim"].is_null() || json["producing_anim"].is_object());
 	assert_exp(!json.contains("produced_anim") || json["produced_anim"].is_null() || json["produced_anim"].is_object());
 	assert_exp(!json.contains("stackable") || json["stackable"].is_boolean());
+	assert_exp(!json.contains("crush_sound") || json["crush_sound"].is_string());
+	assert_exp(!json.contains("can_crush") || json["can_crush"].is_boolean());
 	if (json.contains("anim_idles")) {
 		assert_exp(json["anim_idles"].is_array());
 		for (size_t i = 0; i < json["anim_idles"].size(); i++)
@@ -375,6 +379,8 @@ GameObject::GameObject(
 		this->_proxy = json["proxy"];
 	if (json.contains("stackable"))
 		this->_stackable = json["stackable"];
+	if (json.contains("can_crush"))
+		this->_canCrush = json["can_crush"];
 	if (json.contains("speed"))
 		this->_speed = json["speed"];
 	if (json.contains("gives_queue"))
@@ -383,6 +389,8 @@ GameObject::GameObject(
 		this->_storage = json["storage"];
 	if (json.contains("build_anim") && !json["build_anim"].is_null())
 		this->_buildAnim.emplace(*this, animList, json["build_anim"]);
+	if (json.contains("crush_anim") && !json["crush_anim"].is_null())
+		this->_crushAnim.emplace(*this, animList, json["crush_anim"]);
 	if (json.contains("producing_anim") && !json["producing_anim"].is_null())
 		this->_producingAnim.emplace(*this, animList, json["producing_anim"]);
 	if (json.contains("produced_anim") && !json["produced_anim"].is_null())
@@ -412,6 +420,12 @@ GameObject::GameObject(
 
 		assert_msg(sounds.contains(buildSound), buildSound);
 		this->_buildSound = &sounds.at(buildSound);
+	}
+	if (json.contains("crush_sound")) {
+		auto crushSound = RESOURCE(base.getName(), json["crush_sound"]);
+
+		assert_msg(sounds.contains(crushSound), crushSound);
+		this->_crushSound = &sounds.at(crushSound);
 	}
 	if (json.contains("pass_flags")) {
 		if (json["pass_flags"].is_string()) {
@@ -563,6 +577,7 @@ struct ObstructionContext {
 	Vector2u hitBoxSize;
 	const PathFindingGrid *grid;
 	bool stackable;
+	bool canCrush;
 };
 
 static bool IsPathObstructedTerrain(Vector2i p, void *ctx)
@@ -605,12 +620,7 @@ static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 			if (!(attrs & octx->mask) || PFGRIDMASK_IS_STATIC(attrs))
 				return true;
 
-			auto stackCount = PFGRIDMASK_STACK_COUNT(attrs);
 
-			if (!octx->stackable && stackCount != 0)
-				return true;
-			if (octx->stackable && stackCount >= PATHFINDING_STACK_LIMIT)
-				return true;
 		}
 	return false;
 }
@@ -624,7 +634,13 @@ static float GetTileCostMovableUnits(Vector2i p, void *ctx)
 		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
 			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
 
-			if (PFGRIDMASK_FREE_NB(attrs) != 0)
+			auto stackCount = PFGRIDMASK_STACK_COUNT(attrs);
+
+			if (
+				(!octx->stackable && stackCount != 0) ||
+				(octx->stackable && stackCount >= PATHFINDING_STACK_LIMIT) ||
+				PFGRIDMASK_FREE_NB(attrs) != 0
+			)
 				cost += PATH_UNIT_PENALTY;
 		}
 	return cost;
@@ -708,6 +724,7 @@ void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid)
 
 	ctx.mask = this->_passFlags;
 	ctx.stackable = this->_stackable;
+	ctx.canCrush = this->_canCrush;
 	if (this->_boundToGrid) {
 		ctx.hitBoxSize = {1, 1};
 		ctx.grid = &this->map->pathFindingGrid;
@@ -803,9 +820,14 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid)
 
 		if (!blocker || !blocker->canMove())
 			return COLLISION_PROCEED;
-		if (blocker->moveAside(this)) {
-			this->blockTimer = 1;
-			return COLLISION_WAIT;
+		if (blocker->owner->state.team == this->owner->state.team) {
+			if (blocker->moveAside(this)) {
+				this->blockTimer = 1;
+				return COLLISION_WAIT;
+			}
+		} else if (blocker->isCrushable() && this->_canCrush) {
+			blocker->crushedBy(this);
+			return COLLISION_PROCEED;
 		}
 
 		saved = this->_pathCache;
@@ -832,10 +854,18 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid)
 
 		GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize);
 
-		if (blocker == nullptr || !blocker->canMove() || !blocker->moveAside(this))
+		if (blocker == nullptr || !blocker->canMove())
 			return COLLISION_ABORT;
-		this->blockTimer = 1;
-		return COLLISION_WAIT;
+		if (blocker->owner->state.team == this->owner->state.team) {
+			if (!blocker->moveAside(this))
+				return COLLISION_ABORT;
+			this->blockTimer = 1;
+			return COLLISION_WAIT;
+		} else if (blocker->isCrushable() && this->_canCrush) {
+			blocker->crushedBy(this);
+			return COLLISION_PROCEED;
+		}
+		return COLLISION_ABORT;
 	}
 }
 
@@ -1216,6 +1246,11 @@ void GameObject::playBuiltSound() const
 
 void GameObject::update()
 {
+	if (this->_crushed) {
+		if (this->_crushAnim->update())
+			this->_disposable = true;
+		return;
+	}
 	this->_moving = false;
 	if (!this->_orderQueue.empty()) {
 		if (this->_firstEvent) {
@@ -1329,6 +1364,11 @@ void GameObject::drawSkirt() const
 
 void GameObject::render(int layer)
 {
+	if (this->_crushed) {
+		if ((*this->_crushAnim)() && this->_crushAnim->getLayer() == layer)
+			this->_displayAnim(this->_crushAnim->getAnim());
+		return;
+	}
 	if (layer == -1)
 		this->drawSkirt();
 	if (!this->_building || !this->_buildAnim || this->_buildAnim->current() >= this->_showAfterBuild) {
@@ -1376,6 +1416,7 @@ void GameObject::render(int layer)
 void GameObject::setPosition(const Vector2f &pos)
 {
 	// OPTIMIZE: Diff instead of undoing it and redoing it
+	this->manager->deregisterObject(this);
 	this->deinitGlobalGrid();
 	this->_position = pos;
 	if (this->_tiles)
@@ -1385,6 +1426,7 @@ void GameObject::setPosition(const Vector2f &pos)
 	else
 		this->_gridPos = this->map->absToTileCoord(pos + this->_size / 2);
 	this->initGlobalGrid();
+	this->manager->registerObject(this);
 }
 
 void GameObject::setColor(const HSLColor &color)
@@ -1787,7 +1829,6 @@ void GameObject::initGlobalGrid()
 				!this->canMove()
 			);
 	}
-	this->manager->registerObject(this);
 	this->_initGrid = true;
 }
 
@@ -1840,7 +1881,6 @@ void GameObject::deinitGlobalGrid()
 				!this->canMove()
 			);
 	}
-	this->manager->deregisterObject(this);
 	this->_initGrid = false;
 }
 
@@ -1857,6 +1897,15 @@ std::optional<float> GameObject::getStorageDisplay() const
 		percent += static_cast<float>(this->owner->state.money[key]) / this->owner->state.totalStorage[key];
 	percent /= this->_storage.size();
 	return percent;
+}
+
+void GameObject::crushedBy(GameObject *)
+{
+	this->deinitGlobalGrid();
+	this->_hp = 0;
+	this->_crushSound->play();
+	this->_crushed = true;
+	this->_solid = false;
 }
 
 bool GameObject::isSolid() const
@@ -2031,6 +2080,11 @@ const std::optional<std::string> &GameObject::getGivenQueue() const
 unsigned char GameObject::getBuildMaxDistance() const
 {
 	return this->_buildMaxDistance;
+}
+
+bool GameObject::isCrushable() const
+{
+	return this->_crushSound != nullptr;
 }
 
 bool GameObject::isSelectable() const

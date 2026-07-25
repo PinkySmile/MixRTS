@@ -116,6 +116,7 @@ public:
 
 protected:
 	std::reference_wrapper<const Faction> _base;
+	const MultiSound *_crushSound = nullptr;
 	const MultiSound *_buildSound = nullptr;
 	const MultiSound *_doSound = nullptr;
 	const MultiSound *_selectSound = nullptr;
@@ -184,6 +185,7 @@ protected:
 	bool _harvesting = false;
 	bool _fake = false;
 	bool _central = false;
+	bool _canCrush = false;
 	// TODO: Find a better way to do this
 	bool _dumpStop = false;
 	bool _dumpStart = false;
@@ -195,6 +197,7 @@ protected:
 	bool _building = false;
 	bool _producing = false;
 	bool _produced = false;
+	bool _crushed = false;
 	bool _isPrimary = false;
 	bool _lowerPowerWhenDamaged = false;
 
@@ -226,6 +229,7 @@ public:
 	virtual void deinitGlobalGrid();
 	virtual std::optional<float> getStorageDisplay() const;
 
+	void crushedBy(GameObject *crusher);
 	unsigned getBottom() const;
 	void drawSkirt() const;
 	void setDirection(float angle);
@@ -251,6 +255,7 @@ public:
 
 	[[nodiscard]] int getPower() const;
 	[[nodiscard]] unsigned char getBuildMaxDistance() const;
+	[[nodiscard]] bool isCrushable() const;
 	[[nodiscard]] bool isSelectable() const;
 	[[nodiscard]] bool isSellable() const;
 	[[nodiscard]] bool isRepairable() const;
@@ -299,6 +304,7 @@ protected:
 	std::optional<DumpInfo> _dump;
 	std::vector<std::vector<ConditionalAnim>> _anims;
 	std::optional<ConditionalAnim> _buildAnim;
+	std::optional<ConditionalAnim> _crushAnim;
 	std::optional<ConditionalAnim> _producingAnim;
 	std::optional<ConditionalAnim> _producedAnim;
 	std::vector<ConditionalAnim> _moveAnim;
