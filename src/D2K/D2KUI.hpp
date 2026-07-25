@@ -20,6 +20,8 @@
 
 class D2KUI : public UI {
 private:
+	std::string _prefix;
+
 	tgui::Button::Ptr _resumeGame;
 	tgui::Panel::Ptr _power;
 	tgui::Button::Ptr _sell;

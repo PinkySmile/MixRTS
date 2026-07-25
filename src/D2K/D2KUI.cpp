@@ -250,18 +250,18 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 		game->paused = false;
 	});
 
-	const std::string &prefix = params["cameo_prefix"];
 	auto start = faction.getBase().getName();
 
+	this->_prefix = params["cameo_prefix"];
 	start.push_back(':');
 	for (const auto &entry : std::filesystem::directory_iterator(base / "cameos")) {
 		const auto &entryPath = entry.path();
 		auto name = entryPath.filename().stem().string().substr(2);
 
-		if (name.size() >= prefix.size() && name[prefix.size()] == '_') {
-			if (!name.starts_with(prefix))
+		if (name.size() >= this->_prefix.size() && name[this->_prefix.size()] == '_') {
+			if (!name.starts_with(this->_prefix))
 				continue;
-			name = name.substr(prefix.size() + 1);
+			name = name.substr(this->_prefix.size() + 1);
 		}
 		this->_cameos[start + name] = tgui::Texture{entryPath.native(), {}, {}, true};
 	}
@@ -323,6 +323,8 @@ bool D2KUI::_hasUpgrades()
 }
 
 static void updateList(
+	const std::string &prefix,
+	const std::string &modName,
 	const std::filesystem::path &base,
 	const std::unordered_map<std::string, PlayerQueue> &list,
 	const std::vector<std::string> &order,
@@ -351,7 +353,19 @@ static void updateList(
 		panel->removeAllWidgets();
 		added.clear();
 		for (auto &b : order) {
-			auto it = list.find(b);
+			std::string realName;
+			std::string name = b.substr(b.find(':') + 1);
+
+			if (name == "barr" || name == "lfac" || name == "hfac") {
+				realName = modName;
+				realName.push_back(':');
+				realName += prefix;
+				realName.push_back('_');
+				realName += name;
+			} else
+				realName = b;
+
+			auto it = list.find(realName);
 
 			if (it == list.end() || !it->second.unlocked)
 				continue;
@@ -364,31 +378,43 @@ static void updateList(
 				std::string pos;
 
 				pos.reserve(21 + 6);
-				pos += "cameo";
+				pos += "cameo_";
 				pos += last;
-				pos += ".y + cameo";
+				pos += ".y + cameo_";
 				pos += last;
 				pos += ".h - 1"; // "cameo" + last + ".y + cameo" + last + ".h - 1"
 				pic->setPosition({0, tgui::Layout{pos}});
 			}
 			last = b;
 			pic->setSize("&.w", size.y + 1);
-			pic->onMousePress([queueCb, b]{ queueCb(b, false); });
-			pic->onRightMousePress([queueCb, b]{ queueCb(b, true); });
+			pic->onMousePress([queueCb, realName]{ queueCb(realName, false); });
+			pic->onRightMousePress([queueCb, realName]{ queueCb(realName, true); });
 			r->setTexture(cameos[b]);
-			panel->add(pic, "cameo" + b);
-			added.push_back(b);
+			panel->add(pic, "cameo_" + b);
+			added.push_back(realName);
 		}
 		panel->getVerticalScrollbar()->setValue(scroll);
 	}
 
 	for (auto &b : order) {
-		auto it = list.find(b);
+		std::string realName;
+		std::string name = b.substr(b.find(':') + 1);
+
+		if (name == "barr" || name == "lfac" || name == "hfac") {
+			realName = modName;
+			realName.push_back(':');
+			realName += prefix;
+			realName.push_back('_');
+			realName += name;
+		} else
+			realName = b;
+
+		auto it = list.find(realName);
 
 		if (it == list.end() || !it->second.unlocked)
 			continue;
 
-		auto w = panel->get<D2KCameo>("cameo" + std::string(b));
+		auto w = panel->get<D2KCameo>("cameo_" + b);
 
 		w->setOnHold(it->second.paused);
 		if (!it->second.buildable) {
@@ -613,6 +639,8 @@ void D2KUI::update()
 	}
 
 	updateList(
+		this->_prefix,
+		this->_faction.getBase().getName(),
 		this->_faction.getBase().getBase(),
 		bQueue, this->_buildOrder,
 		this->_buildQueue, this->_buildQueueAdded,
