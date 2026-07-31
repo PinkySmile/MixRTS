@@ -42,6 +42,9 @@ public:
 		EVA_CASH_DOWN,
 		EVA_REQUIRE_STORAGE,
 		EVA_ALREADY_BUILDING,
+		EVA_POWER_OFF,
+		EVA_POWER_ON,
+		EVA_RADAR_UP,
 		EVA_COUNT
 	};
 	enum Cursor {
@@ -191,7 +194,11 @@ protected:
 	std::array<std::string, CURSOR_COUNT> _cursorMapping;
 	std::unordered_map<std::string, CursorAnimation> _cursors;
 	Cursor _cursor = CURSOR_NORMAL;
+	Vector2f _minimapPos;
+	Vector2f _minimapSize;
 	bool _enabled = false;
+	bool _hasLowPower = false;
+	bool _hasRadar = false;
 };
 
 

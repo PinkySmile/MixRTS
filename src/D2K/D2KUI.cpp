@@ -92,6 +92,9 @@ void D2KUI::_loadEvaSounds(const std::filesystem::path &base, const std::string 
 	this->_evaSounds[EVA_REQUIRE_STORAGE]  = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "silo_needed.ogg");
 	this->_evaSounds[EVA_CASH_DOWN]        = std::make_unique<sf::SoundBuffer>(base / "sounds/CASHTIK1.ogg");
 	this->_evaSounds[EVA_CASH_UP]          = std::make_unique<sf::SoundBuffer>(base / "sounds/CASHTIK1.ogg");
+	this->_evaSounds[EVA_POWER_OFF]        = std::make_unique<sf::SoundBuffer>(base / "sounds/POWRDN1.ogg");
+	this->_evaSounds[EVA_POWER_ON]         = std::make_unique<sf::SoundBuffer>(base / "sounds/POWRUP1.ogg");
+	this->_evaSounds[EVA_RADAR_UP]         = std::make_unique<sf::SoundBuffer>(base / "sounds/RADRON1.ogg");
 }
 
 D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nlohmann::json &params) :
@@ -622,6 +625,18 @@ static void updateList3(
 void D2KUI::update()
 {
 	UI::update();
+	this->_minimapPos = this->_blazon->getPosition();
+	this->_minimapSize = this->_blazon->getSize();
+	if (this->ownerState->hasRadar) {
+		this->_blazon->getRenderer()->setOpacity(0);
+	} else {
+		float opacity = this->_blazon->getRenderer()->getOpacity();
+
+		opacity += 0.025;
+		if (opacity >= 1)
+			opacity = 1;
+		this->_blazon->getRenderer()->setOpacity(opacity);
+	}
 
 	unsigned credits = std::min(99999999U, this->ownerState->getCombinedMoney("base:credits"));
 	auto &bQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":building"];

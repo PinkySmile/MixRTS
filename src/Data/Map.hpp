@@ -84,8 +84,10 @@ struct MapMetadata {
 	std::unordered_map<unsigned, MapResource> resources;
 	std::map<Vector2u, std::vector<unsigned>> skirtsConcrete;
 	std::map<Vector2u, std::vector<unsigned>> skirts;
+	std::vector<sf::Color> mapColors;
 
 	void load(Mod &mod, const std::filesystem::path &path);
+	void loadColors(const std::filesystem::path &path);
 };
 
 struct LoadedMap {
@@ -94,6 +96,8 @@ struct LoadedMap {
 	PathFindingGrid pathFindingGrid;
 	std::vector<uint32_t> originalIndices;
 	std::vector<uint32_t> displayedIndices;
+	sf::Image minimap;
+	std::vector<std::vector<uint8_t>> usedSpaces;
 	//std::vector<std::set<GameObject *>> quadrants;
 	//std::vector<std::unique_ptr<GameObject>> mapObjects;
 	//std::vector<ResourcePatch> resources;

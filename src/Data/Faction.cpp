@@ -18,6 +18,8 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	assert_exp(data.contains("can_repair") && data["can_repair"].is_boolean());
 	assert_exp(data.contains("regress_tech") && data["regress_tech"].is_boolean());
 	assert_exp(!data.contains("primary_queue") || data["primary_queue"].is_string());
+	assert_exp(data.contains("has_radar") && data["has_radar"].is_boolean());
+	assert_exp(data.contains("radar_powered") && data["radar_powered"].is_boolean());
 
 	assert_exp(data.contains("sounds") && data["sounds"].is_array());
 	for (size_t i = 0; i < data["sounds"].size(); i++)
@@ -77,6 +79,8 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	this->_startingMoney = data["starting_money"];
 	this->_uiData = data["ui"];
 	this->_regressTech = data["regress_tech"];
+	this->_hasRadar = data["has_radar"];
+	this->_radarPowered = data["radar_powered"];
 
 	if (data.contains("primary_queue"))
 		this->_primaryQueue = data["primary_queue"].get<std::string>();
@@ -178,6 +182,16 @@ bool Faction::canRepair() const
 bool Faction::regressTech() const
 {
 	return this->_regressTech;
+}
+
+bool Faction::hasRadar() const
+{
+	return this->_hasRadar;
+}
+
+bool Faction::isRadarPowered() const
+{
+	return this->_radarPowered;
 }
 
 const std::string &Faction::getName() const

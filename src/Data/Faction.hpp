@@ -38,6 +38,8 @@ private:
 	bool _regressTech;
 	bool _canSell;
 	bool _canRepair;
+	bool _hasRadar;
+	bool _radarPowered;
 
 public:
 	enum CursorIndex {
@@ -60,6 +62,8 @@ public:
 	[[nodiscard]] bool canSell() const;
 	[[nodiscard]] bool canRepair() const;
 	[[nodiscard]] bool regressTech() const;
+	[[nodiscard]] bool hasRadar() const;
+	[[nodiscard]] bool isRadarPowered() const;
 	[[nodiscard]] const std::string &getName() const;
 };
 

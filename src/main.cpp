@@ -83,7 +83,7 @@ int main()
 
 		std::vector allFactions{
 			factions.at("d2k:atreides"),
-			factions.at("d2k:harkonen"),
+			factions.at("d2k:harkonnen"),
 			factions.at("d2k:ordos")
 		};
 		float timer = 0;

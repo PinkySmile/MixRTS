@@ -51,6 +51,7 @@ private:
 	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1}, bool drawGrid = false);
 	void _initObject(MapState &map, Player &owner, GameObject &obj, const std::string &id);
 	void _onObjectSpawned(Vector2i pos, GameObject &obj);
+	void _modUnitInArea(const MapState::Quad &quad, LoadedMap &state, Vector2u tileSize, size_t player, char mod);
 	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, size_t team, char mod, bool isStatic, bool crushable);
 	void _pushOrder(GameObject &obj, const std::string &order);
 
@@ -62,6 +63,7 @@ public:
 	void updateRender();
 	void render();
 	void renderAbove();
+	void renderMinimap(Vector2f pos, Vector2u size);
 	std::vector<Player> &getPlayers();
 	const std::vector<Faction> &getFactions() const;
 	GameObject *getObjectById(unsigned index);
@@ -73,8 +75,8 @@ public:
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
 	void registerObject(GameObject *o);
 	void deregisterObject(GameObject *o);
-	void modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable);
-	void modUnitInArea(Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable);
+	void modUnitInArea(const MapState::Quad &quad, size_t player, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable);
+	void modUnitInArea(Vector2i rel, Vector2u tileSize, size_t player, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable);
 	std::optional<Vector2i> getFirstHarvestableTile(MapState &state, Vector2i pos) const;
 	std::optional<Vector2i> getClosestHarvestableTile(MapState &state, Vector2i pos) const;
 	GameObject *getClosestResourceDump(const std::vector<std::string> &preferredResources, size_t player, Vector2i pos);

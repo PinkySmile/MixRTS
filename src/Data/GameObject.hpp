@@ -186,6 +186,7 @@ protected:
 	bool _fake = false;
 	bool _central = false;
 	bool _canCrush = false;
+	bool _isRadar = false;
 	// TODO: Find a better way to do this
 	bool _dumpStop = false;
 	bool _dumpStart = false;
@@ -255,6 +256,7 @@ public:
 
 	[[nodiscard]] int getPower() const;
 	[[nodiscard]] unsigned char getBuildMaxDistance() const;
+	[[nodiscard]] bool isRadar() const;
 	[[nodiscard]] bool isCrushable() const;
 	[[nodiscard]] bool isSelectable() const;
 	[[nodiscard]] bool isSellable() const;

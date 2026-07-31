@@ -412,6 +412,44 @@ void GameManager::renderAbove()
 	}
 }
 
+void GameManager::renderMinimap(Vector2f pos, Vector2u size)
+{
+	Vector2f rsize;
+	Vector2f rpos;
+	sf::Image result = this->_map.minimap;
+
+	if (this->_map.grid.gridSize.x < this->_map.grid.gridSize.y) {
+		rsize.x = size.x * this->_map.grid.gridSize.x / this->_map.grid.gridSize.y;
+		rsize.y = size.y;
+	} else {
+		rsize.x = size.x;
+		rsize.y = size.y * this->_map.grid.gridSize.y / this->_map.grid.gridSize.x;
+	}
+	rpos.x = pos.x + (size.x - rsize.x) / 2;
+	rpos.y = pos.y + (size.y - rsize.y) / 2;
+
+	for (unsigned y = 0; y < this->_map.grid.gridSize.y; y++)
+		for (unsigned x = 0; x < this->_map.grid.gridSize.x; x++)
+			for (size_t player = 0; player < this->_players.size(); player++)
+				if (this->_map.usedSpaces[player][this->_map.grid.gridSize.x * y + x]) {
+					auto c = this->_players[player].getColor();
+
+					c.l /= 2;
+					result.setPixel({x, y}, c.toRGB());
+					break;
+				}
+
+	sf::Texture texture{result};
+	sf::Sprite sprite{texture};
+
+	sprite.setPosition(rpos);
+	sprite.setScale({
+		rsize.x / texture.getSize().x,
+		rsize.y / texture.getSize().y
+	});
+	game->screen->draw(sprite);
+}
+
 std::vector<Player> &GameManager::getPlayers()
 {
 	return this->_players;
@@ -592,6 +630,8 @@ void GameManager::_initObject(MapState &map, Player &owner, GameObject &obj, con
 	if (group != id)
 		++owner.state.elementsOwned[id];
 	owner.state.myObjects.emplace_back(&obj);
+	if (obj.isRadar())
+		owner.state.radars.emplace_back(&obj);
 
 	this->_objectMap[this->_lastObjectId++] = &obj;
 }
@@ -843,6 +883,30 @@ void GameManager::deregisterObject(GameObject *o)
 		l.erase(it);
 }
 
+
+void GameManager::_modUnitInArea(const MapState::Quad &quad, LoadedMap &map, Vector2u tileSize, size_t player, char mod)
+{
+	// TODO: Handle non-square grids
+	Vector2i minv = {
+		static_cast<int>(floor(std::min(std::min(quad.pt1.x, quad.pt2.x), std::min(quad.pt3.x, quad.pt4.x)) / tileSize.x)),
+		static_cast<int>(floor(std::min(std::min(quad.pt1.y, quad.pt2.y), std::min(quad.pt3.y, quad.pt4.y)) / tileSize.y))
+	};
+	Vector2i maxv = {
+		static_cast<int>(ceil(std::max(std::max(quad.pt1.x, quad.pt2.x), std::max(quad.pt3.x, quad.pt4.x)) / tileSize.x)),
+		static_cast<int>(ceil(std::max(std::max(quad.pt1.y, quad.pt2.y), std::max(quad.pt3.y, quad.pt4.y)) / tileSize.y))
+	};
+
+	for (int y = std::max(minv.y, 0); y < std::min<int>(maxv.y, map.grid.gridSize.y); y++)
+		for (int x = std::max(minv.x, 0); x < std::min<int>(maxv.x, map.grid.gridSize.x); x++)
+			if (mod < 0) {
+				assert_exp(map.usedSpaces[player][x + y * map.grid.gridSize.x] != 0);
+				map.usedSpaces[player][x + y * map.grid.gridSize.x]--;
+			} else if (mod > 0) {
+				assert_exp(map.usedSpaces[player][x + y * map.grid.gridSize.x] < UINT8_MAX);
+				map.usedSpaces[player][x + y * map.grid.gridSize.x]++;
+			}
+}
+
 void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, size_t team, char mod, bool isStatic, bool crushable)
 {
 	// TODO: Handle non-square grids
@@ -876,8 +940,11 @@ void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &st
 			}
 }
 
-void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable)
+void GameManager::modUnitInArea(const MapState::Quad &quad, size_t player, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable)
 {
+	size_t team = this->_players[player].state.team;
+
+	this->_modUnitInArea(quad, this->_map, this->_map.grid.tileSize, player, mod);
 	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, team, mod, isStatic, crushable);
 	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, team, mod, isStatic, crushable);
 	for (auto &map : this->_mapStates)
@@ -889,7 +956,7 @@ void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int pla
 	}
 }
 
-void GameManager::modUnitInArea(Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable)
+void GameManager::modUnitInArea(Vector2i rel, Vector2u tileSize, size_t player, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable)
 {
 	const MapState::Quad quad = {
 		rel,
@@ -897,7 +964,9 @@ void GameManager::modUnitInArea(Vector2i rel, Vector2u tileSize, size_t team, in
 		Vector2f(rel.x + tileSize.x, rel.y + tileSize.y),
 		Vector2f(rel.x, rel.y + tileSize.y),
 	};
+	size_t team = this->_players[player].state.team;
 
+	this->_modUnitInArea(quad, this->_map, this->_map.grid.tileSize, player, mod);
 	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, team, mod, isStatic, crushable);
 	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, team, mod, isStatic, crushable);
 	for (auto &map : this->_mapStates)

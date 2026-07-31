@@ -53,6 +53,28 @@ MapResource::MapResource(const std::filesystem::path &folder, const nlohmann::js
 	}
 }
 
+void MapMetadata::loadColors(const std::filesystem::path &path)
+{
+	std::ifstream stream{ path };
+	unsigned char count;
+	std::vector<sf::Color> colors;
+	size_t totalSize = std::filesystem::file_size(path);
+
+	stream.read(reinterpret_cast<char *>(&count), 1);
+	colors.resize(count);
+	for (size_t i = 0; i < count; i++) {
+		stream.read(reinterpret_cast<char *>(&colors[i].b), 1);
+		stream.read(reinterpret_cast<char *>(&colors[i].g), 1);
+		stream.read(reinterpret_cast<char *>(&colors[i].r), 1);
+		colors[i].a = 255;
+	}
+	this->mapColors.reserve(totalSize - stream.tellg());
+	while (stream.read(reinterpret_cast<char *>(&count), 1)) {
+		assert_exp(count < colors.size());
+		this->mapColors.push_back(colors[count]);
+	}
+}
+
 void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 {
 	std::ifstream streamMeta{path};
@@ -60,12 +82,14 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 
 	assert_msg(streamMeta, path.string());
 	streamMeta >> json;
+	assert_exp(json.contains("map_colors") && json["map_colors"].is_string());
 	assert_exp(json.contains("animations") && json["animations"].is_array());
 	assert_exp(json.contains("generators") && json["generators"].is_array());
 	assert_exp(json.contains("resources") && json["resources"].is_array());
 	assert_exp(!json.contains("skirts_conc") || json["skirts"].is_object());
 	assert_exp(json.contains("skirts") && json["skirts"].is_object());
 
+	this->loadColors(path.parent_path() / json["map_colors"].get<std::string>());
 	for (size_t i = 0; i < json["animations"].size(); i++) {
 		auto &anim = json["animations"][i];
 
@@ -185,6 +209,10 @@ void LoadedMap::load(Mod &mod, const std::filesystem::path &path)
 	}
 	this->grid.grid.resize(this->grid.gridSize.x * this->grid.gridSize.y);
 	this->originalIndices.resize(this->grid.gridSize.x * this->grid.gridSize.y);
+	this->usedSpaces.resize(MAX_TEAM_COUNT);
+	for (auto &s : this->usedSpaces)
+		s.resize(this->grid.gridSize.x * this->grid.gridSize.y, 0);
+	this->minimap.resize(this->grid.gridSize);
 
 	std::string tileset = json["tileset"].get<std::string>();
 
@@ -341,6 +369,7 @@ void LoadedMap::refreshTile(unsigned int x, unsigned int y, bool commit, bool re
 			break;
 		}
 	}
+	this->minimap.setPixel({x, y}, this->metadata.mapColors[index]);
 	if (index != old && reload) {
 		this->refreshTile(x - 1, y - 1, false, true);
 		this->refreshTile(x - 1, y, false, true);

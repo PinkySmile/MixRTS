@@ -13,6 +13,7 @@ UI::UI(const Faction &faction) :
 	_faction(faction),
 	_evaSound(game->dummySoundBuffer)
 {
+	this->_hasRadar = faction.hasRadar();
 	this->_panel->getRenderer()->setBackgroundColor(tgui::Color::Transparent);
 }
 
@@ -45,7 +46,7 @@ std::optional<UI::Event> UI::pollEvent()
 	return result;
 }
 
-void UI::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &)
+void UI::playEVA(EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &)
 {
 	if (!this->_enabled)
 		return;
@@ -78,7 +79,18 @@ void UI::update()
 		anim[2] = (anim[2] + 1) % placement[2].size();
 	}
 	this->_updateCursor();
+	if (this->ownerState->hasRadar != this->_hasRadar) {
+		this->_hasRadar = this->ownerState->hasRadar;
+		if (this->_hasRadar)
+			this->playEVA(EVA_RADAR_UP, 300, 1, 0);
+	}
 
+	bool lowPower = this->ownerState->consumedPower > this->ownerState->producedPower;
+
+	if (lowPower != this->_hasLowPower) {
+		this->_hasLowPower = lowPower;
+		this->playEVA(lowPower ? EVA_POWER_OFF : EVA_POWER_ON, 300, 1, 0);
+	}
 	this->_settings->setVisible(game->paused);
 	for (auto &i : this->_evaCooldown)
 		if (i)
@@ -149,6 +161,20 @@ CursorAnimation &UI::getCurrentCursor()
 void UI::renderAbove()
 {
 	this->getCurrentCursor().render();
+
+	if (this->ownerState->hasRadar) {
+		sf::View oldView = game->screen->getView();
+		tgui::FloatRect newView = game->gui.getView().getRect();
+
+		game->screen->setView(sf::View{
+			sf::FloatRect{
+				sf::Vector2f{newView.left, newView.top},
+				sf::Vector2f{newView.width, newView.height}
+			}
+		});
+		this->manager->renderMinimap(this->_minimapPos, this->_minimapSize);
+		game->screen->setView(oldView);
+	}
 }
 
 void UI::updateRender()

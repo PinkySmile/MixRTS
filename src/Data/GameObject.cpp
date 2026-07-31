@@ -196,6 +196,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("stackable") || json["stackable"].is_boolean());
 	assert_exp(!json.contains("crush_sound") || json["crush_sound"].is_string());
 	assert_exp(!json.contains("can_crush") || json["can_crush"].is_boolean());
+	assert_exp(!json.contains("radar") || json["radar"].is_boolean());
 	if (json.contains("anim_idles")) {
 		assert_exp(json["anim_idles"].is_array());
 		for (size_t i = 0; i < json["anim_idles"].size(); i++)
@@ -336,6 +337,8 @@ GameObject::GameObject(
 		this->_sight = json["sight"];
 	if (json.contains("fake"))
 		this->_fake = json["fake"];
+	if (json.contains("radar"))
+		this->_isRadar = json["radar"];
 	if (json.contains("spawn"))
 		this->_extraSpawn = {
 			RESOURCE(base.getName(), json["spawn"]["unit"]),
@@ -645,11 +648,11 @@ static float GetTileCostMovableUnits(Vector2i p, void *ctx)
 						break;
 					}
 				}
-			if (occupied) {
-				if (!octx->canCrush || PFGRIDMASK_GET_NON_CRUSHABLE(attrs) != 0)
+			if (occupied && octx->canCrush) {
+				if (PFGRIDMASK_GET_NON_CRUSHABLE(attrs) != 0)
 					cost += PATH_UNIT_PENALTY;
 			} else if (!octx->stackable) {
-				if (stackCount != 0)
+				if (stackCount != 0 || PFGRIDMASK_FREE_NB(attrs) != 0)
 					cost += PATH_UNIT_PENALTY;
 			} else {
 				if (stackCount >= PATHFINDING_STACK_LIMIT)
@@ -1811,7 +1814,7 @@ void GameObject::initGlobalGrid()
 						static_cast<int>(this->_gridPos.x + gx),
 						static_cast<int>(this->_gridPos.y + gy)
 					}),
-					this->owner->state.team, 1,
+					this->owner->state.index, 1,
 					this->_currentTilePosition,
 					line[gx].solid ? 1 : 0,
 					!this->canMove(),
@@ -1831,7 +1834,7 @@ void GameObject::initGlobalGrid()
 			this->manager->modUnitInArea(
 				this->map->topLeftCoordToAbs(this->_gridPos),
 				this->map->tileSize,
-				this->owner->state.team, 0,
+				this->owner->state.index, 0,
 				this->_currentTilePosition,
 				this->_solid,
 				!this->canMove(),
@@ -1840,7 +1843,7 @@ void GameObject::initGlobalGrid()
 		else
 			this->manager->modUnitInArea(
 				abs,
-				this->owner->state.team, 0,
+				this->owner->state.index, 0,
 			        this->_currentTilePosition,
 				this->_solid,
 				!this->canMove(),
@@ -1866,7 +1869,7 @@ void GameObject::deinitGlobalGrid()
 						static_cast<int>(this->_gridPos.x + gx),
 						static_cast<int>(this->_gridPos.y + gy)
 					}),
-					this->owner->state.team, -1,
+					this->owner->state.index, -1,
 					0, // TODO: Handle mask
 					line[gx].solid ? -1 : 0,
 					!this->canMove(),
@@ -1886,7 +1889,7 @@ void GameObject::deinitGlobalGrid()
 			this->manager->modUnitInArea(
 				this->map->topLeftCoordToAbs(this->_gridPos),
 				this->map->tileSize,
-				this->owner->state.team, 0,
+				this->owner->state.index, 0,
 				this->_stackable ? static_cast<pfGridType>(this->_currentTilePosition) : 0,
 				-1,
 				!this->canMove(),
@@ -1895,7 +1898,7 @@ void GameObject::deinitGlobalGrid()
 		else
 			this->manager->modUnitInArea(
 				abs,
-				this->owner->state.team, 0,
+				this->owner->state.index, 0,
 				0, // TODO: Handle mask
 				-1,
 				!this->canMove(),
@@ -2101,6 +2104,11 @@ const std::optional<std::string> &GameObject::getGivenQueue() const
 unsigned char GameObject::getBuildMaxDistance() const
 {
 	return this->_buildMaxDistance;
+}
+
+bool GameObject::isRadar() const
+{
+	return this->_isRadar;
 }
 
 bool GameObject::isCrushable() const

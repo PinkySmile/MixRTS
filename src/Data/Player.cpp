@@ -61,6 +61,13 @@ void PlayerState::clean()
 		else
 			++it;
 
+	it = this->radars.begin();
+	while (it != this->radars.end())
+		if ((*it)->isDisposable())
+			it = this->radars.erase(it);
+		else
+			++it;
+
 	for (auto &list : this->queueBuildings | std::ranges::views::values) {
 		auto it_ = list.begin();
 		while (it_ != list.end())
@@ -83,6 +90,12 @@ void PlayerState::clean()
 
 void Player::update()
 {
+	if (this->_primaryFaction.hasRadar())
+		this->state.hasRadar = true;
+	else if (this->state.producedPower < this->state.consumedPower && this->_primaryFaction.isRadarPowered())
+		this->state.hasRadar = false;
+	else
+		this->state.hasRadar = std::ranges::any_of(this->state.radars, [](const GameObject *o) { return !o->isDead(); });
 	for (auto &ui : this->_uis)
 		ui->update();
 	this->state.clean();

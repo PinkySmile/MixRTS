@@ -48,6 +48,7 @@ struct PlayerState {
 	std::unordered_map<std::string, std::list<GameObject *>> queueBuildings;
 	std::unordered_map<std::string, GameObject *> primaryBuildings;
 	std::list<GameObject *> myObjects;
+	std::list<GameObject *> radars;
 	std::unordered_map<std::string, PlayerQueue *> buildQueues;
 	std::unordered_map<std::string, std::unordered_map<std::string, PlayerQueue>> queues;
 
