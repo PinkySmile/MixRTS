@@ -573,6 +573,7 @@ GameObject::~GameObject() = default;
 
 
 struct ObstructionContext {
+	size_t team;
 	uint32_t mask;
 	Vector2u hitBoxSize;
 	const PathFindingGrid *grid;
@@ -619,8 +620,6 @@ static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 
 			if (!(attrs & octx->mask) || PFGRIDMASK_IS_STATIC(attrs))
 				return true;
-
-
 		}
 	return false;
 }
@@ -632,16 +631,30 @@ static float GetTileCostMovableUnits(Vector2i p, void *ctx)
 
 	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
 		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
-			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
-
+			auto index = (p.x + x) + (p.y + y) * octx->grid->gridSize.x;
+			auto attrs = octx->grid->grid[index];
 			auto stackCount = PFGRIDMASK_STACK_COUNT(attrs);
+			bool occupied = false;
 
-			if (
-				(!octx->stackable && stackCount != 0) ||
-				(octx->stackable && stackCount >= PATHFINDING_STACK_LIMIT) ||
-				PFGRIDMASK_FREE_NB(attrs) != 0
-			)
-				cost += PATH_UNIT_PENALTY;
+			if (!octx->grid->usedSpaces[octx->team][index])
+				for (size_t i = 0; i < MAX_TEAM_COUNT; i++) {
+					if (i == octx->team)
+						continue;
+					if (octx->grid->usedSpaces[i][index]) {
+						occupied = true;
+						break;
+					}
+				}
+			if (occupied) {
+				if (!octx->canCrush || PFGRIDMASK_GET_NON_CRUSHABLE(attrs) != 0)
+					cost += PATH_UNIT_PENALTY;
+			} else if (!octx->stackable) {
+				if (stackCount != 0)
+					cost += PATH_UNIT_PENALTY;
+			} else {
+				if (stackCount >= PATHFINDING_STACK_LIMIT)
+					cost += PATH_UNIT_PENALTY;
+			}
 		}
 	return cost;
 }
@@ -722,6 +735,7 @@ void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid)
 	Vector2i pos;
 	Vector2u step = {1, 1};
 
+	ctx.team = this->owner->state.team;
 	ctx.mask = this->_passFlags;
 	ctx.stackable = this->_stackable;
 	ctx.canCrush = this->_canCrush;
@@ -800,6 +814,7 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid)
 			this->_oldTilePosition = this->_currentTilePosition;
 			this->deinitGlobalGrid();
 			this->_currentTilePosition = PFGRIDMASK_FIND_FREE_SLOT(this->map->pathFindingGrid, nextTile.x, nextTile.y);
+			// FIXME: We need to mark the slot we chose as used so another unit doesn't try to take it
 			assert_exp(this->_currentTilePosition);
 		}
 		this->blockTimer = 0;
@@ -933,15 +948,6 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 	if (this->_pathCache.empty())
 		return true;
 
-	switch (this->_boundToGrid ? this->_resolveGridCollision(force) : this->_resolveFreeCollision(force)) {
-	case COLLISION_ABORT:
-		return true;
-	case COLLISION_WAIT:
-		return false;
-	case COLLISION_PROCEED:
-		break;
-	}
-
 	while (this->_position == this->_pathCache.back()) {
 		this->_pathCache.pop_back();
 		if (this->_pathCache.empty())
@@ -965,6 +971,15 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 		angle %= this->_anims.size();
 		if (angle != this->_currentDir && !this->_handleOrder(TurnOrder{angle}))
 			return false;
+	}
+
+	switch (this->_boundToGrid ? this->_resolveGridCollision(force) : this->_resolveFreeCollision(force)) {
+	case COLLISION_ABORT:
+		return true;
+	case COLLISION_WAIT:
+		return false;
+	case COLLISION_PROCEED:
+		break;
 	}
 
 	auto pos = this->_position;
@@ -1799,7 +1814,8 @@ void GameObject::initGlobalGrid()
 					this->owner->state.team, 1,
 					this->_currentTilePosition,
 					line[gx].solid ? 1 : 0,
-					!this->canMove()
+					!this->canMove(),
+					this->isCrushable()
 				);
 			}
 		}
@@ -1815,18 +1831,20 @@ void GameObject::initGlobalGrid()
 			this->manager->modUnitInArea(
 				this->map->topLeftCoordToAbs(this->_gridPos),
 				this->map->tileSize,
-				0, 0,
+				this->owner->state.team, 0,
 				this->_currentTilePosition,
 				this->_solid,
-				!this->canMove()
+				!this->canMove(),
+				this->isCrushable()
 			);
 		else
 			this->manager->modUnitInArea(
 				abs,
-				0, 0,
+				this->owner->state.team, 0,
 			        this->_currentTilePosition,
 				this->_solid,
-				!this->canMove()
+				!this->canMove(),
+				this->isCrushable()
 			);
 	}
 	this->_initGrid = true;
@@ -1851,7 +1869,8 @@ void GameObject::deinitGlobalGrid()
 					this->owner->state.team, -1,
 					0, // TODO: Handle mask
 					line[gx].solid ? -1 : 0,
-					!this->canMove()
+					!this->canMove(),
+					this->isCrushable()
 				);
 			}
 		}
@@ -1867,18 +1886,20 @@ void GameObject::deinitGlobalGrid()
 			this->manager->modUnitInArea(
 				this->map->topLeftCoordToAbs(this->_gridPos),
 				this->map->tileSize,
-				0, 0,
+				this->owner->state.team, 0,
 				this->_stackable ? static_cast<pfGridType>(this->_currentTilePosition) : 0,
 				-1,
-				!this->canMove()
+				!this->canMove(),
+				this->isCrushable()
 			);
 		else
 			this->manager->modUnitInArea(
 				abs,
-				0, 0,
+				this->owner->state.team, 0,
 				0, // TODO: Handle mask
 				-1,
-				!this->canMove()
+				!this->canMove(),
+				this->isCrushable()
 			);
 	}
 	this->_initGrid = false;

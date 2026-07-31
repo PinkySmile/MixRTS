@@ -23,14 +23,20 @@ struct PathFindingGrid {
 	sf::Texture gridImageTexture;
 	std::vector<pfGridType> grid;
 	Vector2u gridSize;
+	std::vector<std::vector<uint8_t>> usedSpaces;
 };
 
 constexpr int PATHFINDING_FREE_NB_POS = 5;
-constexpr int PATHFINDING_FREE_BITS = 10;
-constexpr int PATHFINDING_FREE_OFFSET = sizeof(pfGridType) * 8 - PATHFINDING_FREE_BITS;
+constexpr int PATHFINDING_FREE_BITS = 8;
+constexpr int PATHFINDING_FREE_OFFSET = 8;
 constexpr int PATHFINDING_FREE_MAX = (1 << (PATHFINDING_FREE_BITS - PATHFINDING_FREE_NB_POS)) - 1;
-constexpr int PATHFINDING_METADATA_MASK = (1 << PATHFINDING_FREE_OFFSET) - 1;
-constexpr int PFGRIDMASK_STATIC_BIT = 1 << 10;
+
+constexpr int PATHFINDING_METADATA_MASK = 0xFF;
+constexpr int PFGRIDMASK_STATIC_OFFSET = PATHFINDING_FREE_BITS + PATHFINDING_FREE_OFFSET;
+constexpr int PFGRIDMASK_STATIC_BIT = 1 << PFGRIDMASK_STATIC_OFFSET;
+constexpr int PFGRIDMASK_CRUSHABLE_OFFSET = PFGRIDMASK_STATIC_OFFSET + 1;
+constexpr int PFGRIDMASK_NON_CRUSHABLE_BITS = 3;
+constexpr int PFGRIDMASK_NON_CRUSHABLE_BIT = 1 << PFGRIDMASK_CRUSHABLE_OFFSET;
 
 enum PFFreeMask : unsigned char {
 	PFFREEMASK_NONE         = 0,
@@ -99,13 +105,31 @@ inline void PFGRIDMASK_DEL_STATIC(PathFindingGrid &g, unsigned x, unsigned y)
 	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
 	g.grid[x + y * g.gridSize.x] &= ~PFGRIDMASK_STATIC_BIT;
 }
+
+inline uint8_t PFGRIDMASK_GET_NON_CRUSHABLE(pfGridType tile)
+{
+	return ((tile >> PFGRIDMASK_CRUSHABLE_OFFSET) & ((1 << PFGRIDMASK_NON_CRUSHABLE_BITS) - 1));
+}
+inline void PFGRIDMASK_ADD_NON_CRUSHABLE(PathFindingGrid &g, unsigned x, unsigned y)
+{
+	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
+	assert_exp(PFGRIDMASK_GET_NON_CRUSHABLE(g.grid[x + y * g.gridSize.x]) < ((1 << PFGRIDMASK_NON_CRUSHABLE_BITS) - 1));
+	g.grid[x + y * g.gridSize.x] += PFGRIDMASK_NON_CRUSHABLE_BIT;
+}
+inline void PFGRIDMASK_DEL_NON_CRUSHABLE(PathFindingGrid &g, unsigned x, unsigned y)
+{
+	assert_exp(x < g.gridSize.x && y < g.gridSize.y);
+	assert_exp(PFGRIDMASK_GET_NON_CRUSHABLE(g.grid[x + y * g.gridSize.x]) > 0);
+	g.grid[x + y * g.gridSize.x] -= PFGRIDMASK_NON_CRUSHABLE_BIT;
+}
+
 inline unsigned char PFGRIDMASK_FREE(pfGridType tile)
 {
-	return tile >> PATHFINDING_FREE_OFFSET;
+	return (tile >> PATHFINDING_FREE_OFFSET) & ((1 << PATHFINDING_FREE_NB_POS) - 1);
 }
 inline unsigned char PFGRIDMASK_FREE_NB(pfGridType tile)
 {
-	return tile >> (PATHFINDING_FREE_OFFSET + PATHFINDING_FREE_NB_POS);
+	return (tile >> (PATHFINDING_FREE_OFFSET + PATHFINDING_FREE_NB_POS)) & PATHFINDING_FREE_MAX;
 }
 inline unsigned char PFGRIDMASK_FREE_NB(PathFindingGrid &g, unsigned x, unsigned y)
 {

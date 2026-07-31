@@ -240,6 +240,9 @@ void LoadedMap::load(Mod &mod, const std::filesystem::path &path)
 		for (unsigned x = 0; x < this->grid.pathFindingGrid.gridSize.x; x++)
 			this->grid.pathFindingGrid.gridImage.setPixel({x, y}, __getPFDebugColor(this->grid.pathFindingGrid.grid[x + y * this->grid.pathFindingGrid.gridSize.x]));
 	this->grid.pathFindingGrid.textureOutOfSync = true;
+	this->grid.pathFindingGrid.usedSpaces.resize(MAX_TEAM_COUNT);
+	for (auto &s : this->grid.pathFindingGrid.usedSpaces)
+		s.resize(this->grid.pathFindingGrid.gridSize.x * this->grid.pathFindingGrid.gridSize.y, 0);
 
 
 	this->pathFindingGrid.gridSize = {
@@ -257,6 +260,9 @@ void LoadedMap::load(Mod &mod, const std::filesystem::path &path)
 	for (unsigned y = 0; y < this->pathFindingGrid.gridSize.y; y++)
 		for (unsigned x = 0; x < this->pathFindingGrid.gridSize.x; x++)
 			this->pathFindingGrid.gridImage.setPixel({x, y}, __getPFDebugColor(this->pathFindingGrid.grid[x + y * this->pathFindingGrid.gridSize.x]));
+	this->pathFindingGrid.usedSpaces.resize(MAX_TEAM_COUNT);
+	for (auto &s : this->pathFindingGrid.usedSpaces)
+		s.resize(static_cast<size_t>(this->pathFindingGrid.gridSize.x) * this->pathFindingGrid.gridSize.y, 0);
 	this->pathFindingGrid.textureOutOfSync = true;
 }
 

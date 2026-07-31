@@ -78,6 +78,7 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned
 	size_t index = this->_players.size();
 	auto &faction = this->_factions[factionIndex];
 
+	assert_exp(team < MAX_TEAM_COUNT);
 	while (team >= this->_map.grid.placementGrid.size()) {
 		this->_map.grid.placementGrid.emplace_back(this->_map.grid.grid.size(), 0);
 		for (auto &m: this->_mapStates)
@@ -842,7 +843,7 @@ void GameManager::deregisterObject(GameObject *o)
 		l.erase(it);
 }
 
-void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, char mod, bool isStatic)
+void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, size_t team, char mod, bool isStatic, bool crushable)
 {
 	// TODO: Handle non-square grids
 	Vector2i minv = {
@@ -860,19 +861,27 @@ void GameManager::_modUnitInArea(const MapState::Quad &quad, PathFindingGrid &st
 				PFGRIDMASK_DEL_UNIT(state, x, y, mask);
 				if (isStatic)
 					PFGRIDMASK_DEL_STATIC(state, x, y);
+				if (!crushable)
+					PFGRIDMASK_DEL_NON_CRUSHABLE(state, x, y);
+				assert_exp(state.usedSpaces[team][x + y * state.gridSize.x] != 0);
+				state.usedSpaces[team][x + y * state.gridSize.x]--;
 			} else if (mod > 0) {
 				PFGRIDMASK_ADD_UNIT(state, x, y, mask);
 				if (isStatic)
 					PFGRIDMASK_ADD_STATIC(state, x, y);
+				if (!crushable)
+					PFGRIDMASK_ADD_NON_CRUSHABLE(state, x, y);
+				assert_exp(state.usedSpaces[team][x + y * state.gridSize.x] < UINT8_MAX);
+				state.usedSpaces[team][x + y * state.gridSize.x]++;
 			}
 }
 
-void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic)
+void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable)
 {
-	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, mod, isStatic);
-	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, mod, isStatic);
+	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, team, mod, isStatic, crushable);
+	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, team, mod, isStatic, crushable);
 	for (auto &map : this->_mapStates)
-		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, mod, isStatic);
+		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, team, mod, isStatic, crushable);
 	if (placementCount != 0) {
 		this->_map.grid.updatePlacementGrid(quad, team, placementCount);
 		for (auto &m : this->_mapStates)
@@ -880,7 +889,7 @@ void GameManager::modUnitInArea(const MapState::Quad &quad, size_t team, int pla
 	}
 }
 
-void GameManager::modUnitInArea(Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic)
+void GameManager::modUnitInArea(Vector2i rel, Vector2u tileSize, size_t team, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable)
 {
 	const MapState::Quad quad = {
 		rel,
@@ -889,10 +898,10 @@ void GameManager::modUnitInArea(Vector2i rel, Vector2u tileSize, size_t team, in
 		Vector2f(rel.x, rel.y + tileSize.y),
 	};
 
-	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, mod, isStatic);
-	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, mod, isStatic);
+	this->_modUnitInArea(quad, this->_map.pathFindingGrid, {1, 1}, mask, team, mod, isStatic, crushable);
+	this->_modUnitInArea(quad, this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, mask, team, mod, isStatic, crushable);
 	for (auto &map : this->_mapStates)
-		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, mod, isStatic);
+		this->_modUnitInArea(quad, map.pathFindingGrid, map.tileSize, mask, team, mod, isStatic, crushable);
 	if (placementCount != 0) {
 		this->_map.grid.updatePlacementGrid(quad, team, placementCount);
 		for (auto &m : this->_mapStates)

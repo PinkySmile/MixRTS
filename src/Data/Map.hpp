@@ -16,6 +16,8 @@
 #include "FindPath.hpp"
 #include "forward.hpp"
 
+#define MAX_TEAM_COUNT 16
+
 struct MapState {
 	// OPTIMIZE: Align line size to PAGE_SIZE, or a power of 2
 	std::vector<uint32_t> grid;
