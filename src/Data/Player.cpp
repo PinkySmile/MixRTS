@@ -51,39 +51,43 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 		this->_loadedObjects[key] = &val;
 }
 
-void PlayerState::clean()
+void Player::_clean()
 {
-	auto it = this->myObjects.begin();
+	auto it = this->state.myObjects.begin();
 
-	while (it != this->myObjects.end())
+	while (it != this->state.myObjects.end()) {
 		if ((*it)->isDisposable())
-			it = this->myObjects.erase(it);
+			it = this->state.myObjects.erase(it);
+		else
+			++it;
+	}
+
+	it = this->state.radars.begin();
+	while (it != this->state.radars.end())
+		if ((*it)->isDisposable())
+			it = this->state.radars.erase(it);
 		else
 			++it;
 
-	it = this->radars.begin();
-	while (it != this->radars.end())
-		if ((*it)->isDisposable())
-			it = this->radars.erase(it);
-		else
-			++it;
-
-	for (auto &list : this->queueBuildings | std::ranges::views::values) {
+	for (auto &[name, list] : this->state.queueBuildings) {
 		auto it_ = list.begin();
+		bool empty = list.empty();
 		while (it_ != list.end())
 			if ((*it_)->isDisposable())
 				it_ = list.erase(it_);
 			else
 				++it_;
+		if (!empty && list.empty())
+			this->lockQueue(name);
 	}
 
-	auto mit = this->buildQueues.begin();
-	while (mit != this->buildQueues.end()) {
+	auto mit = this->state.buildQueues.begin();
+	while (mit != this->state.buildQueues.end()) {
 		if (mit->second && mit->second->buildProgress == 0)
 			mit->second = nullptr;
 		++mit;
 	}
-	for (auto &[name, b] : this->primaryBuildings)
+	for (auto &[name, b] : this->state.primaryBuildings)
 		if (b && b->isDisposable())
 			b = nullptr;
 }
@@ -98,7 +102,7 @@ void Player::update()
 		this->state.hasRadar = std::ranges::any_of(this->state.radars, [](const GameObject *o) { return !o->isDead(); });
 	for (auto &ui : this->_uis)
 		ui->update();
-	this->state.clean();
+	this->_clean();
 	for (auto &[qname, q] : this->state.buildQueues) {
 		if (!q)
 			continue;
@@ -361,6 +365,23 @@ void Player::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int pri
 		this->_uis[this->_currentUi]->playEVA(sound, expireIn, priority, cooldown, args);
 }
 
+void Player::recomputeLocked()
+{
+	for (auto &list : this->state.queues | std::ranges::views::values) {
+		for (auto &q : list | std::ranges::views::values) {
+			if (!q.faction->regressesTech())
+				continue;
+			if (
+				(q.object && !q.object->getRequirements()(this->state.elementsOwned)) ||
+				(q.upgrade && !q.upgrade->getRequirements()(this->state.elementsOwned))
+			) {
+				this->resetQueue(*q.queueId);
+				q.unlocked = false;
+			}
+		}
+	}
+}
+
 void Player::checkUnlocked(const Faction &faction)
 {
 	for (auto &[name, object] : faction.getObjects())
@@ -390,6 +411,19 @@ void Player::_tryEndBuild(const std::string &name, PlayerQueue &queue)
 		}
 	} else
 		assert_not_reached();
+}
+
+void Player::lockQueue(const std::string &queueId)
+{
+	for (auto &[name, q] : this->state.queues[queueId]) {
+		q.buildable = false;
+		q.unlocked = false;
+		q.paused = false;
+		q.buildProgress = 0;
+		for (auto &p : q.spent)
+			this->credit(p.first, p.second, CREDIT_SYSTEM);
+		q.spent.clear();
+	}
 }
 
 void Player::resetQueue(const std::string &queueId)

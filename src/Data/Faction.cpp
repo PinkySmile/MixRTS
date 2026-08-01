@@ -182,7 +182,7 @@ bool Faction::canRepair() const
 	return this->_canRepair;
 }
 
-bool Faction::regressTech() const
+bool Faction::regressesTech() const
 {
 	return this->_regressTech;
 }

@@ -175,17 +175,21 @@ void GameManager::update()
 	}
 
 	auto itb = this->_liveObjects.begin();
+	std::set<Player *> toRecompute;
 	while (itb != this->_liveObjects.end())
 		if (itb->isDisposable()) {
 			auto &group = itb->getGroup();
 			auto &id = itb->getId();
 
 			--itb->owner->state.elementsOwned[group];
+			toRecompute.emplace(itb->owner);
 			if (group != id)
 				--itb->owner->state.elementsOwned[id];
 			itb = this->_liveObjects.erase(itb);
 		} else
 			++itb;
+	for (auto p : toRecompute)
+		p->recomputeLocked();
 }
 
 void GameManager::updateRender()

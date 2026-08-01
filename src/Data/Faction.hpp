@@ -62,7 +62,7 @@ public:
 	[[nodiscard]] std::array<std::vector<Sprite>, 3> &getPlacementCursors() const;
 	[[nodiscard]] bool canSell() const;
 	[[nodiscard]] bool canRepair() const;
-	[[nodiscard]] bool regressTech() const;
+	[[nodiscard]] bool regressesTech() const;
 	[[nodiscard]] bool hasRadar() const;
 	[[nodiscard]] bool isRadarPowered() const;
 	[[nodiscard]] const std::string &getName() const;

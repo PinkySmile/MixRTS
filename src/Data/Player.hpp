@@ -53,7 +53,6 @@ struct PlayerState {
 	std::unordered_map<std::string, std::unordered_map<std::string, PlayerQueue>> queues;
 
 	unsigned getCombinedMoney(const std::string &key);
-	void clean();
 };
 
 struct UIState {
@@ -73,6 +72,7 @@ private:
 	std::unordered_map<std::string, const GameObject *> _loadedObjects;
 
 	void _tryEndBuild(const std::string &name, PlayerQueue &queue);
+	void _clean();
 
 public:
 	PlayerState state;
@@ -97,7 +97,9 @@ public:
 	const Faction &getPrimaryFaction() const;
 	const std::unordered_map<std::string, const GameObject *> &getObjects() const;
 	void playEVA(UI::EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
+	void recomputeLocked();
 	void checkUnlocked(const Faction &faction);
+	void lockQueue(const std::string &queueId);
 	void resetQueue(const std::string &queueId);
 	std::vector<std::unique_ptr<UI>> &getUIs();
 	void onMouseMoved(Vector2i pos);
