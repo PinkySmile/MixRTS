@@ -166,6 +166,9 @@ protected:
 	unsigned _showAfterBuild = 0;
 	unsigned _idleTimer = 0;
 	unsigned _currentIdle = 0;
+	unsigned _repairDelay = 0;
+	unsigned _repairHeal = 0;
+	unsigned _repairTimer = 0;
 	std::pair<unsigned, unsigned> _idleTimerRange;
 	int _power = 0;
 	float _speed = 0;
@@ -187,6 +190,7 @@ protected:
 	bool _central = false;
 	bool _canCrush = false;
 	bool _isRadar = false;
+	bool _repairing = false;
 	// TODO: Find a better way to do this
 	bool _dumpStop = false;
 	bool _dumpStart = false;
@@ -251,9 +255,11 @@ public:
 	void produced();
 	void producing(bool producing);
 	void setPrimary(bool primary = true);
-	const std::optional<UnitDeployParams> &getOnDeploy() const;
-	unsigned getSpeed() const;
+	void toggleRepair();
+	void sell();
 
+	[[nodiscard]] const std::optional<UnitDeployParams> &getOnDeploy() const;
+	[[nodiscard]] unsigned getSpeed() const;
 	[[nodiscard]] int getPower() const;
 	[[nodiscard]] unsigned char getBuildMaxDistance() const;
 	[[nodiscard]] bool isRadar() const;
@@ -305,6 +311,7 @@ protected:
 	// Fields here (and not in GameObjectData) require a special copy procedure
 	std::optional<DumpInfo> _dump;
 	std::vector<std::vector<ConditionalAnim>> _anims;
+	std::optional<ConditionalAnim> _repairAnim;
 	std::optional<ConditionalAnim> _buildAnim;
 	std::optional<ConditionalAnim> _crushAnim;
 	std::optional<ConditionalAnim> _producingAnim;
@@ -335,7 +342,7 @@ protected:
 	void _goToClosestResource();
 	void _goToClosestResourceDump();
 	bool _shortenOrder(Order &o);
-	void _displayAnim(Animation &anim);
+	void _displayAnim(Animation &anim, Vector2f offset = {});
 	virtual bool _handleOrder(const Order &o);
 };
 

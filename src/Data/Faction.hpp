@@ -33,6 +33,7 @@ private:
 	std::unordered_map<std::string, unsigned> _startingMoney;
 	std::vector<StartObject> _startingObjects;
 	std::optional<std::string> _primaryQueue;
+	std::optional<nlohmann::json> _repairAnim;
 	nlohmann::json _uiData;
 	std::string _name;
 	bool _regressTech;
@@ -65,6 +66,7 @@ public:
 	[[nodiscard]] bool hasRadar() const;
 	[[nodiscard]] bool isRadarPowered() const;
 	[[nodiscard]] const std::string &getName() const;
+	[[nodiscard]] const std::optional<nlohmann::json> &getRepairAnim() const;
 };
 
 

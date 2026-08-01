@@ -10,24 +10,18 @@
 
 Animation::Animation(const std::filesystem::path &base, const nlohmann::json &json)
 {
-	assert_exp(json.contains("sprite"));
+	if (!json.contains("sprite"))
+		return;
+
 	assert_exp(json["sprite"].is_string());
-	assert_exp(json.contains("offset"));
-	assert_exp(json["offset"].is_object());
-	assert_exp(json["offset"].contains("x"));
-	assert_exp(json["offset"].contains("y"));
-	assert_exp(json["offset"]["x"].is_number());
-	assert_exp(json["offset"]["y"].is_number());
-	assert_exp(json.contains("bounds"));
-	assert_exp(json["bounds"].is_object());
-	assert_exp(json["bounds"].contains("x"));
-	assert_exp(json["bounds"].contains("y"));
-	assert_exp(json["bounds"].contains("w"));
-	assert_exp(json["bounds"].contains("h"));
-	assert_exp(json["bounds"]["x"].is_number());
-	assert_exp(json["bounds"]["y"].is_number());
-	assert_exp(json["bounds"]["h"].is_number());
-	assert_exp(json["bounds"]["w"].is_number());
+	assert_exp(json.contains("offset") && json["offset"].is_object());
+	assert_exp(json["offset"].contains("x") && json["offset"]["x"].is_number());
+	assert_exp(json["offset"].contains("y") && json["offset"]["y"].is_number());
+	assert_exp(json.contains("bounds") && json["bounds"].is_object());
+	assert_exp(json["bounds"].contains("x") && json["bounds"]["x"].is_number());
+	assert_exp(json["bounds"].contains("y") && json["bounds"]["y"].is_number());
+	assert_exp(json["bounds"].contains("w") && json["bounds"]["h"].is_number());
+	assert_exp(json["bounds"].contains("h") && json["bounds"]["w"].is_number());
 	assert_exp(!json.contains("blending") || json["blending"].is_string());
 	assert_exp(!json.contains("coloring") || json["coloring"].is_object());
 
@@ -46,7 +40,7 @@ Animation::Animation(const std::filesystem::path &base, const nlohmann::json &js
 		if (coloring == "palette") {
 			this->_pal = PAL_PALETTE;
 			this->_palIndices = json["coloring"]["indices"].get<std::vector<unsigned>>();
-			this->_cache = game->textureMgr.getEmbeddedPalette(this->_file);
+			this->_cache = game->textureMgr.getEmbeddedPalette(*this->_file);
 			if (!this->_cache)
 				this->_pal = PAL_NONE;
 		} else if (coloring == "mask") {
@@ -59,7 +53,7 @@ Animation::Animation(const std::filesystem::path &base, const nlohmann::json &js
 			assert_not_reached_msg("Invalid coloring");
 	}
 	if (this->_pal == PAL_NONE) {
-		this->_sprite.load(this->_file);
+		this->_sprite.load(*this->_file);
 		this->_requiresPaletteReload = false;
 	} else
 		this->_requiresPaletteReload = true;
@@ -78,9 +72,9 @@ Sprite &Animation::getSprite()
 
 	IntRect rect = this->_bounds;
 
-	if (rect.size.x == 0)
+	if (this->_file && rect.size.x == 0)
 		rect.size.x = this->_sprite.getTextureSize().x;
-	if (rect.size.y == 0)
+	if (this->_file && rect.size.y == 0)
 		rect.size.y = this->_sprite.getTextureSize().y;
 	this->_sprite.setTextureRect(rect);
 	this->_sprite.setPosition(this->_offset);
@@ -89,7 +83,7 @@ Sprite &Animation::getSprite()
 
 void Animation::setColor(const HSLColor &color)
 {
-	if (this->_pal == PAL_NONE)
+	if (!this->_file || this->_pal == PAL_NONE)
 		return;
 	this->_color = color;
 	this->_requiresPaletteReload = true;
@@ -120,7 +114,7 @@ void Animation::_reloadPalette()
 {
 	this->_requiresPaletteReload = false;
 	if (this->_pal == PAL_NONE)
-		this->_sprite.load(this->_file);
+		this->_sprite.load(*this->_file);
 	else if (this->_pal == PAL_PALETTE) {
 		const auto size = this->_palIndices.size();
 		HSLColor mid = this->_color;
@@ -133,7 +127,7 @@ void Animation::_reloadPalette()
 			mid.l = base * (i + 1) / (size + 1);
 			result = mid.toRGB();
 		}
-		this->_sprite.load(this->_file, *this->_cache);
+		this->_sprite.load(*this->_file, *this->_cache);
 	} else
 		assert_not_reached();
 }

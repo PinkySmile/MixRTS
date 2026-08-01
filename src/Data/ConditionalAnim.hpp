@@ -14,18 +14,19 @@
 
 class ConditionalAnim {
 private:
-	const GameObject &_parent;
+	const GameObject *_parent;
 	std::vector<Animation> _anim;
 	std::function<bool(const ConditionalAnim &This)> _cond;
 	unsigned _index = 0;
 	unsigned _delay = 0;
 	unsigned _totalDelay = 0;
-	int _layer;
+	int _layer = 0;
 
+	void _init(const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j, const std::string &anim);
 public:
-	ConditionalAnim(const GameObject &parent, const ConditionalAnim &other);
-	ConditionalAnim(const GameObject &parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j);
-	ConditionalAnim(const GameObject &parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j, unsigned index);
+	ConditionalAnim(const GameObject *parent, const ConditionalAnim &other);
+	ConditionalAnim(const Mod &base, const GameObject *parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j);
+	ConditionalAnim(const Mod &base, const GameObject *parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j, unsigned index);
 	bool operator()() const;
 	bool update();
 	void reset();

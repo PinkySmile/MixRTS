@@ -11,7 +11,7 @@
 #include "Resources/Assert.hpp"
 #include "Utils.hpp"
 
-ConditionalAnim::ConditionalAnim(const GameObject &parent, const ConditionalAnim &other) :
+ConditionalAnim::ConditionalAnim(const GameObject *parent, const ConditionalAnim &other) :
 	_parent(parent),
 	_anim(other._anim),
 	_cond(other._cond),
@@ -22,15 +22,9 @@ ConditionalAnim::ConditionalAnim(const GameObject &parent, const ConditionalAnim
 {
 }
 
-ConditionalAnim::ConditionalAnim(const GameObject &parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j) :
-	_parent(parent)
+void ConditionalAnim::_init(const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j, const std::string &animName)
 {
-	std::function<bool(const ConditionalAnim &This)> cb = [](const ConditionalAnim &){ return true; };
-
-	assert_exp(j.contains("anim"));
-	assert_exp(j["anim"].is_string());
-
-	std::string animName = RESOURCE(parent.getBase().getName(), j["anim"]);
+	std::function cb = [](const ConditionalAnim &){ return true; };
 
 	assert_msg(animList.contains(animName), animName);
 	assert_exp(!j.contains("delay") || j["delay"].is_number());
@@ -47,12 +41,12 @@ ConditionalAnim::ConditionalAnim(const GameObject &parent, const std::unordered_
 	if (j.contains("when_hp_lower"))
 		cb = [cb, hp = j["when_hp_lower"].get<float>()](const ConditionalAnim &This) {
 			if (!cb(This)) return false;
-			return This._parent.animationState.health * 100.f < hp;
+			return This._parent->animationState.health * 100.f < hp;
 		};
 	if (j.contains("when_hp_bigger"))
 		cb = [cb, hp = j["when_hp_bigger"].get<float>()](const ConditionalAnim &This) {
 			if (!cb(This)) return false;
-			return This._parent.animationState.health * 100.f >= hp;
+			return This._parent->animationState.health * 100.f >= hp;
 		};
 	if (j.contains("when_storage_is_in")) {
 		assert_exp(j["when_storage_is_in"].size() == 2);
@@ -60,8 +54,8 @@ ConditionalAnim::ConditionalAnim(const GameObject &parent, const std::unordered_
 		auto range = j["when_storage_is_in"].get<std::vector<unsigned>>();
 		cb = [cb, range](const ConditionalAnim &This) {
 			if (!cb(This)) return false;
-			unsigned total = This._parent.owner->state.totalStorage[This._parent.animationState.storageKey];
-			unsigned maxVal = This._parent.owner->state.money[This._parent.animationState.storageKey];
+			unsigned total = This._parent->owner->state.totalStorage[This._parent->animationState.storageKey];
+			unsigned maxVal = This._parent->owner->state.money[This._parent->animationState.storageKey];
 			float percent = maxVal * 100.f / total;
 			return percent >= range[0] && percent < range[1];
 		};
@@ -69,71 +63,33 @@ ConditionalAnim::ConditionalAnim(const GameObject &parent, const std::unordered_
 	if (j.contains("when_storage_bigger"))
 		cb = [cb, storage = j["when_storage_bigger"].get<float>()](const ConditionalAnim &This) {
 			if (!cb(This)) return false;
-			unsigned total = This._parent.owner->state.totalStorage[This._parent.animationState.storageKey];
-			unsigned maxVal = This._parent.owner->state.money[This._parent.animationState.storageKey];
+			unsigned total = This._parent->owner->state.totalStorage[This._parent->animationState.storageKey];
+			unsigned maxVal = This._parent->owner->state.money[This._parent->animationState.storageKey];
 			float percent = maxVal * 100.f / total;
 			return percent >= storage;
 		};
 	this->_cond = cb;
 }
 
-ConditionalAnim::ConditionalAnim(const GameObject &parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j, unsigned int index) :
+ConditionalAnim::ConditionalAnim(const Mod &base, const GameObject *parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j) :
 	_parent(parent)
 {
-	std::function<bool(const ConditionalAnim &This)> cb = [](const ConditionalAnim &){ return true; };
-
 	assert_exp(j.contains("anim"));
 	assert_exp(j["anim"].is_string());
+	this->_init(animList, j, RESOURCE(base.getName(), j["anim"]));
+}
 
-	std::string animName = RESOURCE(parent.getBase().getName(), j["anim"].get<std::string>() + "_" + std::to_string(index));
-
-	assert_msg(animList.contains(animName), animName);
-	assert_exp(!j.contains("delay") || j["delay"].is_number());
-	assert_exp(j.contains("layer"));
-	assert_exp(!j.contains("when_hp_lower") || j["when_hp_lower"].is_number());
-	assert_exp(!j.contains("when_hp_bigger") || j["when_hp_bigger"].is_number());
-	assert_exp(!j.contains("when_storage_bigger") || j["when_storage_bigger"].is_number());
-	assert_exp(!j.contains("when_storage_is_in") || j["when_storage_is_in"].is_array());
-
-	this->_anim = animList.at(animName);
-	if (j.contains("delay"))
-		this->_delay = j["delay"];
-	this->_layer = j["layer"];
-	if (j.contains("when_hp_lower"))
-		cb = [cb, hp = j["when_hp_lower"].get<float>()](const ConditionalAnim &This) {
-			if (!cb(This)) return false;
-			return This._parent.animationState.health * 100.f < hp;
-		};
-	if (j.contains("when_hp_bigger"))
-		cb = [cb, hp = j["when_hp_bigger"].get<float>()](const ConditionalAnim &This) {
-			if (!cb(This)) return false;
-			return This._parent.animationState.health * 100.f >= hp;
-		};
-	if (j.contains("when_storage_is_in")) {
-		assert_exp(j["when_storage_is_in"].size() == 2);
-		assert_exp(j["when_storage_is_in"][0].is_number() && j["when_storage_is_in"][1].is_number());
-		auto range = j["when_storage_is_in"].get<std::vector<unsigned>>();
-		cb = [cb, range](const ConditionalAnim &This) {
-			if (!cb(This)) return false;
-			unsigned total = This._parent.owner->state.totalStorage[This._parent.animationState.storageKey];
-			unsigned maxVal = This._parent.owner->state.money[This._parent.animationState.storageKey];
-			float percent = maxVal * 100.f / total;
-			return percent >= range[0] && percent < range[1];
-		};
-	}
-	if (j.contains("when_storage_bigger"))
-		cb = [cb, storage = j["when_storage_bigger"].get<float>()](const ConditionalAnim &This) {
-			if (!cb(This)) return false;
-			unsigned total = This._parent.owner->state.totalStorage[This._parent.animationState.storageKey];
-			unsigned maxVal = This._parent.owner->state.money[This._parent.animationState.storageKey];
-			float percent = maxVal * 100.f / total;
-			return percent >= storage;
-		};
-	this->_cond = cb;
+ConditionalAnim::ConditionalAnim(const Mod &base, const GameObject *parent, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j, unsigned int index) :
+	_parent(parent)
+{
+	assert_exp(j.contains("anim"));
+	assert_exp(j["anim"].is_string());
+	this->_init(animList, j, RESOURCE(base.getName(), j["anim"].get<std::string>() + "_" + std::to_string(index)));
 }
 
 bool ConditionalAnim::operator()() const
 {
+	assert_exp(this->_parent);
 	return this->_cond(*this);
 }
 

@@ -168,6 +168,16 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 
 	assert_exp(this->_primary.loadFromFile(base / "ui/common/primary.png"));
 
+	this->_repair->onMousePress([this] {
+		this->_soundButton.play();
+		this->_repairing = !this->_repairing;
+		this->_selling = false;
+	});
+	this->_sell->onMousePress([this] {
+		this->_soundButton.play();
+		this->_selling = !this->_selling;
+		this->_repairing = false;
+	});
 	this->_up1->onMousePress([this] {
 		auto amount = this->_buildQueue->getContentOffset();
 
@@ -310,6 +320,10 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_cursorMapping[CURSOR_DEPLOY]                 = "deploy";
 	this->_cursorMapping[CURSOR_NO_DEPLOY]              = "no_deploy";
 	this->_cursorMapping[CURSOR_PRIMARY]                = "deploy";
+	this->_cursorMapping[CURSOR_NO_REPAIR]              = "no_repair";
+	this->_cursorMapping[CURSOR_REPAIR]                 = "repair";
+	this->_cursorMapping[CURSOR_NO_SELL]                = "no_sell";
+	this->_cursorMapping[CURSOR_SELL]                   = "sell";
 }
 
 D2KUI::~D2KUI() noexcept = default;

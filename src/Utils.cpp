@@ -3,13 +3,23 @@
 //
 
 #include "Utils.hpp"
+#include "Resources/Assert.hpp"
 
 
 nlohmann::json &mergeObjects(nlohmann::json &dst, const nlohmann::json &t)
 {
-	for (auto &[key, value] : t.items())
-		if (!dst.contains(key))
+	for (auto &[key, value] : t.items()) {
+		if (!dst.contains(key)) {
 			dst[key] = value;
+		} else if (dst[key].is_array()) {
+			assert_exp(value.is_array());
+			for (auto &item : value)
+				dst[key].push_back(item);
+		} else if (dst[key].is_object()) {
+			assert_exp(value.is_object());
+			mergeObjects(dst[key], value);
+		}
+	}
 	return dst;
 }
 

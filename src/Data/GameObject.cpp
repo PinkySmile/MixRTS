@@ -68,21 +68,21 @@ bool GameObject::_shortenOrder(Order &o)
 	return true;
 }
 
-void GameObject::_displayAnim(Animation &anim)
+void GameObject::_displayAnim(Animation &anim, Vector2f offset)
 {
 	Sprite &sprite = anim.getSprite();
 
 	sprite.setPosition({
-		sprite.getPosition().x + this->_position.x,
-		sprite.getPosition().y + this->_position.y
+		sprite.getPosition().x + this->_position.x + offset.x,
+		sprite.getPosition().y + this->_position.y + offset.y
 	});
 	switch (anim.getBlending()) {
-		case Animation::BLEND_ADD:
-			game->screen->draw(sprite, sf::BlendAdd);
-			break;
-		case Animation::BLEND_ALPHA:
-			game->screen->draw(sprite);
-			break;
+	case Animation::BLEND_ADD:
+		game->screen->draw(sprite, sf::BlendAdd);
+		break;
+	case Animation::BLEND_ALPHA:
+		game->screen->draw(sprite);
+		break;
 	}
 }
 
@@ -94,49 +94,51 @@ GameObject::GameObject(const GameObject &g) :
 			g._dump->dir,
 			g._dump->delay,
 			g._dump->delayAfter,
-			std::make_unique<ConditionalAnim>(*this, *g._dump->during),
-			std::make_unique<ConditionalAnim>(*this, *g._dump->start),
-			std::make_unique<ConditionalAnim>(*this, *g._dump->stop)
+			std::make_unique<ConditionalAnim>(this, *g._dump->during),
+			std::make_unique<ConditionalAnim>(this, *g._dump->start),
+			std::make_unique<ConditionalAnim>(this, *g._dump->stop)
 		);
 
+	if (g._repairAnim)
+		this->_repairAnim.emplace(this, *g._repairAnim);
 	if (g._buildAnim)
-		this->_buildAnim.emplace(*this, *g._buildAnim);
+		this->_buildAnim.emplace(this, *g._buildAnim);
 	if (g._crushAnim)
-		this->_crushAnim.emplace(*this, *g._crushAnim);
+		this->_crushAnim.emplace(this, *g._crushAnim);
 	if (g._producingAnim)
-		this->_producingAnim.emplace(*this, *g._producingAnim);
+		this->_producingAnim.emplace(this, *g._producingAnim);
 	if (g._producedAnim)
-		this->_producedAnim.emplace(*this, *g._producedAnim);
+		this->_producedAnim.emplace(this, *g._producedAnim);
 
 	this->_idleAnims.reserve(g._idleAnims.size());
 	for (auto &anim : g._idleAnims)
-		this->_idleAnims.emplace_back(*this, anim);
+		this->_idleAnims.emplace_back(this, anim);
 	this->_moveAnim.reserve(g._moveAnim.size());
 	for (auto &anim : g._moveAnim)
-		this->_moveAnim.emplace_back(*this, anim);
+		this->_moveAnim.emplace_back(this, anim);
 	this->_fireAnim.reserve(g._fireAnim.size());
 	for (auto &anim : g._fireAnim)
-		this->_fireAnim.emplace_back(*this, anim);
+		this->_fireAnim.emplace_back(this, anim);
 	this->_crouchAnim.reserve(g._crouchAnim.size());
 	for (auto &anim : g._crouchAnim)
-		this->_crouchAnim.emplace_back(*this, anim);
+		this->_crouchAnim.emplace_back(this, anim);
 	this->_crawlAnim.reserve(g._crawlAnim.size());
 	for (auto &anim : g._crawlAnim)
-		this->_crawlAnim.emplace_back(*this, anim);
+		this->_crawlAnim.emplace_back(this, anim);
 	this->_crawlFireAnim.reserve(g._crawlFireAnim.size());
 	for (auto &anim : g._crawlFireAnim)
-		this->_crawlFireAnim.emplace_back(*this, anim);
+		this->_crawlFireAnim.emplace_back(this, anim);
 
 	this->_harvestAnims.reserve(g._harvestAnims.size());
 	for (auto &anim : g._harvestAnims)
-		this->_harvestAnims.emplace_back(*this, anim);
+		this->_harvestAnims.emplace_back(this, anim);
 
 	this->_anims.reserve(g._anims.size());
 	for (auto &animVec : g._anims) {
 		this->_anims.emplace_back();
 		this->_anims.back().reserve(animVec.size());
 		for (auto &anim : animVec)
-			this->_anims.back().emplace_back(*this, anim);
+			this->_anims.back().emplace_back(this, anim);
 	}
 
 	if (!this->_idleAnims.empty())
@@ -197,6 +199,8 @@ GameObject::GameObject(
 	assert_exp(!json.contains("crush_sound") || json["crush_sound"].is_string());
 	assert_exp(!json.contains("can_crush") || json["can_crush"].is_boolean());
 	assert_exp(!json.contains("radar") || json["radar"].is_boolean());
+	assert_exp(!json.contains("repair_delay") || json["repair_delay"].is_number());
+	assert_exp(!json.contains("repair_heal") || json["repair_heal"].is_number());
 	if (json.contains("anim_idles")) {
 		assert_exp(json["anim_idles"].is_array());
 		for (size_t i = 0; i < json["anim_idles"].size(); i++)
@@ -337,6 +341,10 @@ GameObject::GameObject(
 		this->_sight = json["sight"];
 	if (json.contains("fake"))
 		this->_fake = json["fake"];
+	if (json.contains("repair_delay"))
+		this->_repairDelay = json["repair_delay"];
+	if (json.contains("repair_heal"))
+		this->_repairHeal = json["repair_heal"];
 	if (json.contains("radar"))
 		this->_isRadar = json["radar"];
 	if (json.contains("spawn"))
@@ -391,13 +399,13 @@ GameObject::GameObject(
 	if (json.contains("storage"))
 		this->_storage = json["storage"];
 	if (json.contains("build_anim") && !json["build_anim"].is_null())
-		this->_buildAnim.emplace(*this, animList, json["build_anim"]);
+		this->_buildAnim.emplace(base, this, animList, json["build_anim"]);
 	if (json.contains("crush_anim") && !json["crush_anim"].is_null())
-		this->_crushAnim.emplace(*this, animList, json["crush_anim"]);
+		this->_crushAnim.emplace(base, this, animList, json["crush_anim"]);
 	if (json.contains("producing_anim") && !json["producing_anim"].is_null())
-		this->_producingAnim.emplace(*this, animList, json["producing_anim"]);
+		this->_producingAnim.emplace(base, this, animList, json["producing_anim"]);
 	if (json.contains("produced_anim") && !json["produced_anim"].is_null())
-		this->_producedAnim.emplace(*this, animList, json["produced_anim"]);
+		this->_producedAnim.emplace(base, this, animList, json["produced_anim"]);
 	if (json.contains("idle_time"))
 		this->_idleTimerRange = {json["idle_time"][0], json["idle_time"][1]};
 	if (json.contains("turn_speed"))
@@ -465,41 +473,41 @@ GameObject::GameObject(
 	}
 	if (json.contains("anim_idles"))
 		for (auto &j : json["anim_idles"])
-			this->_idleAnims.emplace_back(*this, animList, j);
+			this->_idleAnims.emplace_back(base, this, animList, j);
 	if (directions) {
 		this->_anims.resize(*directions);
 		for (auto &anim: json["anims"])
 			for (size_t i = 0; i < *directions; i++)
-				this->_anims[i].emplace_back(*this, animList, anim, i);
+				this->_anims[i].emplace_back(base, this, animList, anim, i);
 		if (json.contains("anim_move"))
 			for (size_t i = 0; i < *directions; i++)
-				this->_moveAnim.emplace_back(*this, animList, json["anim_move"], i);
+				this->_moveAnim.emplace_back(base, this, animList, json["anim_move"], i);
 		if (json.contains("anim_fire"))
 			for (size_t i = 0; i < *directions; i++)
-				this->_fireAnim.emplace_back(*this, animList, json["anim_fire"], i);
+				this->_fireAnim.emplace_back(base, this, animList, json["anim_fire"], i);
 		if (json.contains("anim_crouch"))
 			for (size_t i = 0; i < *directions; i++)
-				this->_crouchAnim.emplace_back(*this, animList, json["anim_crouch"], i);
+				this->_crouchAnim.emplace_back(base, this, animList, json["anim_crouch"], i);
 		if (json.contains("anim_crawl"))
 			for (size_t i = 0; i < *directions; i++)
-				this->_crawlAnim.emplace_back(*this, animList, json["anim_crawl"], i);
+				this->_crawlAnim.emplace_back(base, this, animList, json["anim_crawl"], i);
 		if (json.contains("anim_crawl_fire"))
 			for (size_t i = 0; i < *directions; i++)
-				this->_crawlFireAnim.emplace_back(*this, animList, json["anim_crawl_fire"], i);
+				this->_crawlFireAnim.emplace_back(base, this, animList, json["anim_crawl_fire"], i);
 	} else {
 		this->_anims.emplace_back();
 		for (auto &anim: json["anims"])
-			this->_anims.front().emplace_back(*this, animList, anim);
+			this->_anims.front().emplace_back(base, this, animList, anim);
 		if (json.contains("anim_move"))
-			this->_moveAnim.emplace_back(*this, animList, json["anim_move"]);
+			this->_moveAnim.emplace_back(base, this, animList, json["anim_move"]);
 		if (json.contains("anim_fire"))
-			this->_fireAnim.emplace_back(*this, animList, json["anim_fire"]);
+			this->_fireAnim.emplace_back(base, this, animList, json["anim_fire"]);
 		if (json.contains("anim_crouch"))
-			this->_crouchAnim.emplace_back(*this, animList, json["anim_crouch"]);
+			this->_crouchAnim.emplace_back(base, this, animList, json["anim_crouch"]);
 		if (json.contains("anim_crawl"))
-			this->_crawlAnim.emplace_back(*this, animList, json["anim_crawl"]);
+			this->_crawlAnim.emplace_back(base, this, animList, json["anim_crawl"]);
 		if (json.contains("anim_crawl_fire"))
-			this->_crawlFireAnim.emplace_back(*this, animList, json["anim_crawl_fire"]);
+			this->_crawlFireAnim.emplace_back(base, this, animList, json["anim_crawl_fire"]);
 	}
 	if (json.contains("harvest_anim")) {
 		assert_exp(!json["harvest_anim"].contains("dirs") || json["harvest_anim"]["dirs"].is_number_unsigned());
@@ -507,16 +515,16 @@ GameObject::GameObject(
 		unsigned dirs = json["harvest_anim"]["dirs"];
 
 		for (size_t i = 0; i < dirs; i++)
-			this->_harvestAnims.emplace_back(*this, animList, json["harvest_anim"], i);
+			this->_harvestAnims.emplace_back(base, this, animList, json["harvest_anim"], i);
 	}
 	if (json.contains("dump"))
 		this->_dump.emplace(
 			json["dump"]["dir"].get<unsigned>(),
 			json["dump"]["delay"].get<unsigned>(),
 			json["dump"]["delay_after"].get<unsigned>(),
-			std::make_unique<ConditionalAnim>(*this, animList, json["dump"]["during"]),
-			std::make_unique<ConditionalAnim>(*this, animList, json["dump"]["start_anim"]),
-			std::make_unique<ConditionalAnim>(*this, animList, json["dump"]["stop_anim"])
+			std::make_unique<ConditionalAnim>(base, this, animList, json["dump"]["during"]),
+			std::make_unique<ConditionalAnim>(base, this, animList, json["dump"]["start_anim"]),
+			std::make_unique<ConditionalAnim>(base, this, animList, json["dump"]["stop_anim"])
 		);
 
 	if (json.contains("select")) {
@@ -545,6 +553,8 @@ GameObject::GameObject(
 	}
 	this->animationState.health = 1;
 
+	if (auto repair = faction.getRepairAnim())
+		this->_repairAnim.emplace(base, this, animList, *repair);
 	if (this->_storage.size() == 1)
 		this->animationState.storageKey = this->_storage.begin()->first;
 
@@ -1243,15 +1253,15 @@ bool GameObject::_handleOrder(const Order &o)
 {
 	if (auto turn = std::get_if<TurnOrder>(&o))
 		return this->_updateTurn(turn->resultDir);
-	else if (auto move = std::get_if<MoveOrder>(&o))
+	if (auto move = std::get_if<MoveOrder>(&o))
 		return this->_updateMove(move->destination, move->force);
-	else if (auto cmove = std::get_if<MoveCheckOrder>(&o))
+	if (auto cmove = std::get_if<MoveCheckOrder>(&o))
 		return this->_updateCheckMove(cmove->destination, cmove->fail);
-	else if (std::holds_alternative<HarvestOrder>(o))
+	if (std::holds_alternative<HarvestOrder>(o))
 		return this->_updateHarvest();
-	else if (auto dump = std::get_if<DumpOrder>(&o))
+	if (auto dump = std::get_if<DumpOrder>(&o))
 		return this->_updateDump(dump->target);
-	else if (std::holds_alternative<DeployOrder>(this->_orderQueue.front()))
+	if (std::holds_alternative<DeployOrder>(this->_orderQueue.front()))
 		return this->_updateDeploy();
 	return true;
 }
@@ -1268,6 +1278,20 @@ void GameObject::update()
 		if (this->_crushAnim->update())
 			this->_disposable = true;
 		return;
+	}
+	if (this->_repairing) {
+		if (this->_repairAnim && (*this->_repairAnim)())
+			this->_repairAnim->update();
+		if (this->_repairTimer == 0) {
+			this->heal(this->_repairHeal);
+			if (this->_hp >= this->_maxHp)
+				this->_repairing = false;
+			else
+				this->_repairTimer++;
+		} else
+			this->_repairTimer++;
+		if (this->_repairTimer >= this->_repairDelay)
+			this->_repairTimer = 0;
 	}
 	this->_moving = false;
 	if (!this->_orderQueue.empty()) {
@@ -1354,14 +1378,14 @@ void GameObject::drawSkirt() const
 	for (size_t x = 0; x < size.x; x++) {
 		for (size_t y = 0; y < size.y; y++) {
 			Vector2f pos = {
-				static_cast<float>(this->_position.x + this->_skirt.position.x + x * this->map->tileSize.x),
-				static_cast<float>(this->_position.y + this->_skirt.position.y + y * this->map->tileSize.y)
+				this->_position.x + this->_skirt.position.x + x * this->map->tileSize.x,
+				this->_position.y + this->_skirt.position.y + y * this->map->tileSize.y
 			};
 			MapState::Quad abs{
-				{static_cast<float>(pos.x),                         static_cast<float>(pos.y)},
-				{static_cast<float>(pos.x + this->map->tileSize.x), static_cast<float>(pos.y)},
-				{static_cast<float>(pos.x + this->map->tileSize.x), static_cast<float>(pos.y + this->map->tileSize.y)},
-				{static_cast<float>(pos.x),                         static_cast<float>(pos.y + this->map->tileSize.y)}
+				{pos.x,                         pos.y},
+				{pos.x + this->map->tileSize.x, pos.y},
+				{pos.x + this->map->tileSize.x, pos.y + this->map->tileSize.y},
+				{pos.x,                         pos.y + this->map->tileSize.y}
 			};
 			auto tIndex = lmap.grid.anyHasAnyGridBits(abs, GRIDMASK_HAS_CONCRETE) ?
 				itC->second[x + y * size.x] :
@@ -1382,6 +1406,8 @@ void GameObject::drawSkirt() const
 
 void GameObject::render(int layer)
 {
+	if (this->_repairing && this->_repairAnim && (*this->_repairAnim)())
+		this->_displayAnim(this->_repairAnim->getAnim(), this->_size / 2);
 	if (this->_crushed) {
 		if ((*this->_crushAnim)() && this->_crushAnim->getLayer() == layer)
 			this->_displayAnim(this->_crushAnim->getAnim());
@@ -1497,9 +1523,13 @@ unsigned GameObject::getMaxHealth() const
 
 void GameObject::heal(unsigned int amount)
 {
+	if (this->_lowerPowerWhenDamaged)
+		this->owner->state.producedPower += this->getPower();
 	this->_hp += amount;
 	if (this->_hp > this->_maxHp)
 		this->_hp = this->_maxHp;
+	if (this->_lowerPowerWhenDamaged)
+		this->owner->state.producedPower -= this->getPower();
 	this->animationState.health = static_cast<float>(this->_hp) / static_cast<float>(this->_maxHp);
 }
 
@@ -2139,6 +2169,15 @@ bool GameObject::isPrimary() const
 void GameObject::setPrimary(bool primary)
 {
 	this->_isPrimary = primary;
+}
+
+void GameObject::toggleRepair()
+{
+	this->_repairing = !this->_repairing;
+}
+
+void GameObject::sell()
+{
 }
 
 const std::optional<UnitDeployParams> &GameObject::getOnDeploy() const

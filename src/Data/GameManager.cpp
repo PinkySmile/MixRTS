@@ -346,18 +346,10 @@ void GameManager::render()
 		}
 	}});
 	game->screen->draw(sprite);
-	for (auto &list : this->_renderObjects | std::ranges::views::values)
-		for (auto b : list)
-			b->render(-2);
-	for (auto &list : this->_renderObjects | std::ranges::views::values)
-		for (auto b : list)
-			b->render(-1);
-	for (auto &list : this->_renderObjects | std::ranges::views::values)
-		for (auto b : list)
-			b->render(0);
-	for (auto &list : this->_renderObjects | std::ranges::views::values)
-		for (auto b : list)
-			b->render(1);
+	for (int layer = -2; layer <= 2; layer++)
+		for (auto &list : this->_renderObjects | std::ranges::views::values)
+			for (auto b : list)
+				b->render(layer);
 	if (this->_debugGrid == 0)
 		this->_renderPathFindingGrid(this->_map.pathFindingGrid);
 	else if (this->_debugGrid == 1)

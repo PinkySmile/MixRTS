@@ -82,6 +82,10 @@ public:
 		CURSOR_DEPLOY,
 		CURSOR_NO_DEPLOY,
 		CURSOR_PRIMARY,
+		CURSOR_NO_REPAIR,
+		CURSOR_REPAIR,
+		CURSOR_NO_SELL,
+		CURSOR_SELL,
 		CURSOR_COUNT,
 
 		CURSOR_SCROLL_DIFF = CURSOR_NO_SCROLL_RIGHT - CURSOR_SCROLL_RIGHT,
@@ -170,7 +174,14 @@ protected:
 
 	CursorAnimation &getCurrentCursor();
 
+	void _tileClickedNormal();
+	void _tileClickedRepair();
+	void _tileClickedSell();
+
 	void _updateCursor();
+	void _updateCursorNormal();
+	void _updateCursorRepair();
+	void _updateCursorSell();
 	void _handleTryPlace();
 	void _displayPlacementPreview();
 	bool _isSelectionTooFar() const;
@@ -199,6 +210,8 @@ protected:
 	bool _enabled = false;
 	bool _hasLowPower = false;
 	bool _hasRadar = false;
+	bool _repairing = false;
+	bool _selling = false;
 };
 
 

@@ -183,23 +183,9 @@ void UI::updateRender()
 		c.second.update();
 }
 
-void UI::_updateCursor()
+void UI::_updateCursorNormal()
 {
 	Vector2i pos = this->map->absToTileCoord(this->_placementPos);
-
-	if (
-		this->_placementBuilding != nullptr
-	#ifdef _DEBUG
-		|| this->_placementPos.x < 0 || this->_placementPos.y < 0 ||
-		static_cast<unsigned>(this->_placementPos.x) >= this->map->gridSize.x * this->map->tileSize.x ||
-		static_cast<unsigned>(this->_placementPos.y) >= this->map->gridSize.y * this->map->tileSize.y
-	#endif
-	) {
-		this->_cursor = CURSOR_NORMAL;
-		return;
-	}
-	this->_objectBuffer.clear();
-	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
 
 	if (!this->_objectBuffer.empty()) {
 		// TODO: Handle non snap-to-grid units/buildings
@@ -289,6 +275,52 @@ void UI::_updateCursor()
 			this->_cursor = CURSOR_MOVE;
 	} else
 		this->_cursor = CURSOR_NORMAL;
+}
+
+void UI::_updateCursorRepair()
+{
+	this->_cursor = CURSOR_NO_REPAIR;
+	if (this->_objectBuffer.size() == 1) {
+		GameObject *obj = this->_objectBuffer.front();
+
+		if (obj->owner->state.index == this->ownerState->index && !obj->isDead() && obj->getHealth() != obj->getMaxHealth() && obj->isRepairable())
+			this->_cursor = CURSOR_REPAIR;
+	}
+}
+
+void UI::_updateCursorSell()
+{
+	this->_cursor = CURSOR_NO_SELL;
+	if (this->_objectBuffer.size() == 1) {
+		GameObject *obj = this->_objectBuffer.front();
+
+		if (obj->owner->state.index == this->ownerState->index && !obj->isDead() && obj->isSellable())
+			this->_cursor = CURSOR_SELL;
+	}
+}
+
+void UI::_updateCursor()
+{
+	if (
+		this->_placementBuilding != nullptr
+	#ifdef _DEBUG
+		|| this->_placementPos.x < 0 || this->_placementPos.y < 0 ||
+		static_cast<unsigned>(this->_placementPos.x) >= this->map->gridSize.x * this->map->tileSize.x ||
+		static_cast<unsigned>(this->_placementPos.y) >= this->map->gridSize.y * this->map->tileSize.y
+	#endif
+	) {
+		this->_cursor = CURSOR_NORMAL;
+		return;
+	}
+	this->_objectBuffer.clear();
+	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
+
+	if (this->_selling)
+		this->_updateCursorSell();
+	else if (this->_repairing)
+		this->_updateCursorRepair();
+	else
+		this->_updateCursorNormal();
 }
 
 bool UI::_isSelectionTooFar() const
@@ -425,13 +457,8 @@ void UI::_handleTryPlace()
 	this->_placementBuilding = nullptr;
 }
 
-void UI::tileClicked(Vector2i absPos)
+void UI::_tileClickedNormal()
 {
-	this->_placementPos = absPos;
-	if (this->_placementBuilding != nullptr)
-		return this->_handleTryPlace();
-	this->_objectBuffer.clear();
-	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
 	// TODO: Hardcoded key
 	if (!this->state->selectedObjects.empty() && !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)) {
 		if (this->state->selectedObjects.size() == 1) {
@@ -547,6 +574,42 @@ void UI::tileClicked(Vector2i absPos)
 	}
 }
 
+void UI::_tileClickedRepair()
+{
+	if (this->_objectBuffer.size() == 1) {
+		GameObject *obj = this->_objectBuffer.front();
+
+		if (!obj->isDead() && obj->getHealth() != obj->getMaxHealth() && obj->isRepairable())
+			obj->toggleRepair();
+	}
+}
+
+void UI::_tileClickedSell()
+{
+	if (this->_objectBuffer.size() == 1) {
+		GameObject *obj = this->_objectBuffer.front();
+
+		if (!obj->isDead() && obj->isSellable())
+			obj->sell();
+	}
+}
+
+void UI::tileClicked(Vector2i absPos)
+{
+	this->_placementPos = absPos;
+	if (this->_placementBuilding != nullptr)
+		return this->_handleTryPlace();
+	this->_objectBuffer.clear();
+	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
+
+	if (this->_selling)
+		this->_tileClickedSell();
+	else if (this->_repairing)
+		this->_tileClickedRepair();
+	else
+		this->_tileClickedNormal();
+}
+
 void UI::mouseMovedToTile(Vector2i absPos)
 {
 	this->_placementPos = absPos;
@@ -558,6 +621,8 @@ void UI::onCancel(Vector2i absPos)
 		this->_placementBuilding = nullptr;
 	else if (!this->state->selectedObjects.empty())
 		this->state->selectedObjects.clear();
+	this->_selling = false;
+	this->_repairing = false;
 	this->mouseMovedToTile(absPos);
 }
 

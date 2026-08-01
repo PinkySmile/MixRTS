@@ -38,12 +38,12 @@ private:
 	void _reloadPalette();
 
 	Sprite _sprite;
-	Vector2f _offset;
-	IntRect _bounds;
+	Vector2f _offset = {0, 0};
+	IntRect _bounds = {0, 0, 0, 0};
 	Paletting _pal = PAL_NONE;
 	Blending _blending = BLEND_ALPHA;
-	HSLColor _color;
-	std::filesystem::path _file;
+	HSLColor _color = {0, 0, 0};
+	std::optional<std::filesystem::path> _file;
 	std::vector<unsigned> _palIndices;
 	unsigned _palHue;
 	std::string _palMask;

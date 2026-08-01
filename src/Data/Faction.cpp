@@ -20,6 +20,7 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	assert_exp(!data.contains("primary_queue") || data["primary_queue"].is_string());
 	assert_exp(data.contains("has_radar") && data["has_radar"].is_boolean());
 	assert_exp(data.contains("radar_powered") && data["radar_powered"].is_boolean());
+	assert_exp(!data.contains("repairing_animation") || data["repairing_animation"].is_object());
 
 	assert_exp(data.contains("sounds") && data["sounds"].is_array());
 	for (size_t i = 0; i < data["sounds"].size(); i++)
@@ -82,6 +83,8 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	this->_hasRadar = data["has_radar"];
 	this->_radarPowered = data["radar_powered"];
 
+	if (data.contains("repairing_animation"))
+		this->_repairAnim = data["repairing_animation"];
 	if (data.contains("primary_queue"))
 		this->_primaryQueue = data["primary_queue"].get<std::string>();
 	for (const auto &p : data["place"]["best"]) {
@@ -197,6 +200,11 @@ bool Faction::isRadarPowered() const
 const std::string &Faction::getName() const
 {
 	return this->_name;
+}
+
+const std::optional<nlohmann::json> &Faction::getRepairAnim() const
+{
+	return this->_repairAnim;
 }
 
 const std::optional<std::string> &Faction::getPrimaryQueue() const
