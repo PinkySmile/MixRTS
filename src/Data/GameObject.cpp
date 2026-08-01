@@ -203,6 +203,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("radar") || json["radar"].is_boolean());
 	assert_exp(!json.contains("repair_delay") || json["repair_delay"].is_number());
 	assert_exp(!json.contains("repair_heal") || json["repair_heal"].is_number());
+	assert_exp(!json.contains("repair_cost") || json["repair_cost"].is_object());
 	if (json.contains("anim_idles")) {
 		assert_exp(json["anim_idles"].is_array());
 		for (size_t i = 0; i < json["anim_idles"].size(); i++)
@@ -352,6 +353,8 @@ GameObject::GameObject(
 		this->_repairDelay = json["repair_delay"];
 	if (json.contains("repair_heal"))
 		this->_repairHeal = json["repair_heal"];
+	if (json.contains("repair_cost"))
+		this->_repairCost = json["repair_cost"];
 	if (json.contains("radar"))
 		this->_isRadar = json["radar"];
 	if (json.contains("spawn"))
@@ -1298,6 +1301,8 @@ void GameObject::update()
 			this->_repairAnim->update();
 		if (this->_repairTimer == 0) {
 			this->heal(this->_repairHeal);
+			for (auto &[name, count] : this->_repairCost)
+				this->owner->consume(name, count);
 			if (this->_hp >= this->_maxHp)
 				this->_repairing = false;
 			else

@@ -126,6 +126,7 @@ protected:
 	std::set<Vector2i> _checkTiles;
 	std::optional<std::vector<std::vector<BuildingMask>>> _tiles;
 	std::unordered_map<std::string, unsigned> _sellRefund;
+	std::unordered_map<std::string, unsigned> _repairCost;
 	std::unordered_map<std::string, unsigned> _cost;
 	std::shared_ptr<ReqAndCombinator> _requirements;
 	std::optional<std::string> _buildQueue;
