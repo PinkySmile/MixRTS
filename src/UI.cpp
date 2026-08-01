@@ -281,7 +281,7 @@ void UI::_updateCursorRepair()
 {
 	this->_cursor = CURSOR_NO_REPAIR;
 	if (this->_objectBuffer.size() == 1) {
-		GameObject *obj = this->_objectBuffer.front();
+		const GameObject *obj = this->_objectBuffer.front();
 
 		if (obj->owner->state.index == this->ownerState->index && !obj->isDead() && obj->getHealth() != obj->getMaxHealth() && obj->isRepairable())
 			this->_cursor = CURSOR_REPAIR;
@@ -292,7 +292,7 @@ void UI::_updateCursorSell()
 {
 	this->_cursor = CURSOR_NO_SELL;
 	if (this->_objectBuffer.size() == 1) {
-		GameObject *obj = this->_objectBuffer.front();
+		const GameObject *obj = this->_objectBuffer.front();
 
 		if (obj->owner->state.index == this->ownerState->index && !obj->isDead() && obj->isSellable())
 			this->_cursor = CURSOR_SELL;
@@ -577,20 +577,20 @@ void UI::_tileClickedNormal()
 void UI::_tileClickedRepair()
 {
 	if (this->_objectBuffer.size() == 1) {
-		GameObject *obj = this->_objectBuffer.front();
+		const GameObject *obj = this->_objectBuffer.front();
 
 		if (!obj->isDead() && obj->getHealth() != obj->getMaxHealth() && obj->isRepairable())
-			obj->toggleRepair();
+			this->_eventQueue.emplace_back(RepairEvent{obj->index});
 	}
 }
 
 void UI::_tileClickedSell()
 {
 	if (this->_objectBuffer.size() == 1) {
-		GameObject *obj = this->_objectBuffer.front();
+		const GameObject *obj = this->_objectBuffer.front();
 
 		if (!obj->isDead() && obj->isSellable())
-			obj->sell();
+			this->_eventQueue.emplace_back(SellEvent{obj->index});
 	}
 }
 

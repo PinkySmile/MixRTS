@@ -73,6 +73,7 @@ public:
 	void consumeEvent(const sf::Event &event);
 	bool isAreaFree(const Vector2i &pos, const Vector2u &size, const std::vector<unsigned> &exclusion = {}, bool stackable = false) const;
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
+	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<const GameObject *> &objects);
 	void registerObject(GameObject *o);
 	void deregisterObject(GameObject *o);
 	void modUnitInArea(const MapState::Quad &quad, size_t player, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable);
@@ -83,6 +84,8 @@ public:
 	MapResource &getResource(Vector2i pos);
 	void consumeResource(Vector2i pos);
 	void centerCameraOn(Vector2f pos);
+	float initUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map);
+	void deinitUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map);
 	std::pair<std::string, unsigned> convertResource(const std::string &source, const std::vector<std::string> &expected, unsigned value);
 
 	inline void centerCameraOn(const GameObject &object)

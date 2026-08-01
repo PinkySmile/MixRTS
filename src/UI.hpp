@@ -130,6 +130,14 @@ public:
 		unsigned index;
 	};
 
+	struct RepairEvent {
+		unsigned index;
+	};
+
+	struct SellEvent {
+		unsigned index;
+	};
+
 	typedef std::variant<
 		StartBuildEvent,
 		PlaceBuildEvent,
@@ -138,7 +146,9 @@ public:
 		MoveUnitEvent,
 		HarvestUnitEvent,
 		DumpUnitEvent,
-		SetPrimaryEvent
+		SetPrimaryEvent,
+		RepairEvent,
+		SellEvent
 	> Event;
 
 	UIState *state;
@@ -197,7 +207,7 @@ protected:
 	std::list<EVAQueue> _evaQueue;
 	std::array<unsigned, EVA_COUNT> _evaCooldown{0};
 	std::array<std::unique_ptr<sf::SoundBuffer>, EVA_COUNT> _evaSounds{nullptr};
-	std::vector<GameObject *> _objectBuffer;
+	std::vector<const GameObject *> _objectBuffer;
 	sf::Sound _evaSound;
 	std::deque<Event> _eventQueue;
 	tgui::Panel::Ptr _settings;

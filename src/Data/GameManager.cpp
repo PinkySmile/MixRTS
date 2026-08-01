@@ -616,7 +616,6 @@ void GameManager::_initObject(MapState &map, Player &owner, GameObject &obj, con
 	obj.pfGrid = &this->_map.pathFindingGrid;
 	obj.index = this->_lastObjectId;
 	obj.setColor(owner.getColor());
-	obj.built();
 
 	++owner.state.elementsOwned[group];
 	if (group != id)
@@ -644,6 +643,66 @@ void GameManager::_onObjectSpawned(Vector2i pos, GameObject &obj)
 	if (gqueue)
 		obj.owner->state.queueBuildings[*gqueue].push_back(&obj);
 	obj.owner->checkUnlocked(obj.getFaction());
+	obj.built();
+}
+
+float GameManager::initUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map)
+{
+	unsigned nbConcreteTiles = 0;
+	unsigned nbTiles = 0;
+
+	for (size_t y = 0; y < tiles.size(); y++) {
+		auto &line = tiles[y];
+
+		if (y + pos.y >= map.gridSize.y)
+			break;
+		for (size_t x = 0; x < line.size(); x++) {
+			if (x + pos.x >= map.gridSize.x)
+				break;
+
+			Vector2i fullPos = {static_cast<int>(pos.x + x), static_cast<int>(pos.y + y)};
+			auto fullPosAbs = map.tileCoordToAbs(fullPos);
+
+			if (line[x].placementRequired) {
+				// OPTIMIZE: Can use a reference instead of calling helpers
+				this->_map.grid.resetGridBits(fullPos, GRIDMASK_IS_FREE);
+				for (auto &m : this->_mapStates)
+					m.resetGridBits(fullPosAbs, GRIDMASK_IS_FREE);
+			}
+			if (line[x].solid) {
+				nbTiles++;
+				// OPTIMIZE: Can use a reference instead of calling helpers
+				nbConcreteTiles += map.hasAnyGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
+			}
+		}
+	}
+	if (nbTiles == 0)
+		return 1;
+	return static_cast<float>(nbConcreteTiles) / static_cast<float>(nbTiles);
+}
+
+void GameManager::deinitUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map)
+{
+	for (size_t y = 0; y < tiles.size(); y++) {
+		auto &line = tiles[y];
+
+		if (y + pos.y >= map.gridSize.y)
+			break;
+		for (size_t x = 0; x < line.size(); x++) {
+			if (x + pos.x >= map.gridSize.x)
+				break;
+
+			Vector2i fullPos = {static_cast<int>(pos.x + x), static_cast<int>(pos.y + y)};
+			auto fullPosAbs = map.tileCoordToAbs(fullPos);
+
+			if (line[x].placementRequired) {
+				// OPTIMIZE: Can use a reference instead of calling helpers
+				this->_map.grid.setGridBits(fullPos, GRIDMASK_IS_FREE);
+				for (auto &m : this->_mapStates)
+					m.setGridBits(fullPosAbs, GRIDMASK_IS_FREE);
+			}
+		}
+	}
 }
 
 GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id)
@@ -659,8 +718,6 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 	auto &base = *in.at(id);
 	auto &concBase = *objects.at(concrete);
 	auto &tiles = base.getTileData();
-	unsigned nbConcreteTiles = 0;
-	unsigned nbTiles = 0;
 	Vector2i pos = map.absToTileCoord(absPos);
 
 	if (!tiles)
@@ -692,17 +749,6 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 				this->_initObject(map, player, this->_liveObjects.back(), concrete);
 				this->_onObjectSpawned(fullPos, this->_liveObjects.back());
 			}
-			if (line[x].placementRequired) {
-				// OPTIMIZE: Can use a reference instead of calling helpers
-				this->_map.grid.resetGridBits(fullPos, GRIDMASK_IS_FREE);
-				for (auto &m : this->_mapStates)
-					m.resetGridBits(fullPosAbs, GRIDMASK_IS_FREE);
-			}
-			if (line[x].solid) {
-				nbTiles++;
-				// OPTIMIZE: Can use a reference instead of calling helpers
-				nbConcreteTiles += map.hasAnyGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
-			}
 		}
 	}
 
@@ -719,13 +765,9 @@ noGrid:
 			out.push_back(base);
 
 		auto &obj = out.back();
-
-		this->_initObject(map, player, obj, id);
-		if (nbTiles != nbConcreteTiles)
-			obj.damage(obj.getHealth() * (nbTiles - nbConcreteTiles) / (nbTiles * 2));
-
 		auto parent = player.getSpawnBuilding(buildQueue);
 
+		this->_initObject(map, player, obj, id);
 		if (parent) {
 			auto exit = parent->getExitOffset();
 			auto spawn = parent->getSpawnOffset();
@@ -851,6 +893,14 @@ bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const
 }
 
 void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<GameObject *> &objects)
+{
+	// OPTIMIZE: Split the map into quadrants
+	for (auto &b : this->_liveObjects)
+		if (this->_isInArea(b, absPos, size))
+			objects.push_back(&b);
+}
+
+void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<const GameObject *> &objects)
 {
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)

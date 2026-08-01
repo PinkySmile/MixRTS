@@ -81,9 +81,9 @@ struct ResourceLot {
 
 union BuildingMask {
 	struct {
-		bool placementConcrete: 1;
-		bool solid: 1;
-		bool placementRequired: 1;
+		bool placementConcrete: 1; // 1
+		bool solid: 1;             // 2
+		bool placementRequired: 1; // 4
 	};
 	uint8_t value;
 };
@@ -125,6 +125,7 @@ protected:
 	std::unordered_map<std::string, unsigned> _storage;
 	std::set<Vector2i> _checkTiles;
 	std::optional<std::vector<std::vector<BuildingMask>>> _tiles;
+	std::unordered_map<std::string, unsigned> _sellRefund;
 	std::unordered_map<std::string, unsigned> _cost;
 	std::shared_ptr<ReqAndCombinator> _requirements;
 	std::optional<std::string> _buildQueue;
@@ -156,6 +157,7 @@ protected:
 	unsigned _buildSpeed = -1;
 	unsigned _maxHp;
 	unsigned _hp;
+	unsigned _decayTarget;
 	unsigned _sight = 0;
 	unsigned _limit = UINT32_MAX;
 	std::array<unsigned, 4> _gpTimer = {};
@@ -164,6 +166,7 @@ protected:
 	unsigned _harvestTime = 0;
 	unsigned _harvestDelay = 0;
 	unsigned _showAfterBuild = 0;
+	unsigned _showBeforeSell = 0;
 	unsigned _idleTimer = 0;
 	unsigned _currentIdle = 0;
 	unsigned _repairDelay = 0;
@@ -199,7 +202,8 @@ protected:
 	bool _selectable = true;
 	bool _sellable = false;
 	bool _repairable = false;
-	bool _building = false;
+	bool _built = false;
+	bool _sold = false;
 	bool _producing = false;
 	bool _produced = false;
 	bool _crushed = false;
@@ -222,18 +226,17 @@ public:
 	);
 	virtual ~GameObject();
 
-	virtual void setColor(const HSLColor &color);
-	virtual void update();
-	virtual void render(int layer);
-	virtual bool canDeploy() const;
-	virtual bool isDeployable() const;
-	virtual bool canMove() const;
-	virtual void deploy();
-	virtual void built();
-	virtual void initGlobalGrid();
-	virtual void deinitGlobalGrid();
-	virtual std::optional<float> getStorageDisplay() const;
-
+	void setColor(const HSLColor &color);
+	void update();
+	void render(int layer);
+	bool canDeploy() const;
+	bool isDeployable() const;
+	bool canMove() const;
+	void deploy();
+	void built();
+	std::optional<float> getStorageDisplay() const;
+	void initGlobalGrid();
+	void deinitGlobalGrid();
 	void crushedBy(GameObject *crusher);
 	unsigned getBottom() const;
 	void drawSkirt() const;
@@ -241,6 +244,7 @@ public:
 	void setPosition(const Vector2f &pos);
 	void heal(unsigned amount);
 	void damage(unsigned amount);
+	void setHealth(unsigned health);
 	void harvest(const Vector2i &pos, bool automatic = false);
 	void harvest();
 	void moveTo(const Vector2i &pos, bool automatic = false);
@@ -311,6 +315,7 @@ protected:
 	// Fields here (and not in GameObjectData) require a special copy procedure
 	std::optional<DumpInfo> _dump;
 	std::vector<std::vector<ConditionalAnim>> _anims;
+	std::optional<ConditionalAnim> _sellAnim;
 	std::optional<ConditionalAnim> _repairAnim;
 	std::optional<ConditionalAnim> _buildAnim;
 	std::optional<ConditionalAnim> _crushAnim;

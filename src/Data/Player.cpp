@@ -345,6 +345,11 @@ void Player::handleUiEvents()
 				building->setPrimary();
 				building->producing(producing);
 				this->playEVA(UI::EVA_PRIMARY_SELECTED, 120, 1, 0, *gq);
+			} else if (auto repair = std::get_if<UI::RepairEvent>(&*event)) {
+				this->_parent.getObjectById(repair->index)->toggleRepair();
+			} else if (auto sell = std::get_if<UI::SellEvent>(&*event)) {
+				this->_parent.getObjectById(sell->index)->sell();
+				this->playEVA(UI::EVA_SELL, 120, 1, 0);
 			} else
 				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));
 		}

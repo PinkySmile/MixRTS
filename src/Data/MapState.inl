@@ -65,7 +65,7 @@ inline Vector2i MapState::indexToRelPos(size_t index) const
 	};
 }
 
-inline void MapState::clampedPosition(const MapState::Quad &abs, Vector2i &topLeft, Vector2i &bottomRight) const
+inline void MapState::clampedPosition(const Quad &abs, Vector2i &topLeft, Vector2i &bottomRight) const
 {
 	topLeft = this->absToTileCoord(abs.pt1);
 	bottomRight = this->absToTileCoord(abs.pt3 - Vector2i{1, 1});
@@ -91,7 +91,7 @@ inline void MapState::updatePlacementGrid(const Vector2i &rel, unsigned int play
 	b += delta;
 }
 
-inline void MapState::updatePlacementGrid(const MapState::Quad &abs, unsigned int player, int delta)
+inline void MapState::updatePlacementGrid(const Quad &abs, unsigned int player, int delta)
 {
 	Vector2i topLeft;
 	Vector2i bottomRight;
@@ -115,7 +115,7 @@ inline void MapState::setGridBits(const Vector2i &rel, uint32_t bits)
 	this->grid[rel.x + rel.y * this->gridSize.x] |= bits;
 }
 
-inline void MapState::setGridBits(const MapState::Quad &abs, uint32_t bits)
+inline void MapState::setGridBits(const Quad &abs, uint32_t bits)
 {
 	Vector2i topLeft;
 	Vector2i bottomRight;
@@ -133,7 +133,7 @@ inline void MapState::resetGridBits(const Vector2i &rel, uint32_t bits)
 	this->grid[rel.x + rel.y * this->gridSize.x] &= ~bits;
 }
 
-inline void MapState::resetGridBits(const MapState::Quad &abs, uint32_t bits)
+inline void MapState::resetGridBits(const Quad &abs, uint32_t bits)
 {
 	Vector2i topLeft;
 	Vector2i bottomRight;
@@ -165,7 +165,7 @@ inline bool MapState::hasExactlySomeGridBits(const Vector2i &rel, uint32_t bits,
 	return (this->grid[rel.x + rel.y * this->gridSize.x] & bits) == expectedBits;
 }
 
-inline bool MapState::anyHasAnyGridBits(const MapState::Quad &abs, uint32_t bits) const
+inline bool MapState::anyHasAnyGridBits(const Quad &abs, uint32_t bits) const
 {
 	Vector2i topLeft;
 	Vector2i bottomRight;
@@ -178,7 +178,7 @@ inline bool MapState::anyHasAnyGridBits(const MapState::Quad &abs, uint32_t bits
 	return false;
 }
 
-inline bool MapState::anyHasAllGridBits(const MapState::Quad &abs, uint32_t bits) const
+inline bool MapState::anyHasAllGridBits(const Quad &abs, uint32_t bits) const
 {
 	Vector2i topLeft;
 	Vector2i bottomRight;
@@ -191,7 +191,7 @@ inline bool MapState::anyHasAllGridBits(const MapState::Quad &abs, uint32_t bits
 	return false;
 }
 
-inline bool MapState::anyHasExactlySomeGridBits(const MapState::Quad &abs, uint32_t bits, uint32_t expected) const
+inline bool MapState::anyHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const
 {
 	Vector2i topLeft;
 	Vector2i bottomRight;
@@ -204,7 +204,7 @@ inline bool MapState::anyHasExactlySomeGridBits(const MapState::Quad &abs, uint3
 	return false;
 }
 
-inline bool MapState::allHasAnyGridBits(const MapState::Quad &abs, uint32_t bits) const
+inline bool MapState::allHasAnyGridBits(const Quad &abs, uint32_t bits) const
 {
 	Vector2i topLeft;
 	Vector2i bottomRight;
@@ -217,7 +217,7 @@ inline bool MapState::allHasAnyGridBits(const MapState::Quad &abs, uint32_t bits
 	return true;
 }
 
-inline bool MapState::allHasAllGridBits(const MapState::Quad &abs, uint32_t bits) const
+inline bool MapState::allHasAllGridBits(const Quad &abs, uint32_t bits) const
 {
 	Vector2i topLeft;
 	Vector2i bottomRight;
@@ -230,7 +230,7 @@ inline bool MapState::allHasAllGridBits(const MapState::Quad &abs, uint32_t bits
 	return true;
 }
 
-inline bool MapState::allHasExactlySomeGridBits(const MapState::Quad &abs, uint32_t bits, uint32_t expected) const
+inline bool MapState::allHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const
 {
 	Vector2i topLeft;
 	Vector2i bottomRight;

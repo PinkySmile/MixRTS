@@ -99,6 +99,8 @@ GameObject::GameObject(const GameObject &g) :
 			std::make_unique<ConditionalAnim>(this, *g._dump->stop)
 		);
 
+	if (g._sellAnim)
+		this->_sellAnim.emplace(this, *g._sellAnim);
 	if (g._repairAnim)
 		this->_repairAnim.emplace(this, *g._repairAnim);
 	if (g._buildAnim)
@@ -221,6 +223,11 @@ GameObject::GameObject(
 	assert_exp(!json.contains("power") || json["power"].is_number());
 	assert_exp(!json.contains("lower_power_when_damaged") || json["lower_power_when_damaged"].is_boolean());
 	assert_exp(!json.contains("deploy") || json["deploy"].is_object());
+	if (json.contains("sell")) {
+		assert_exp(json["sell"].is_object());
+		assert_exp(json["sell"].contains("anim") && json["sell"]["anim"].is_object());
+		assert_exp(json["sell"].contains("refund") && json["sell"]["refund"].is_object());
+	}
 	if (json.contains("skirt")) {
 		assert_exp(json["skirt"].is_object());
 		assert_exp(json["skirt"].contains("x") && json["skirt"]["x"].is_number());
@@ -315,7 +322,7 @@ GameObject::GameObject(
 
 	this->_id = id;
 	this->_hp = json["hp"];
-	this->_maxHp = this->_hp;
+	this->_decayTarget = this->_maxHp = this->_hp;
 	this->_cost = json["cost"];
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 
@@ -459,6 +466,11 @@ GameObject::GameObject(
 	else if (this->_buildAnim)
 		this->_showAfterBuild = this->_buildAnim->size();
 
+	if (json.contains("sell")) {
+		this->_sellAnim.emplace(base, this, animList, json["sell"]["anim"]);
+		this->_sellRefund = json["sell"]["refund"];
+		this->_showBeforeSell = this->_buildAnim->size() - this->_showAfterBuild;
+	}
 	if (json.contains("select_sound")) {
 		std::string selectSound = RESOURCE(base.getName(), json["select_sound"]);
 
@@ -582,7 +594,10 @@ GameObject::GameObject(
 	assert_exp(!this->_stackable || this->_boundToGrid);
 }
 
-GameObject::~GameObject() = default;
+GameObject::~GameObject()
+{
+	this->deinitGlobalGrid();
+}
 
 
 struct ObstructionContext {
@@ -961,14 +976,14 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 	if (this->_pathCache.empty())
 		return true;
 
-	while (this->_position == this->_pathCache.back()) {
+	auto dest = this->_pathCache.back() + this->_getTileOffsetFromCenter();
+	std::optional<float> a;
+
+	while (this->_position == dest) {
 		this->_pathCache.pop_back();
 		if (this->_pathCache.empty())
 			return true;
 	}
-
-	auto dest = this->_pathCache.back() + this->_getTileOffsetFromCenter();
-	std::optional<float> a;
 
 	if (this->_boundToGrid) {
 		auto d = this->map->absToTileCoord(dest + this->_size / 2);
@@ -1236,7 +1251,6 @@ bool GameObject::_updateDeploy()
 		auto &s = *this->_onDeploy->spawnBuilding;
 
 		if (this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position)) {
-			this->deinitGlobalGrid();
 			this->_solid = false;
 			this->_disposable = true;
 
@@ -1322,9 +1336,17 @@ void GameObject::update()
 		}
 	} else
 		this->_currentIdle = 0;
-	if (this->_building && this->_buildAnim && (*this->_buildAnim)()) {
-		if (this->_buildAnim->update())
-			this->_building = false;
+	if (this->_built) {
+		if (!this->_buildAnim || !(*this->_buildAnim)() || this->_buildAnim->update())
+			this->_built = false;
+	} else if (this->_sold) {
+		if (this->_sellAnim && (*this->_sellAnim)() && this->_sellAnim->update()) {
+			for (auto &[fundType, value] : this->_sellRefund)
+				this->owner->credit(fundType, value, Player::CREDIT_SYSTEM);
+			this->_disposable = true;
+			this->_solid = false;
+			return;
+		}
 	} else {
 		if (this->_producing && this->_producingAnim && (*this->_producingAnim)())
 			this->_producingAnim->update();
@@ -1415,7 +1437,14 @@ void GameObject::render(int layer)
 	}
 	if (layer == -1)
 		this->drawSkirt();
-	if (!this->_building || !this->_buildAnim || this->_buildAnim->current() >= this->_showAfterBuild) {
+
+	bool display = true;
+
+	if (this->_built && this->_buildAnim && this->_buildAnim->current() < this->_showAfterBuild)
+		display = false;
+	if (this->_sold && this->_sellAnim && this->_sellAnim->current() >= this->_showBeforeSell)
+		display = false;
+	if (display) {
 		if (!this->_dumpStop && !this->_dumpStart && !this->_dumping) {
 			if (this->_moving && !this->_moveAnim.empty()) {
 				auto &anim = this->_moveAnim[this->_currentDir];
@@ -1446,9 +1475,12 @@ void GameObject::render(int layer)
 		}
 	}
 
-	if (this->_building && this->_buildAnim && (*this->_buildAnim)()) {
-		if (layer == this->_buildAnim->getLayer())
+	if (this->_built) {
+		if (this->_buildAnim && (*this->_buildAnim)() && layer == this->_buildAnim->getLayer())
 			this->_displayAnim(this->_buildAnim->getAnim());
+	} else if (this->_sold) {
+		if (this->_sellAnim && (*this->_sellAnim)() && layer == this->_sellAnim->getLayer())
+			this->_displayAnim(this->_sellAnim->getAnim());
 	} else {
 		if (this->_produced &&  this->_producedAnim && (*this->_producedAnim)() && layer == this->_producedAnim->getLayer())
 			this->_displayAnim(this->_producedAnim->getAnim());
@@ -1523,22 +1555,21 @@ unsigned GameObject::getMaxHealth() const
 
 void GameObject::heal(unsigned int amount)
 {
-	if (this->_lowerPowerWhenDamaged)
-		this->owner->state.producedPower += this->getPower();
-	this->_hp += amount;
-	if (this->_hp > this->_maxHp)
-		this->_hp = this->_maxHp;
-	if (this->_lowerPowerWhenDamaged)
-		this->owner->state.producedPower -= this->getPower();
-	this->animationState.health = static_cast<float>(this->_hp) / static_cast<float>(this->_maxHp);
+	this->setHealth(this->_hp + amount);
 }
 
 void GameObject::damage(unsigned int amount)
 {
-	if (this->_hp < amount)
-		this->_hp = 0;
-	else
-		this->_hp -= amount;
+	this->setHealth(this->_hp - amount);
+}
+
+void GameObject::setHealth(unsigned health)
+{
+	if (this->_lowerPowerWhenDamaged)
+		this->owner->state.producedPower += this->getPower();
+	this->_hp = std::min(health, this->_maxHp);
+	if (this->_lowerPowerWhenDamaged)
+		this->owner->state.producedPower -= this->getPower();
 	this->animationState.health = static_cast<float>(this->_hp) / static_cast<float>(this->_maxHp);
 }
 
@@ -1833,11 +1864,12 @@ void GameObject::initGlobalGrid()
 		return;
 
 	if (this->_tiles) {
+		this->_decayTarget = this->_maxHp * (this->manager->initUnitTiles(*this->_tiles, this->_gridPos, *this->map) + 1) / 2;
 		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
 			auto &line = (*this->_tiles)[gy];
 
 			for (size_t gx = 0; gx < line.size(); gx++) {
-				if (!line[gx].placementRequired)
+				if (!line[gx].placementRequired && !line[gx].placementConcrete)
 					continue;
 				this->manager->modUnitInArea(
 					this->map->tileCoordToAbs({
@@ -1888,11 +1920,12 @@ void GameObject::deinitGlobalGrid()
 	if (!this->_initGrid)
 		return;
 	if (this->_tiles) {
+		this->manager->deinitUnitTiles(*this->_tiles, this->_gridPos, *this->map);
 		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
 			auto &line = (*this->_tiles)[gy];
 
 			for (size_t gx = 0; gx < line.size(); gx++) {
-				if (!line[gx].placementRequired)
+				if (!line[gx].placementRequired && !line[gx].placementConcrete)
 					continue;
 				this->manager->modUnitInArea(
 					this->map->tileCoordToAbs({
@@ -2092,7 +2125,8 @@ bool GameObject::isCentral() const
 
 void GameObject::built()
 {
-	this->_building = true;
+	this->setHealth(this->_decayTarget);
+	this->_built = true;
 	if (this->_buildAnim)
 		this->_buildAnim->reset();
 }
@@ -2153,7 +2187,7 @@ bool GameObject::isSelectable() const
 
 bool GameObject::isSellable() const
 {
-	return this->_sellable;
+	return this->_sellable && !this->_sold;
 }
 
 bool GameObject::isRepairable() const
@@ -2178,6 +2212,11 @@ void GameObject::toggleRepair()
 
 void GameObject::sell()
 {
+	if (!this->isSellable())
+		return;
+	this->_sold = true;
+	if (this->_sellAnim)
+		this->_sellAnim->reset();
 }
 
 const std::optional<UnitDeployParams> &GameObject::getOnDeploy() const
