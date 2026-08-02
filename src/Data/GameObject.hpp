@@ -125,6 +125,7 @@ protected:
 	std::unordered_map<std::string, unsigned> _storage;
 	std::set<Vector2i> _checkTiles;
 	std::optional<std::vector<std::vector<BuildingMask>>> _tiles;
+	std::unordered_map<std::string, unsigned> _sellUnits;
 	std::unordered_map<std::string, unsigned> _sellRefund;
 	std::unordered_map<std::string, unsigned> _repairCost;
 	std::unordered_map<std::string, unsigned> _cost;
@@ -173,6 +174,7 @@ protected:
 	unsigned _repairDelay = 0;
 	unsigned _repairHeal = 0;
 	unsigned _repairTimer = 0;
+	unsigned _sellTimer = 0;
 	std::pair<unsigned, unsigned> _idleTimerRange;
 	int _power = 0;
 	float _speed = 0;

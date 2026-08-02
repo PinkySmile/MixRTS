@@ -56,9 +56,15 @@ void Player::_clean()
 	auto it = this->state.myObjects.begin();
 
 	while (it != this->state.myObjects.end()) {
-		if ((*it)->isDisposable())
+		if ((*it)->isDisposable()) {
+			auto power = (*it)->getPower();
+
+			if (power > 0)
+				this->state.consumedPower -= power;
+			else
+				this->state.producedPower += power;
 			it = this->state.myObjects.erase(it);
-		else
+		} else
 			++it;
 	}
 
@@ -292,7 +298,8 @@ void Player::handleUiEvents()
 
 				auto &sq = this->state.queues[cancelBuild->queue][cancelBuild->id];
 
-				if (sq.paused || sq.buildProgress == sq.buildTime) {
+				if (sq.buildProgress == 0);
+				else if (sq.paused || sq.buildProgress == sq.buildTime) {
 					this->playEVA(UI::EVA_CANCEL, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
 					this->resetQueue(cancelBuild->queue);
 				} else {

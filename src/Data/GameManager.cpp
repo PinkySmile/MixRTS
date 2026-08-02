@@ -182,7 +182,8 @@ void GameManager::update()
 			auto &id = itb->getId();
 
 			--itb->owner->state.elementsOwned[group];
-			toRecompute.emplace(itb->owner);
+			if (!this->_isDebugUnlocked)
+				toRecompute.emplace(itb->owner);
 			if (group != id)
 				--itb->owner->state.elementsOwned[id];
 			itb = this->_liveObjects.erase(itb);

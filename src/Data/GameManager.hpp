@@ -10,10 +10,8 @@
 #include <deque>
 #include <list>
 #include <map>
-#include <set>
 #include <SFML/Window/Event.hpp>
 #include "forward.hpp"
-#include "Color.hpp"
 #include "Vector.hpp"
 #include "Utils.hpp"
 #include "GameObject.hpp"

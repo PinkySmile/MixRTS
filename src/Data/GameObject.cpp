@@ -227,6 +227,7 @@ GameObject::GameObject(
 	if (json.contains("sell")) {
 		assert_exp(json["sell"].is_object());
 		assert_exp(json["sell"].contains("anim") && json["sell"]["anim"].is_object());
+		assert_exp(json["sell"].contains("units") && json["sell"]["units"].is_object());
 		assert_exp(json["sell"].contains("refund") && json["sell"]["refund"].is_object());
 	}
 	if (json.contains("skirt")) {
@@ -472,6 +473,8 @@ GameObject::GameObject(
 	if (json.contains("sell")) {
 		this->_sellAnim.emplace(base, this, animList, json["sell"]["anim"]);
 		this->_sellRefund = json["sell"]["refund"];
+		for (auto &[key, nb] : json["sell"]["units"].items())
+			this->_sellUnits[RESOURCE(base.getName(), key)] = nb;
 		this->_showBeforeSell = this->_buildAnim->size() - this->_showAfterBuild;
 	}
 	if (json.contains("select_sound")) {
@@ -1345,7 +1348,35 @@ void GameObject::update()
 		if (!this->_buildAnim || !(*this->_buildAnim)() || this->_buildAnim->update())
 			this->_built = false;
 	} else if (this->_sold) {
-		if (this->_sellAnim && (*this->_sellAnim)() && this->_sellAnim->update()) {
+		assert_exp(this->_sellAnim);
+		if (this->_sellAnim->current() == this->_showBeforeSell && this->_sellTimer == 0) {
+			std::pair<Vector2f, std::vector<Vector2f>> offsets[] = {
+				{{1, 1}, { {-1,  1}, { 0,  1}, { 1,  1} }},
+				{{0, 0}, { {-1,  0}, {-1, -1}, { 0, -1} }},
+				{{2, 0}, { { 0, -1}, { 1, -1}, { 1,  0} }},
+				{{1, 0}, { {-1, -1}, { 0, -1}, { 1, -1} }},
+				{{0, 1}, { {-1, -1}, {-1,  0}, {-1,  1} }},
+				{{2, 1}, { { 1, -1}, { 1,  0}, { 1,  1} }},
+				{{1, 2}, { {-1,  1}, { 0,  1}, { 1,  1} }},
+				{{0, 2}, { {-1,  0}, {-1,  1}, { 0,  1} }},
+				{{2, 2}, { { 1,  0}, { 1,  1}, { 0,  1} }},
+			};
+			size_t i = 0;
+
+			this->_sellTimer++;
+			for (auto &[name, nb] : this->_sellUnits) {
+				while (nb--) {
+					assert_exp(i < std::size(offsets));
+					auto pos = this->_gridPos + offsets[i].first;
+					auto obj = this->manager->spawnObject(this->owner->state.index, this->map->topLeftCoordToAbs(pos), "", name);
+					auto out = pos + offsets[i].second[game->gameRandom() % offsets[i].second.size()];
+
+					obj->moveTo(this->map->topLeftCoordToAbs(out), true);
+					i++;
+				}
+			}
+		}
+		if ((*this->_sellAnim)() && this->_sellAnim->update()) {
 			for (auto &[fundType, value] : this->_sellRefund)
 				this->owner->credit(fundType, value, Player::CREDIT_SYSTEM);
 			this->_disposable = true;
@@ -2130,7 +2161,12 @@ bool GameObject::isCentral() const
 
 void GameObject::built()
 {
+	// FIXME:
+	auto old = this->_lowerPowerWhenDamaged;
+
+	this->_lowerPowerWhenDamaged = false;
 	this->setHealth(this->_decayTarget);
+	this->_lowerPowerWhenDamaged = old;
 	this->_built = true;
 	if (this->_buildAnim)
 		this->_buildAnim->reset();
