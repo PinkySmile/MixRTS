@@ -120,6 +120,7 @@ protected:
 	const MultiSound *_buildSound = nullptr;
 	const MultiSound *_doSound = nullptr;
 	const MultiSound *_selectSound = nullptr;
+	const MultiSound *_deathSound = nullptr;
 	std::optional<std::string> _giveQueue;
 	std::optional<UnitDeployParams> _onDeploy;
 	std::unordered_map<std::string, unsigned> _storage;

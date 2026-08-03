@@ -199,6 +199,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("produced_anim") || json["produced_anim"].is_null() || json["produced_anim"].is_object());
 	assert_exp(!json.contains("stackable") || json["stackable"].is_boolean());
 	assert_exp(!json.contains("crush_sound") || json["crush_sound"].is_string());
+	assert_exp(!json.contains("death_sound") || json["death_sound"].is_string());
 	assert_exp(!json.contains("can_crush") || json["can_crush"].is_boolean());
 	assert_exp(!json.contains("radar") || json["radar"].is_boolean());
 	assert_exp(!json.contains("repair_delay") || json["repair_delay"].is_number());
@@ -448,6 +449,12 @@ GameObject::GameObject(
 
 		assert_msg(sounds.contains(crushSound), crushSound);
 		this->_crushSound = &sounds.at(crushSound);
+	}
+	if (json.contains("death_sound")) {
+		auto deathSound = RESOURCE(base.getName(), json["death_sound"]);
+
+		assert_msg(sounds.contains(deathSound), deathSound);
+		this->_deathSound = &sounds.at(deathSound);
 	}
 	if (json.contains("pass_flags")) {
 		if (json["pass_flags"].is_string()) {
@@ -1596,13 +1603,15 @@ void GameObject::heal(unsigned int amount)
 
 void GameObject::damage(unsigned int amount)
 {
-	this->setHealth(this->_hp - amount);
+	this->setHealth(std::max<int>(this->_hp - amount, 0));
 }
 
 void GameObject::setHealth(unsigned health)
 {
 	if (this->_lowerPowerWhenDamaged)
 		this->owner->state.producedPower += this->getPower();
+	if (health == 0 && this->_deathSound)
+		this->_deathSound->play();
 	this->_hp = std::min(health, this->_maxHp);
 	if (this->_lowerPowerWhenDamaged)
 		this->owner->state.producedPower -= this->getPower();
@@ -2025,7 +2034,7 @@ std::optional<float> GameObject::getStorageDisplay() const
 void GameObject::crushedBy(GameObject *)
 {
 	this->deinitGlobalGrid();
-	this->_hp = 0;
+	this->setHealth(0);
 	this->_crushSound->play();
 	this->_crushed = true;
 	this->_solid = false;
