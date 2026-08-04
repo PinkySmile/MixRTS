@@ -26,10 +26,14 @@ private:
 	std::vector<std::string> _objects;
 	std::vector<std::string> _upgrades;
 	std::vector<std::string> _animations;
+	std::vector<std::string> _effects;
+	std::vector<std::string> _weapons;
 	std::unordered_map<std::string, MultiSound> _loadedSounds;
 	std::unordered_map<std::string, Upgrade> _loadedUpgrades;
 	std::unordered_map<std::string, GameObject> _loadedObjects;
 	std::unordered_map<std::string, std::vector<Animation>> _loadedAnimations;
+	std::unordered_map<std::string, Effect> _loadedEffects;
+	std::unordered_map<std::string, Weapon> _loadedWeapons;
 	std::unordered_map<std::string, unsigned> _startingMoney;
 	std::vector<StartObject> _startingObjects;
 	std::optional<std::string> _primaryQueue;
@@ -55,6 +59,8 @@ public:
 	[[nodiscard]] const std::unordered_map<std::string, MultiSound> &getSounds() const;
 	[[nodiscard]] const std::unordered_map<std::string, Upgrade> &getUpgrades() const;
 	[[nodiscard]] const std::unordered_map<std::string, GameObject> &getObjects() const;
+	[[nodiscard]] const std::unordered_map<std::string, Effect> &getEffects() const;
+	[[nodiscard]] const std::unordered_map<std::string, Weapon> &getWeapons() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getStartingMoney() const;
 	[[nodiscard]] const std::vector<StartObject> &getStartingObjects() const;
 	[[nodiscard]] UI *createUI() const;

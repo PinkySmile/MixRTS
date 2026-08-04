@@ -121,6 +121,7 @@ protected:
 	const MultiSound *_doSound = nullptr;
 	const MultiSound *_selectSound = nullptr;
 	const MultiSound *_deathSound = nullptr;
+	std::vector<std::string> _tags;
 	std::optional<std::string> _giveQueue;
 	std::optional<UnitDeployParams> _onDeploy;
 	std::unordered_map<std::string, unsigned> _storage;
@@ -266,6 +267,7 @@ public:
 	void toggleRepair();
 	void sell();
 
+	[[nodiscard]] const std::vector<std::string> &getTags() const;
 	[[nodiscard]] const std::optional<UnitDeployParams> &getOnDeploy() const;
 	[[nodiscard]] unsigned getSpeed() const;
 	[[nodiscard]] int getPower() const;

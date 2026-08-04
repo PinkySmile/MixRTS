@@ -12,6 +12,8 @@
 #include "Animation.hpp"
 #include "CursorAnimation.hpp"
 #include "Upgrade.hpp"
+#include "Effect.hpp"
+#include "Weapon.hpp"
 #include "Mod.hpp"
 #include "Utils.hpp"
 #include "GameObject.hpp"
@@ -289,6 +291,84 @@ void Mod::loadUpgrades(const std::filesystem::path &path, const Faction &base, s
 #ifndef PROPAGATE_CRASH
 	} catch (std::exception &e) {
 		throw _AssertionFailedException("While loading upgrade file \"" + path.string() + "\"\n" + e.what());
+	}
+#endif
+}
+
+void Mod::loadEffects(const std::filesystem::path &path, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, MultiSound> &sounds, std::unordered_map<std::string, Effect> &effects) const
+{
+#ifndef PROPAGATE_CRASH
+	try {
+#endif
+		std::ifstream stream{this->_base / path};
+		nlohmann::json json;
+		nlohmann::json gen;
+
+		assert_msg(stream, "Failed to open " + path.string());
+		stream >> json;
+		if (json.contains("_general"))
+			gen = json["_general"];
+		else
+			gen = nlohmann::json::object();
+		for (auto &[id, jeffect] : json.items()) {
+		#ifndef PROPAGATE_CRASH
+			try {
+		#endif
+				if (id.starts_with('_'))
+					continue;
+
+				std::string fullId = RESOURCE(this->_name, id);
+
+				assert_exp(!effects.contains(fullId));
+				effects.emplace(fullId, Effect{*this, anims, sounds, mergeObjects(jeffect, gen)});
+		#ifndef PROPAGATE_CRASH
+			} catch (std::exception &e) {
+				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what());
+			}
+		#endif
+		}
+#ifndef PROPAGATE_CRASH
+	} catch (std::exception &e) {
+		throw _AssertionFailedException("While loading effect file \"" + path.string() + "\"\n" + e.what());
+	}
+#endif
+}
+
+void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_map<std::string, Effect> &effects, const std::unordered_map<std::string, MultiSound> &sounds, std::unordered_map<std::string, Weapon> &weapons) const
+{
+#ifndef PROPAGATE_CRASH
+	try {
+#endif
+		std::ifstream stream{this->_base / path};
+		nlohmann::json json;
+		nlohmann::json gen;
+
+		assert_msg(stream, "Failed to open " + path.string());
+		stream >> json;
+		if (json.contains("_general"))
+			gen = json["_general"];
+		else
+			gen = nlohmann::json::object();
+		for (auto &[id, jweapon] : json.items()) {
+		#ifndef PROPAGATE_CRASH
+			try {
+		#endif
+				if (id.starts_with('_'))
+					continue;
+
+				std::string fullId = RESOURCE(this->_name, id);
+
+				assert_exp(!weapons.contains(fullId));
+				weapons.emplace(fullId, Weapon{*this, effects, sounds, mergeObjects(jweapon, gen)});
+		#ifndef PROPAGATE_CRASH
+			} catch (std::exception &e) {
+				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what());
+			}
+		#endif
+		}
+#ifndef PROPAGATE_CRASH
+	} catch (std::exception &e) {
+		throw _AssertionFailedException("While loading weapon file \"" + path.string() + "\"\n" + e.what());
 	}
 #endif
 }

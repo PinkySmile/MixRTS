@@ -7,6 +7,8 @@
 #include "Faction.hpp"
 #include "Animation.hpp"
 #include "Upgrade.hpp"
+#include "Effect.hpp"
+#include "Weapon.hpp"
 #include "Player.hpp"
 #include "Mod.hpp"
 #include "UI.hpp"

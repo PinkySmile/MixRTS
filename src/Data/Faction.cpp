@@ -7,6 +7,8 @@
 #include "Mod.hpp"
 #include "Animation.hpp"
 #include "Upgrade.hpp"
+#include "Effect.hpp"
+#include "Weapon.hpp"
 #include "GameObject.hpp"
 #include "D2K/D2KUI.hpp"
 
@@ -37,6 +39,14 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	assert_exp(data.contains("upgrades") && data["upgrades"].is_array());
 	for (size_t i = 0; i < data["upgrades"].size(); i++)
 		assert_msg(data["upgrades"][i].is_string(), "data[\"upgrades\"][" + std::to_string(i) + "]");
+
+	assert_exp(data.contains("effects") && data["effects"].is_array());
+	for (size_t i = 0; i < data["effects"].size(); i++)
+		assert_msg(data["effects"][i].is_string(), "data[\"effects\"][" + std::to_string(i) + "]");
+
+	assert_exp(data.contains("weapons") && data["weapons"].is_array());
+	for (size_t i = 0; i < data["weapons"].size(); i++)
+		assert_msg(data["weapons"][i].is_string(), "data[\"weapons\"][" + std::to_string(i) + "]");
 
 	assert_exp(data.contains("starting_money") && data["starting_money"].is_object());
 	for (auto &[key, value] : data["starting_money"].items())
@@ -76,6 +86,8 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	this->_objects = data["objects"];
 	this->_animations = data["animations"];
 	this->_upgrades = data["upgrades"];
+	this->_effects = data["effects"];
+	this->_weapons = data["weapons"];
 	this->_sounds = data["sounds"];
 	this->_startingMoney = data["starting_money"];
 	this->_uiData = data["ui"];
@@ -121,6 +133,10 @@ void Faction::load()
 			this->_base.loadAnimations(a, this->_loadedAnimations);
 		for (auto &a: this->_sounds)
 			this->_base.loadSounds(a, this->_loadedSounds);
+		for (auto &e: this->_effects)
+			this->_base.loadEffects(e, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects);
+		for (auto &w: this->_weapons)
+			this->_base.loadWeapons(w, this->_loadedEffects, this->_loadedSounds, this->_loadedWeapons);
 		for (auto &u: this->_objects)
 			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedObjects);
 		for (auto &u: this->_upgrades)
@@ -145,6 +161,16 @@ const std::unordered_map<std::string, MultiSound> &Faction::getSounds() const
 const std::unordered_map<std::string, Upgrade> &Faction::getUpgrades() const
 {
 	return this->_loadedUpgrades;
+}
+
+const std::unordered_map<std::string, Effect> &Faction::getEffects() const
+{
+	return this->_loadedEffects;
+}
+
+const std::unordered_map<std::string, Weapon> &Faction::getWeapons() const
+{
+	return this->_loadedWeapons;
 }
 
 const std::unordered_map<std::string, unsigned> &Faction::getStartingMoney() const

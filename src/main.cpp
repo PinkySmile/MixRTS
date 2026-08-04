@@ -3,6 +3,8 @@
 #include <cfenv>
 #include "Data/Animation.hpp"
 #include "Data/Upgrade.hpp"
+#include "Data/Effect.hpp"
+#include "Data/Weapon.hpp"
 #include "Resources/Game.hpp"
 #include "Resources/Assert.hpp"
 #include "Data/Player.hpp"
@@ -17,6 +19,10 @@ float guiScale = 1.5f;
 #ifdef _DEBUG
 bool DEBUG_MODE = false;
 #endif
+
+struct Args {
+	bool loadingOnly = false;
+};
 
 void reloadViews(Vector2u size)
 {
@@ -54,8 +60,46 @@ void dispFPS(float frameTime)
 	game->screen->setView(old);
 }
 
-int main()
+int parseArgs(int argc, char **argv, Args &args)
 {
+	std::map<std::string, char> longToShort = {
+		{"load-only", 'l'}
+	};
+	std::map<char, std::function<void ()>> cbs = {
+		{'l', [&args] { args.loadingOnly = true; }}
+	};
+
+	for (int i = 0; i < argc; i++) {
+		if (argv[i][0] == '-') {
+			if (argv[i][1] == '-') {
+				auto it = longToShort.find(&argv[i][2]);
+
+				if (it == longToShort.end()) {
+					fprintf(stderr, "Unknown format %s\n", &argv[i][2]);
+					return EXIT_FAILURE;
+				}
+				cbs[it->second]();
+			} else for (size_t j = 1; argv[i][j]; j++) {
+				auto it = cbs.find(argv[i][j]);
+
+				if (it == cbs.end()) {
+					fprintf(stderr, "Unknown format %c\n", argv[i][j]);
+					return EXIT_FAILURE;
+				}
+				it->second();
+			}
+		}
+	}
+	return EXIT_SUCCESS;
+}
+
+int main(int argc, char **argv)
+{
+	Args args;
+	int ret = parseArgs(argc, argv, args);
+
+	if (ret != 0)
+		return ret;
 #ifdef __linux__
 	feenableexcept(FE_INVALID);
 #elif defined(_WIN32) || defined(_WIN64)
@@ -136,6 +180,8 @@ int main()
 		music.play();
 		music.setLooping(true);
 		reloadViews(game->screen->getSize());
+		if (args.loadingOnly)
+			game->screen->close();
 		while (game->screen->isOpen()) {
 			while (auto event = game->screen->pollEvent()) {
 				if (event->is<sf::Event::Closed>())

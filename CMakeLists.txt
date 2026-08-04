@@ -201,6 +201,10 @@ add_executable(
 	src/Data/GridMask.hpp
 	src/Data/Map.cpp
 	src/Data/Map.hpp
+	src/Data/Weapon.cpp
+	src/Data/Weapon.hpp
+	src/Data/Effect.cpp
+	src/Data/Effect.hpp
 )
 
 target_link_libraries(

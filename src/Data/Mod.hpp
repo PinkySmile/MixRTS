@@ -38,6 +38,18 @@ public:
 		const std::filesystem::path &path,
 		const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades
 	) const;
+	void loadEffects(
+		const std::filesystem::path &path,
+		const std::unordered_map<std::string, std::vector<Animation>> &anims,
+		const std::unordered_map<std::string, MultiSound> &sounds,
+		std::unordered_map<std::string, Effect> &effects
+	) const;
+	void loadWeapons(
+		const std::filesystem::path &path,
+		const std::unordered_map<std::string, Effect> &effects,
+		const std::unordered_map<std::string, MultiSound> &sounds,
+		std::unordered_map<std::string, Weapon> &weapons
+	) const;
 	void loadObjects(
 		const std::filesystem::path &path,
 		const Faction &base,

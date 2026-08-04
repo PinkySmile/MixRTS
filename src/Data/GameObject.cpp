@@ -176,6 +176,9 @@ GameObject::GameObject(
 	assert_exp(!json.contains("build_speed") || json["build_speed"].is_number_unsigned());
 	assert_exp(!json.contains("group") || json["group"].is_string());
 	assert_exp(json.contains("requirements") && json["requirements"].is_array());
+	assert_exp(json.contains("tags") && json["tags"].is_array());
+	for (size_t i = 0; i < json["tags"].size(); i++)
+		assert_msg(json["tags"][i].is_string(), "json[\"tags\"][\"" + std::to_string(i) + "\"]");
 	assert_exp(json.contains("anims") && json["anims"].is_array());
 	assert_exp(!json.contains("sight") || json["sight"].is_number());
 	assert_exp(!json.contains("turn_speed") || json["turn_speed"].is_number());
@@ -328,7 +331,7 @@ GameObject::GameObject(
 	this->_decayTarget = this->_maxHp = this->_hp;
 	this->_cost = json["cost"];
 	this->_size = {json["size"]["x"], json["size"]["y"]};
-
+	this->_tags = json["tags"];
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
 	if (json.contains("directions")) {
@@ -2267,6 +2270,11 @@ void GameObject::sell()
 	this->_sold = true;
 	if (this->_sellAnim)
 		this->_sellAnim->reset();
+}
+
+const std::vector<std::string> &GameObject::getTags() const
+{
+	return this->_tags;
 }
 
 const std::optional<UnitDeployParams> &GameObject::getOnDeploy() const
