@@ -25,42 +25,7 @@
 bool GameObject::_shortenOrder(Order &o)
 {
 	if (std::holds_alternative<MoveOrder>(o) || std::holds_alternative<AttackUnitOrder>(o)) {
-		if (!this->_boundToGrid)
-			return true;
-
-		float x = std::fmod(this->_position.x, this->map->tileSize.x);
-		float y = std::fmod(this->_position.y, this->map->tileSize.y);
-
-		if (x == 0 && y == 0)
-			return true;
-		this->_pathCache.erase(this->_pathCache.begin() + 1, this->_pathCache.end());
-
-		Vector2f pos = this->_position + this->_size / 2;
-
-		// TODO: Handle non-square grids
-		if (this->_currentDir == 1 * this->_anims.size() / 8) {
-			pos.x += this->map->tileSize.x - x;
-			pos.y -= y;
-		} else if (this->_currentDir == 3 * this->_anims.size() / 8) {
-			pos.x += this->map->tileSize.x - x;
-			pos.y += this->map->tileSize.y - y;
-		} else if (this->_currentDir == 5 * this->_anims.size() / 8) {
-			pos.x -= x;
-			pos.y += this->map->tileSize.y - y;
-		} else if (this->_currentDir == 7 * this->_anims.size() / 8) {
-			pos.x -= x;
-			pos.y -= y;
-		} else if (this->_currentDir == 0 * this->_anims.size() / 8)
-			pos.y -= y;
-		else if (this->_currentDir == 2 * this->_anims.size() / 8)
-			pos.x += this->map->tileSize.x - x;
-		else if (this->_currentDir == 4 * this->_anims.size() / 8)
-			pos.y += this->map->tileSize.y - y;
-		else if (this->_currentDir == 6 * this->_anims.size() / 8)
-			pos.x -= x;
-
-		this->_cachedDest = pos;
-		this->_pathCache.front() = this->_cachedDest;
+		this->_orderQueue.emplace_front(FinishMovementOrder{});
 		return false;
 	} else if (std::holds_alternative<HarvestOrder>(o)) {
 		this->cancel = true;
@@ -1344,10 +1309,36 @@ bool GameObject::_updateAttack(const GameObject *obj)
 	range *= range;
 	if (range < diff.magnitude2()) {
 		if (this->_updateMove(opCenter, false, obj)) {
-			
+		
 		}
+		return false;
 	}
+	if (!this->_updateFinishMovement())
+		return false;
 	return false;
+}
+
+bool GameObject::_updateFinishMovement()
+{
+	if (!this->_boundToGrid)
+		return true;
+
+	float x = std::fmod(this->_position.x, this->map->tileSize.x);
+	float y = std::fmod(this->_position.y, this->map->tileSize.y);
+
+	if (x == 0 && y == 0)
+		return true;
+	this->_pathCache.erase(this->_pathCache.begin() + 1, this->_pathCache.end());
+
+	Vector2f pos = this->_position;
+	Vector2f diff = this->_pathCache.back() + this->_getTileOffsetFromCenter() - pos;
+
+	// TODO: Handle non-square grids
+	diff.x = std::fmod(diff.x, this->map->tileSize.x);
+	diff.y = std::fmod(diff.y, this->map->tileSize.y);
+	this->_cachedDest = pos + diff;
+	this->_pathCache.front() = this->_cachedDest;
+	return this->_updateMove(this->_cachedDest, false, nullptr);
 }
 
 bool GameObject::_handleOrder(const Order &o)
@@ -1366,6 +1357,8 @@ bool GameObject::_handleOrder(const Order &o)
 		return this->_updateDeploy();
 	if (auto attack = std::get_if<AttackUnitOrder>(&o))
 		return this->_updateAttack(attack->target);
+	if (std::holds_alternative<FinishMovementOrder>(o))
+		return this->_updateFinishMovement();
 	return true;
 }
 

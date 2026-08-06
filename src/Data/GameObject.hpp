@@ -27,6 +27,7 @@ struct DeployOrder;
 struct DumpOrder;
 struct MoveCheckOrder;
 struct AttackUnitOrder;
+struct FinishMovementOrder;
 typedef std::variant<
 	TurnOrder,
 	MoveOrder,
@@ -34,7 +35,8 @@ typedef std::variant<
 	HarvestOrder,
 	DumpOrder,
 	MoveCheckOrder,
-	AttackUnitOrder
+	AttackUnitOrder,
+	FinishMovementOrder
 > Order;
 
 struct TurnOrder {
@@ -44,6 +46,7 @@ struct MoveOrder {
 	Vector2i destination;
 	bool force;
 };
+struct FinishMovementOrder {};
 struct HarvestOrder {};
 struct DeployOrder {};
 struct DumpOrder {
@@ -369,6 +372,7 @@ protected:
 	bool _updateDump(GameObject *place);
 	bool _updateDeploy();
 	bool _updateAttack(const GameObject *obj);
+	bool _updateFinishMovement();
 	unsigned _getFreeBarrelFor(const GameObject *obj) const;
 
 	void _harvestClosestResource();

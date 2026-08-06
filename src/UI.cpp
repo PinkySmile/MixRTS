@@ -548,13 +548,14 @@ void UI::_tileClickedNormal()
 
 					a.target = o->index;
 					a.indices.push_back(s->index);
+					usedUnits.emplace(s->index);
 					goto continueOutter;
 				}
 		}
 		for (auto &a : attack | std::ranges::views::values)
 			this->_eventQueue.emplace_back(a);
 
-		if (!this->_objectBuffer.empty() && (!hasHarvester || !canDeposit)) {
+		if (!this->_objectBuffer.empty() && (!hasHarvester || !canDeposit) && usedUnits.empty()) {
 			this->state->selectedObjects.clear();
 			this->state->selectedObjects.emplace(this->_objectBuffer.back());
 			// TODO: Wrong check. Should have a different index per controlling player.
