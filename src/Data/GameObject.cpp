@@ -8,6 +8,7 @@
 #include "Animation.hpp"
 #include "Player.hpp"
 #include "ConditionalAnim.hpp"
+#include "Weapon.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
 
@@ -23,7 +24,7 @@
 
 bool GameObject::_shortenOrder(Order &o)
 {
-	if (std::holds_alternative<MoveOrder>(o)) {
+	if (std::holds_alternative<MoveOrder>(o) || std::holds_alternative<AttackUnitOrder>(o)) {
 		if (!this->_boundToGrid)
 			return true;
 
@@ -145,6 +146,10 @@ GameObject::GameObject(const GameObject &g) :
 
 	if (!this->_idleAnims.empty())
 		this->_idleTimer = random_distrib(game->gameRandom, this->_idleTimerRange.first, this->_idleTimerRange.second);
+
+	for (auto &weapon : this->_weapons)
+		for (auto &tag : weapon.weapon->canHitTags())
+			this->_weaponByTag[tag].push_back(&weapon);
 }
 
 GameObject::GameObject(
@@ -152,6 +157,7 @@ GameObject::GameObject(
 	const std::string &id,
 	const std::unordered_map<std::string, std::vector<Animation>> &animList,
 	const std::unordered_map<std::string, MultiSound> &sounds,
+	const std::unordered_map<std::string, Weapon> &weapons,
 	const nlohmann::json &json
 ) :
 	GameObjectData(faction)
@@ -180,6 +186,7 @@ GameObject::GameObject(
 	for (size_t i = 0; i < json["tags"].size(); i++)
 		assert_msg(json["tags"][i].is_string(), "json[\"tags\"][\"" + std::to_string(i) + "\"]");
 	assert_exp(json.contains("anims") && json["anims"].is_array());
+	assert_exp(!json.contains("weapons") || json["weapons"].is_array());
 	assert_exp(!json.contains("sight") || json["sight"].is_number());
 	assert_exp(!json.contains("turn_speed") || json["turn_speed"].is_number());
 	assert_exp(!json.contains("do_sound") || json["do_sound"].is_string());
@@ -332,6 +339,9 @@ GameObject::GameObject(
 	this->_cost = json["cost"];
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 	this->_tags = json["tags"];
+	// TODO: Apply right any_ flag
+	this->_tags.emplace_back("any_ground");
+	this->_tags.emplace_back("any");
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
 	if (json.contains("directions")) {
@@ -554,6 +564,13 @@ GameObject::GameObject(
 			std::make_unique<ConditionalAnim>(base, this, animList, json["dump"]["start_anim"]),
 			std::make_unique<ConditionalAnim>(base, this, animList, json["dump"]["stop_anim"])
 		);
+	if (json.contains("weapons")) {
+		for (auto &weapon : json["weapons"])
+			this->_weapons.emplace_back(base, weapons, weapon);
+		std::ranges::sort(this->_weapons, [](const ObjectWeapon &a, const ObjectWeapon &b) -> bool {
+			return a.priority < b.priority;
+		});
+	}
 
 	if (json.contains("select")) {
 		assert_exp(json["select"].contains("x"));
@@ -608,6 +625,9 @@ GameObject::GameObject(
 		this->_currentTilePosition = PFFREEMASK_NONE;
 	this->_oldTilePosition = this->_currentTilePosition;
 	assert_exp(!this->_stackable || this->_boundToGrid);
+	for (auto &weapon : this->_weapons)
+		for (auto &tag : weapon.weapon->canHitTags())
+			this->_weaponByTag[tag].push_back(&weapon);
 }
 
 GameObject::~GameObject()
@@ -620,7 +640,10 @@ struct ObstructionContext {
 	size_t team;
 	uint32_t mask;
 	Vector2u hitBoxSize;
+	Vector2i dest;
+	const MapState *ggrid;
 	const PathFindingGrid *grid;
+	const GameObject *ignoreObject;
 	bool stackable;
 	bool canCrush;
 };
@@ -637,6 +660,26 @@ static bool IsPathObstructedTerrain(Vector2i p, void *ctx)
 		return true;
 	if (p.y + octx->hitBoxSize.y > octx->grid->gridSize.y)
 		return true;
+	if (octx->ignoreObject) {
+		Vector2i pos = octx->ignoreObject->getPosition();
+		Vector2u size = octx->ignoreObject->getSize();
+		MapState::Quad absP = {
+			Vector2f(p.x, p.y),
+			Vector2f(p.x + 1, p.y),
+			Vector2f(p.x + 1, p.y + 1),
+			Vector2f(p.x, p.y + 1)
+		};
+
+		if (octx->ggrid)
+			absP = octx->ggrid->tileCoordToAbs(p);
+		if (
+			pos.x + size.x > absP.pt1.x &&
+			pos.y + size.y > absP.pt1.y &&
+			pos.x <= absP.pt3.x &&
+			pos.y <= absP.pt3.y
+		)
+			return false;
+	}
 	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
 		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
 			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
@@ -650,6 +693,8 @@ static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 {
 	auto octx = static_cast<ObstructionContext *>(ctx);
 
+	if (p == octx->dest && octx->ignoreObject)
+		return false;
 	if (p.x < 0)
 		return true;
 	if (p.y < 0)
@@ -673,6 +718,8 @@ static float GetTileCostMovableUnits(Vector2i p, void *ctx)
 	auto octx = static_cast<ObstructionContext *>(ctx);
 	float cost = 0;
 
+	if (p == octx->dest && octx->ignoreObject)
+		return 0;
 	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
 		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
 			auto index = (p.x + x) + (p.y + y) * octx->grid->gridSize.x;
@@ -772,13 +819,15 @@ bool GameObject::_updateCheckMove(Vector2i pos, void (GameObject::*fail)())
 	return true;
 }
 
-void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid)
+void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject)
 {
 	ObstructionContext ctx;
 	Vector2i target;
 	Vector2i pos;
 	Vector2u step = {1, 1};
 
+	ctx.ignoreObject = ignoreObject;
+	ctx.dest = destination;
 	ctx.team = this->owner->state.team;
 	ctx.mask = this->_passFlags;
 	ctx.stackable = this->_stackable;
@@ -786,11 +835,13 @@ void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid)
 	if (this->_boundToGrid) {
 		ctx.hitBoxSize = {1, 1};
 		ctx.grid = &this->map->pathFindingGrid;
+		ctx.ggrid = this->map;
 		target = this->map->absToTileCoord(destination);
 		pos = this->_gridPos;
 	} else {
 		ctx.hitBoxSize = this->_size;
 		ctx.grid = this->pfGrid;
+		ctx.ggrid = nullptr;
 		target = destination;
 		pos = this->_position;
 	}
@@ -845,7 +896,7 @@ GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size) const
 	return fallback;
 }
 
-CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid)
+CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject)
 {
 	Vector2i nextTile = this->map->absToTileCoord(this->_pathCache.back());
 
@@ -890,7 +941,7 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid)
 		}
 
 		saved = this->_pathCache;
-		this->_computeMovePath(this->_cachedDest, ignoreSolid);
+		this->_computeMovePath(this->_cachedDest, ignoreSolid, ignoreObject);
 		if (!this->_pathCache.empty()) {
 			Vector2i newNext = this->map->absToTileCoord(this->_pathCache.back());
 
@@ -902,7 +953,7 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid)
 		return COLLISION_WAIT;
 	} else {
 		saved = this->_pathCache;
-		this->_computeMovePath(this->_cachedDest, ignoreSolid);
+		this->_computeMovePath(this->_cachedDest, ignoreSolid, ignoreObject);
 		if (!this->_pathCache.empty()) {
 			Vector2i newNext = this->map->absToTileCoord(this->_pathCache.back());
 
@@ -928,7 +979,7 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid)
 	}
 }
 
-CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid)
+CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject)
 {
 	auto stepPos = [this](Vector2f dest) -> Vector2i {
 		Vector2f pos = this->_position;
@@ -961,7 +1012,7 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid)
 
 	std::vector<Vector2i> saved = this->_pathCache;
 
-	this->_computeMovePath(this->_cachedDest, ignoreSolid);
+	this->_computeMovePath(this->_cachedDest, ignoreSolid, ignoreObject);
 	if (!this->_pathCache.empty()) {
 		Vector2i newNext = stepPos(this->_pathCache.back());
 
@@ -979,11 +1030,11 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid)
 	return COLLISION_WAIT;
 }
 
-bool GameObject::_updateMove(Vector2i destination, bool force)
+bool GameObject::_updateMove(Vector2i destination, bool force, const GameObject *ignoreObject)
 {
 	if (!this->_pathCached) {
 		this->_cachedDest = destination;
-		this->_computeMovePath(destination, force);
+		this->_computeMovePath(destination, force, ignoreObject);
 		this->_pathCached = true;
 		if (this->_pathCache.empty())
 			return true;
@@ -1013,11 +1064,11 @@ bool GameObject::_updateMove(Vector2i destination, bool force)
 		unsigned angle = round((*a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
 
 		angle %= this->_anims.size();
-		if (angle != this->_currentDir && !this->_handleOrder(TurnOrder{angle}))
+		if (angle != this->_currentDir && !this->_updateTurn(angle))
 			return false;
 	}
 
-	switch (this->_boundToGrid ? this->_resolveGridCollision(force) : this->_resolveFreeCollision(force)) {
+	switch (this->_boundToGrid ? this->_resolveGridCollision(force, ignoreObject) : this->_resolveFreeCollision(force, ignoreObject)) {
 	case COLLISION_ABORT:
 		return true;
 	case COLLISION_WAIT:
@@ -1279,12 +1330,32 @@ bool GameObject::_updateDeploy()
 	return true;
 }
 
+bool GameObject::_updateAttack(const GameObject *obj)
+{
+	if (obj == nullptr || obj->isDead())
+		return true;
+
+	const ObjectWeapon *weapon = this->getBestWeaponFor(obj, this->_getFreeBarrelFor(obj));
+	unsigned range = weapon->weapon->getRange();
+	Vector2f myCenter = this->_position + this->_size / 2;
+	Vector2f opCenter = obj->_position + obj->_size / 2;
+	Vector2f diff = (opCenter - myCenter).abs();
+
+	range *= range;
+	if (range < diff.magnitude2()) {
+		if (this->_updateMove(opCenter, false, obj)) {
+			
+		}
+	}
+	return false;
+}
+
 bool GameObject::_handleOrder(const Order &o)
 {
 	if (auto turn = std::get_if<TurnOrder>(&o))
 		return this->_updateTurn(turn->resultDir);
 	if (auto move = std::get_if<MoveOrder>(&o))
-		return this->_updateMove(move->destination, move->force);
+		return this->_updateMove(move->destination, move->force, nullptr);
 	if (auto cmove = std::get_if<MoveCheckOrder>(&o))
 		return this->_updateCheckMove(cmove->destination, cmove->fail);
 	if (std::holds_alternative<HarvestOrder>(o))
@@ -1293,7 +1364,14 @@ bool GameObject::_handleOrder(const Order &o)
 		return this->_updateDump(dump->target);
 	if (std::holds_alternative<DeployOrder>(this->_orderQueue.front()))
 		return this->_updateDeploy();
+	if (auto attack = std::get_if<AttackUnitOrder>(&o))
+		return this->_updateAttack(attack->target);
 	return true;
+}
+
+unsigned GameObject::_getFreeBarrelFor(const GameObject *obj) const
+{
+	return 0;
 }
 
 void GameObject::playBuiltSound() const
@@ -1411,10 +1489,14 @@ void GameObject::update()
 			if (anim())
 				anim.update();
 	}
-	for (auto &o : this->_orderQueue)
-		if (auto dump = std::get_if<DumpOrder>(&o))
+	for (auto &o : this->_orderQueue) {
+		if (auto dump = std::get_if<DumpOrder>(&o)) {
 			if (dump->target->isDisposable())
 				dump->target = nullptr;
+		} else if (auto attack = std::get_if<AttackUnitOrder>(&o))
+			if (attack->target->isDisposable())
+				attack->target = nullptr;
+	}
 	if (this->_dumping && (*this->_dump->during)())
 		this->_dump->during->update();
 	if (!this->_harvestAnims.empty() && this->_harvesting) {
@@ -1766,6 +1848,11 @@ void GameObject::harvest(const Vector2i &pos, bool automatic)
 void GameObject::harvest()
 {
 	this->_harvestClosestResource();
+}
+
+void GameObject::attack(const GameObject *obj)
+{
+	this->_orderQueue.emplace_back(AttackUnitOrder{obj});
 }
 
 void GameObject::moveTo(const Vector2i &pos, bool automatic)
@@ -2272,6 +2359,35 @@ void GameObject::sell()
 		this->_sellAnim->reset();
 }
 
+const ObjectWeapon *GameObject::getBestWeaponFor(const GameObject *obj, unsigned barrel) const
+{
+	const std::vector<std::string> &tags = obj->getTags();
+
+	for (const std::string &tag : tags) {
+		auto it = this->_weaponByTag.find(tag);
+
+		if (it == this->_weaponByTag.end())
+			continue;
+
+		for (auto &weapon : it->second) {
+			if (barrel != UINT32_MAX && weapon->barrel != barrel)
+				continue;
+			return weapon;
+		}
+	}
+	return nullptr;
+}
+
+ObjectWeapon *GameObject::getBestWeaponFor(const GameObject *obj, unsigned barrel)
+{
+	return const_cast<ObjectWeapon *>(static_cast<const GameObject *>(this)->getBestWeaponFor(obj, barrel));
+}
+
+bool GameObject::canAttack(const GameObject *obj) const
+{
+	return this->getBestWeaponFor(obj, UINT32_MAX) != nullptr;
+}
+
 const std::vector<std::string> &GameObject::getTags() const
 {
 	return this->_tags;
@@ -2287,6 +2403,21 @@ unsigned GameObject::getSpeed() const
 	return this->_speed;
 }
 
+ObjectWeapon::ObjectWeapon(const Mod &base, const std::unordered_map<std::string, Weapon> &weapons, const nlohmann::json &j)
+{
+	assert_exp(j.contains("name") && j["name"].is_string());
+	assert_exp(j.contains("priority") && j["priority"].is_number());
+	assert_exp(j.contains("barrel") && j["barrel"].is_number());
+	assert_exp(j.contains("cooldown") && j["cooldown"].is_number());
+
+	std::string weaponName = RESOURCE(base.getName(), j["name"].get<std::string>());
+
+	assert_exp(weapons.contains(weaponName));
+	this->weapon = &weapons.at(weaponName);
+	this->priority = j["priority"];
+	this->barrel = j["barrel"];
+	this->cooldown = j["cooldown"];
+}
 
 GameObjectData::GameObjectData(const Faction &base) :
 	_base(base)

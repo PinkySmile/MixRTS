@@ -111,6 +111,11 @@ public:
 		unsigned index;
 	};
 
+	struct AttackUnitEvent {
+		std::vector<unsigned> indices;
+		unsigned target;
+	};
+
 	struct MoveUnitEvent {
 		std::vector<unsigned> indices;
 		Vector2u position;
@@ -148,7 +153,8 @@ public:
 		DumpUnitEvent,
 		SetPrimaryEvent,
 		RepairEvent,
-		SellEvent
+		SellEvent,
+		AttackUnitEvent
 	> Event;
 
 	UIState *state;

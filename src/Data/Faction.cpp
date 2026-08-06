@@ -138,7 +138,7 @@ void Faction::load()
 		for (auto &w: this->_weapons)
 			this->_base.loadWeapons(w, this->_loadedEffects, this->_loadedSounds, this->_loadedWeapons);
 		for (auto &u: this->_objects)
-			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedObjects);
+			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedWeapons, this->_loadedObjects);
 		for (auto &u: this->_upgrades)
 			this->_base.loadUpgrades(u, *this, this->_loadedUpgrades);
 #ifndef PROPAGATE_CRASH

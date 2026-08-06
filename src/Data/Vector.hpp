@@ -237,6 +237,14 @@ public:
 		result.rotate(angle, center);
 		return result;
 	}
+
+	[[nodiscard]] Vector2<T> abs() noexcept
+	{
+		return {
+			std::abs(this->x),
+			std::abs(this->y)
+		};
+	}
 };
 
 typedef Vector2<float>              Vector2f;

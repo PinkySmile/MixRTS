@@ -179,6 +179,9 @@ void GameManager::update()
 	auto itb = this->_liveObjects.begin();
 	std::set<Player *> toRecompute;
 	while (itb != this->_liveObjects.end())
+		// TODO: Objects above expect the pointers to stay valid until they can check isDisposable
+		//       which isn't the case here. We should hold on to disposable objects for a full tick
+		//       to allow all objects to properly dispose of the pointers to dead objects.
 		if (itb->isDisposable()) {
 			auto &group = itb->getGroup();
 			auto &id = itb->getId();

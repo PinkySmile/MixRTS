@@ -216,6 +216,7 @@ void Mod::loadObjects(
 	const Faction &base,
 	const std::unordered_map<std::string, std::vector<Animation>> &anims,
 	const std::unordered_map<std::string, MultiSound> &sounds,
+	const std::unordered_map<std::string, Weapon> &weapons,
 	std::unordered_map<std::string, GameObject> &objects
 ) const
 {
@@ -242,7 +243,7 @@ void Mod::loadObjects(
 				std::string fullId = RESOURCE(this->_name, id);
 
 				assert_exp(!objects.contains(fullId));
-				objects.emplace(fullId, GameObject{base, fullId, anims, sounds, mergeObjects(jbuilding, gen)});
+				objects.emplace(fullId, GameObject{base, fullId, anims, sounds, weapons, mergeObjects(jbuilding, gen)});
 		#ifndef PROPAGATE_CRASH
 			} catch (std::exception &e) {
 				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what());

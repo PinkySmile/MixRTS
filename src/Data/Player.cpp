@@ -361,6 +361,10 @@ void Player::handleUiEvents()
 			} else if (auto sell = std::get_if<UI::SellEvent>(&*event)) {
 				this->_parent.getObjectById(sell->index)->sell();
 				this->playEVA(UI::EVA_SELL, 120, 1, 0);
+			} else if (auto attack = std::get_if<UI::AttackUnitEvent>(&*event)) {
+				auto target = this->_parent.getObjectById(attack->target);
+				for (unsigned o : attack->indices)
+					this->_parent.getObjectById(o)->attack(target);
 			} else
 				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));
 		}

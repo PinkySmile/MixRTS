@@ -192,21 +192,43 @@ void UI::_updateCursorNormal()
 		if (this->state->selectedObjects.size() == 1) {
 			auto obj = *this->state->selectedObjects.begin();
 
-			if (
-				this->ownerState->index == obj->owner->state.index &&
-				std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()
-			) {
-				if (obj->isDeployable()) {
-					if (obj->canDeploy())
-						this->_cursor = CURSOR_DEPLOY;
-					else
-						this->_cursor = CURSOR_NO_DEPLOY;
-					return;
-				} else if (auto &gq = obj->getGivenQueue()) {
-					if (this->ownerState->queueBuildings[*gq].size() > 1 && this->ownerState->primaryBuildings[*gq] != obj) {
-						this->_cursor = CURSOR_DEPLOY;
+			if (this->ownerState->index == obj->owner->state.index) {
+				if (std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()) {
+					if (obj->isDeployable()) {
+						if (obj->canDeploy())
+							this->_cursor = CURSOR_DEPLOY;
+						else
+							this->_cursor = CURSOR_NO_DEPLOY;
 						return;
+					} else if (auto &gq = obj->getGivenQueue()) {
+						if (this->ownerState->queueBuildings[*gq].size() > 1 && this->ownerState->primaryBuildings[*gq] != obj) {
+							this->_cursor = CURSOR_DEPLOY;
+							return;
+						}
 					}
+				}
+			} else if (this->ownerState->team == obj->owner->state.team) {
+
+			} else {
+				if (obj->canAttack(this->_objectBuffer.front())) {
+					this->_cursor = CURSOR_ATTACK;
+					return;
+				}
+			}
+		}
+
+		if (!this->state->selectedObjects.empty()) {
+			auto obj = *this->state->selectedObjects.begin();
+			auto &other = this->_objectBuffer.front();
+
+			if (this->ownerState->index == other->owner->state.index) {
+
+			} else if (this->ownerState->team == other->owner->state.team) {
+
+			} else {
+				if (obj->canAttack(other)) {
+					this->_cursor = CURSOR_ATTACK;
+					return;
 				}
 			}
 		}
@@ -493,7 +515,9 @@ void UI::_tileClickedNormal()
 		});
 		bool hasHarvester = false;
 		bool canHarvest = false;
+		std::set<unsigned> usedUnits;
 		auto &lmap = this->manager->getLoadedMap().grid;
+		std::unordered_map<unsigned, AttackUnitEvent> attack;
 
 		for (auto o : this->state->selectedObjects) {
 			// TODO: Wrong check. Should have a different index per controlling player.
@@ -509,6 +533,26 @@ void UI::_tileClickedNormal()
 			if (canHarvest)
 				break;
 		}
+
+		for (auto s : this->state->selectedObjects) {
+			// TODO: Wrong check. Should have a different index per controlling player.
+			//       This one is only the player index that were declared at the start but
+			//       a player can control multiple in case their ally leaves.
+			if (s->owner->state.index != this->ownerState->index)
+			continueOutter:
+				continue;
+
+			for (auto &o : this->_objectBuffer)
+				if (s->canAttack(o)) {
+					auto &a = attack[o->index];
+
+					a.target = o->index;
+					a.indices.push_back(s->index);
+					goto continueOutter;
+				}
+		}
+		for (auto &a : attack | std::ranges::views::values)
+			this->_eventQueue.emplace_back(a);
 
 		if (!this->_objectBuffer.empty() && (!hasHarvester || !canDeposit)) {
 			this->state->selectedObjects.clear();
@@ -534,6 +578,8 @@ void UI::_tileClickedNormal()
 				//       This one is only the player index that were declared at the start but
 				//       a player can control multiple in case their ally leaves.
 				if (s->owner->state.index != this->ownerState->index)
+					continue;
+				if (usedUnits.contains(s->index))
 					continue;
 
 				// TODO: Handle non snap-to-grid units

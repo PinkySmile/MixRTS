@@ -26,13 +26,15 @@ struct HarvestOrder;
 struct DeployOrder;
 struct DumpOrder;
 struct MoveCheckOrder;
+struct AttackUnitOrder;
 typedef std::variant<
 	TurnOrder,
 	MoveOrder,
 	DeployOrder,
 	HarvestOrder,
 	DumpOrder,
-	MoveCheckOrder
+	MoveCheckOrder,
+	AttackUnitOrder
 > Order;
 
 struct TurnOrder {
@@ -50,6 +52,9 @@ struct DumpOrder {
 struct MoveCheckOrder {
 	void (GameObject::*fail)();
 	Vector2i destination;
+};
+struct AttackUnitOrder {
+	const GameObject *target;
 };
 
 // Result of resolving a dynamic collision while a grid-bound unit moves.
@@ -100,6 +105,15 @@ struct UnitDeployParams {
 };
 
 
+struct ObjectWeapon {
+	const Weapon *weapon;
+	unsigned priority;
+	unsigned barrel;
+	unsigned cooldown;
+
+	ObjectWeapon(const Mod &base, const std::unordered_map<std::string, Weapon> &wList, const nlohmann::json &j);
+};
+
 class GameObjectData {
 public:
 	struct AnimationState {
@@ -121,6 +135,7 @@ protected:
 	const MultiSound *_doSound = nullptr;
 	const MultiSound *_selectSound = nullptr;
 	const MultiSound *_deathSound = nullptr;
+	std::vector<ObjectWeapon> _weapons;
 	std::vector<std::string> _tags;
 	std::optional<std::string> _giveQueue;
 	std::optional<UnitDeployParams> _onDeploy;
@@ -227,6 +242,7 @@ public:
 		const std::string &id,
 		const std::unordered_map<std::string, std::vector<Animation>> &animList,
 		const std::unordered_map<std::string, MultiSound> &sounds,
+		const std::unordered_map<std::string, Weapon> &weapons,
 		const nlohmann::json &json
 	);
 	virtual ~GameObject();
@@ -252,6 +268,7 @@ public:
 	void setHealth(unsigned health);
 	void harvest(const Vector2i &pos, bool automatic = false);
 	void harvest();
+	void attack(const GameObject *obj);
 	void moveTo(const Vector2i &pos, bool automatic = false);
 	bool moveAside(GameObject *asker);
 	void dumpResourcesTo(GameObject *dump, bool automatic = false);
@@ -267,6 +284,7 @@ public:
 	void toggleRepair();
 	void sell();
 
+	[[nodiscard]] bool canAttack(const GameObject *obj) const;
 	[[nodiscard]] const std::vector<std::string> &getTags() const;
 	[[nodiscard]] const std::optional<UnitDeployParams> &getOnDeploy() const;
 	[[nodiscard]] unsigned getSpeed() const;
@@ -334,19 +352,24 @@ protected:
 	std::vector<ConditionalAnim> _crawlFireAnim;
 	std::vector<ConditionalAnim> _idleAnims;
 	std::vector<ConditionalAnim> _harvestAnims;
+	std::unordered_map<std::string, std::vector<ObjectWeapon *>> _weaponByTag;
 
+	[[nodiscard]] const ObjectWeapon *getBestWeaponFor(const GameObject *, unsigned barrel) const;
+	[[nodiscard]] ObjectWeapon *getBestWeaponFor(const GameObject *, unsigned barrel);
 	[[nodiscard]] Vector2f _getTileOffsetFromCenter() const;
 	bool _updateTurn(unsigned target);
-	void _computeMovePath(Vector2i destination, bool ignoreSolid);
+	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);
 	bool _tileAvailableFor(Vector2i tile) const;
 	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size) const;
-	CollisionResolution _resolveGridCollision(bool force);
-	CollisionResolution _resolveFreeCollision(bool force);
-	bool _updateMove(Vector2i pos, bool force);
+	CollisionResolution _resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject);
+	CollisionResolution _resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject);
+	bool _updateMove(Vector2i pos, bool force, const GameObject *ignoreObject);
 	bool _updateCheckMove(Vector2i pos, void (GameObject::*fail)());
 	bool _updateHarvest();
 	bool _updateDump(GameObject *place);
 	bool _updateDeploy();
+	bool _updateAttack(const GameObject *obj);
+	unsigned _getFreeBarrelFor(const GameObject *obj) const;
 
 	void _harvestClosestResource();
 	void _dumpInClosestResourceDump();
