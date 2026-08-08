@@ -245,6 +245,7 @@ void Player::keyPressed(const Event::KeyPressed &key)
 				return;
 			}
 	}
+	this->_uis[this->_currentUi]->onKeyPressed(key.code, key.control, key.shift, key.alt, key.system);
 }
 
 void Player::updateRender()
@@ -365,6 +366,9 @@ void Player::handleUiEvents()
 				auto target = this->_parent.getObjectById(attack->target);
 				for (unsigned o : attack->indices)
 					this->_parent.getObjectById(o)->attack(target);
+			} else if (auto stop = std::get_if<UI::StopEvent>(&*event)) {
+				for (auto i: stop->indices)
+					this->_parent.getObjectById(i)->clearOrders();
 			} else
 				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));
 		}

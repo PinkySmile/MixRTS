@@ -347,7 +347,12 @@ void GameManager::render()
 {
 	sf::View old = game->screen->getView();
 	sf::Sprite sprite{this->_map.renderCache.getTexture()};
+	bool dPFGrid = false;
+	sf::RectangleShape shape;
 
+	shape.setFillColor(sf::Color::Transparent);
+	shape.setOutlineColor(sf::Color::Black);
+	shape.setOutlineThickness(2);
 	game->screen->setView(sf::View{sf::FloatRect{
 		this->_cameraTranslate,
 		sf::Vector2f{
@@ -356,23 +361,39 @@ void GameManager::render()
 		}
 	}});
 	game->screen->draw(sprite);
-	for (int layer = -2; layer <= 2; layer++)
+	for (int layer = -2; layer <= 0; layer++)
 		for (auto &list : this->_renderObjects | std::ranges::views::values)
 			for (auto b : list)
 				b->render(layer);
-	if (this->_debugGrid == 0)
+	if (this->_debugGrid == 0) {
 		this->_renderPathFindingGrid(this->_map.pathFindingGrid);
-	else if (this->_debugGrid == 1)
+		dPFGrid = true;
+	} else if (this->_debugGrid == 1)
 		displayGrid(this->_map.grid);
-	else if (this->_debugGrid == 2)
+	else if (this->_debugGrid == 2) {
 		this->_renderPathFindingGrid(this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, true);
-	else if (this->_debugGrid != 255) {
+		dPFGrid = true;
+	} else if (this->_debugGrid != 255) {
 		if ((this->_debugGrid - 3) % 2 == 1) {
 			auto &map = this->_mapStates[(this->_debugGrid - 3) / 2];
 
 			this->_renderPathFindingGrid(map.pathFindingGrid, map.tileSize, true);
+			dPFGrid = true;
 		} else
 			displayGrid(this->_mapStates[(this->_debugGrid - 3) / 2]);
+	}
+	for (int layer = 1; layer <= 2; layer++)
+		for (auto &list : this->_renderObjects | std::ranges::views::values)
+			for (auto b : list)
+				b->render(layer);
+
+	if (dPFGrid) {
+		for (auto &list : this->_renderObjects | std::ranges::views::values)
+			for (auto b : list) {
+				shape.setPosition(b->getPosition());
+				shape.setSize(b->getSize());
+				game->screen->draw(shape);
+			}
 	}
 	for (auto &player : this->_players)
 		player.render();

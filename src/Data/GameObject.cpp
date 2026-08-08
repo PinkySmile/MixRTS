@@ -1323,15 +1323,16 @@ bool GameObject::_updateFinishMovement()
 	if (!this->_boundToGrid)
 		return true;
 
-	float x = std::fmod(this->_position.x, this->map->tileSize.x);
-	float y = std::fmod(this->_position.y, this->map->tileSize.y);
+	auto center = this->_getTileOffsetFromCenter();
+	float x = std::fmod(this->_position.x - center.x, this->map->tileSize.x);
+	float y = std::fmod(this->_position.y - center.y, this->map->tileSize.y);
 
 	if (x == 0 && y == 0)
 		return true;
 	this->_pathCache.erase(this->_pathCache.begin() + 1, this->_pathCache.end());
 
-	Vector2f pos = this->_position;
-	Vector2f diff = this->_pathCache.back() + this->_getTileOffsetFromCenter() - pos;
+	Vector2f pos = this->_position - center;
+	Vector2f diff = this->_pathCache.back() + this->map->tileSize / 2 - pos;
 
 	// TODO: Handle non-square grids
 	diff.x = std::fmod(diff.x, this->map->tileSize.x);

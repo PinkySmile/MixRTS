@@ -14,6 +14,8 @@
 #include <SFML/Graphics/Texture.hpp>
 #include <SFML/Audio/SoundBuffer.hpp>
 #include <SFML/Audio/Sound.hpp>
+#include <SFML/Window/Keyboard.hpp>
+
 #include "../forward.hpp"
 #include "../Data/Vector.hpp"
 
@@ -131,6 +133,10 @@ public:
 		unsigned hole;
 	};
 
+	struct StopEvent {
+		std::vector<unsigned> indices;
+	};
+
 	struct SetPrimaryEvent {
 		unsigned index;
 	};
@@ -154,7 +160,8 @@ public:
 		SetPrimaryEvent,
 		RepairEvent,
 		SellEvent,
-		AttackUnitEvent
+		AttackUnitEvent,
+		StopEvent
 	> Event;
 
 	UIState *state;
@@ -177,6 +184,7 @@ public:
 	virtual void onCancel(Vector2i absPos);
 	virtual void tileClicked(Vector2i absPos);
 	virtual void mouseMovedToTile(Vector2i absPos);
+	virtual void onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta);
 	virtual void update();
 	virtual void render();
 

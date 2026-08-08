@@ -60,6 +60,20 @@ void UI::playEVA(EVASound sound, unsigned int expireIn, unsigned int priority, u
 	this->_evaQueue.insert(it, {sound, expireIn, priority, cooldown});
 }
 
+void UI::onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta)
+{
+	// TODO: Hardcoded key
+	if (key == sf::Keyboard::Key::S && !ctrl && !shift && !alt && !meta) {
+		if (!this->state->selectedObjects.empty()) {
+			StopEvent event;
+
+			for (auto &s : this->state->selectedObjects)
+				event.indices.push_back(s->index);
+			this->_eventQueue.emplace_front(event);
+		}
+	}
+}
+
 void UI::update()
 {
 	auto it = this->state->selectedObjects.begin();
