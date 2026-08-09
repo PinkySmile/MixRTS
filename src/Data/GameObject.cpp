@@ -2364,6 +2364,11 @@ void GameObject::sell()
 		this->_sellAnim->reset();
 }
 
+void GameObject::nextDirection()
+{
+	this->_currentDir = (this->_currentDir + 1) % this->_anims.size();
+}
+
 const ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel) const
 {
 	const std::vector<std::string> &tags = obj->getTags();

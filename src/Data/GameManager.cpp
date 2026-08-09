@@ -551,7 +551,12 @@ void GameManager::consumeEvent(const Event &event)
 			DEBUG_MODE = this->_isDebugUnlocked;
 		} else if (keyPressed->code == sf::Keyboard::Key::F5)
 			this->_limitCamera = !this->_limitCamera;
-		else if (keyPressed->code == sf::Keyboard::Key::F11)
+		else if (keyPressed->code == sf::Keyboard::Key::F6) {
+			for (auto &p : this->_players)
+				if (p.isEnabled())
+					for (auto o : p.uiState.selectedObjects)
+						const_cast<GameObject *>(o)->nextDirection();
+		} else if (keyPressed->code == sf::Keyboard::Key::F11)
 			this->_paused = !this->_paused;
 		else if (keyPressed->code == sf::Keyboard::Key::F12)
 			this->_forceStep = true;

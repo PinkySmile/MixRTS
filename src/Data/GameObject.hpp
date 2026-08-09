@@ -286,6 +286,7 @@ public:
 	void setPrimary(bool primary = true);
 	void toggleRepair();
 	void sell();
+	void nextDirection();
 
 	[[nodiscard]] bool canAttack(const GameObject *obj) const;
 	[[nodiscard]] const std::vector<std::string> &getTags() const;
