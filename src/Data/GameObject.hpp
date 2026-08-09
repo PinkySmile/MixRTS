@@ -357,8 +357,8 @@ protected:
 	std::vector<ConditionalAnim> _harvestAnims;
 	std::unordered_map<std::string, std::vector<ObjectWeapon *>> _weaponByTag;
 
-	[[nodiscard]] const ObjectWeapon *getBestWeaponFor(const GameObject *, unsigned barrel) const;
-	[[nodiscard]] ObjectWeapon *getBestWeaponFor(const GameObject *, unsigned barrel);
+	[[nodiscard]] const ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel) const;
+	[[nodiscard]] ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel);
 	[[nodiscard]] Vector2f _getTileOffsetFromCenter() const;
 	bool _updateTurn(unsigned target);
 	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);

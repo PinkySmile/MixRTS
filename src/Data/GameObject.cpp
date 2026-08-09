@@ -24,6 +24,8 @@
 
 bool GameObject::_shortenOrder(Order &o)
 {
+	if (std::holds_alternative<FinishMovementOrder>(o))
+		return false;
 	if (std::holds_alternative<MoveOrder>(o) || std::holds_alternative<AttackUnitOrder>(o)) {
 		this->_orderQueue.emplace_front(FinishMovementOrder{});
 		return false;
@@ -1300,7 +1302,7 @@ bool GameObject::_updateAttack(const GameObject *obj)
 	if (obj == nullptr || obj->isDead())
 		return true;
 
-	const ObjectWeapon *weapon = this->getBestWeaponFor(obj, this->_getFreeBarrelFor(obj));
+	const ObjectWeapon *weapon = this->_getBestWeaponFor(obj, this->_getFreeBarrelFor(obj));
 	unsigned range = weapon->weapon->getRange();
 	Vector2f myCenter = this->_position + this->_size / 2;
 	Vector2f opCenter = obj->_position + obj->_size / 2;
@@ -1324,21 +1326,22 @@ bool GameObject::_updateFinishMovement()
 		return true;
 
 	auto center = this->_getTileOffsetFromCenter();
-	float x = std::fmod(this->_position.x - center.x, this->map->tileSize.x);
-	float y = std::fmod(this->_position.y - center.y, this->map->tileSize.y);
+	Vector2f pos = this->_position - center - this->map->tileSize / 2;
+	float x = std::fmod(pos.x, this->map->tileSize.x);
+	float y = std::fmod(pos.y, this->map->tileSize.y);
 
 	if (x == 0 && y == 0)
 		return true;
 	this->_pathCache.erase(this->_pathCache.begin() + 1, this->_pathCache.end());
 
-	Vector2f pos = this->_position - center;
-	Vector2f diff = this->_pathCache.back() + this->map->tileSize / 2 - pos;
+	auto p = this->_pathCache.back() - this->map->tileSize / 2;
+	Vector2f diff = p - pos;
 
 	// TODO: Handle non-square grids
 	diff.x = std::fmod(diff.x, this->map->tileSize.x);
 	diff.y = std::fmod(diff.y, this->map->tileSize.y);
 	this->_cachedDest = pos + diff;
-	this->_pathCache.front() = this->_cachedDest;
+	this->_pathCache.front() = this->_cachedDest + this->map->tileSize / 2;
 	return this->_updateMove(this->_cachedDest, false, nullptr);
 }
 
@@ -2353,7 +2356,7 @@ void GameObject::sell()
 		this->_sellAnim->reset();
 }
 
-const ObjectWeapon *GameObject::getBestWeaponFor(const GameObject *obj, unsigned barrel) const
+const ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel) const
 {
 	const std::vector<std::string> &tags = obj->getTags();
 
@@ -2372,14 +2375,14 @@ const ObjectWeapon *GameObject::getBestWeaponFor(const GameObject *obj, unsigned
 	return nullptr;
 }
 
-ObjectWeapon *GameObject::getBestWeaponFor(const GameObject *obj, unsigned barrel)
+ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel)
 {
-	return const_cast<ObjectWeapon *>(static_cast<const GameObject *>(this)->getBestWeaponFor(obj, barrel));
+	return const_cast<ObjectWeapon *>(static_cast<const GameObject *>(this)->_getBestWeaponFor(obj, barrel));
 }
 
 bool GameObject::canAttack(const GameObject *obj) const
 {
-	return this->getBestWeaponFor(obj, UINT32_MAX) != nullptr;
+	return this->_getBestWeaponFor(obj, UINT32_MAX) != nullptr;
 }
 
 const std::vector<std::string> &GameObject::getTags() const
