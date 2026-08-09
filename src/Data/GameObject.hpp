@@ -114,7 +114,15 @@ struct ObjectWeapon {
 	unsigned barrel;
 	unsigned cooldown;
 
-	ObjectWeapon(const Mod &base, const std::unordered_map<std::string, Weapon> &wList, const nlohmann::json &j);
+	ObjectWeapon(unsigned short extraPrio, unsigned barrel, const Mod &base, const std::unordered_map<std::string, Weapon> &wList, const nlohmann::json &j);
+};
+
+struct ObjectBarrel {
+	std::vector<ObjectWeapon> weapons;
+	unsigned shootTimer = 0;
+	unsigned short priority;
+
+	ObjectBarrel(unsigned index, const Mod &base, const std::unordered_map<std::string, Weapon> &wList, const nlohmann::json &j);
 };
 
 class GameObjectData {
@@ -138,7 +146,7 @@ protected:
 	const MultiSound *_doSound = nullptr;
 	const MultiSound *_selectSound = nullptr;
 	const MultiSound *_deathSound = nullptr;
-	std::vector<ObjectWeapon> _weapons;
+	std::vector<ObjectBarrel> _barrels;
 	std::vector<std::string> _tags;
 	std::optional<std::string> _giveQueue;
 	std::optional<UnitDeployParams> _onDeploy;
@@ -356,6 +364,7 @@ protected:
 	std::vector<ConditionalAnim> _crawlFireAnim;
 	std::vector<ConditionalAnim> _idleAnims;
 	std::vector<ConditionalAnim> _harvestAnims;
+	std::unordered_map<std::string, std::vector<ObjectBarrel *>> _barrelByTag;
 	std::unordered_map<std::string, std::vector<ObjectWeapon *>> _weaponByTag;
 
 	[[nodiscard]] const ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel) const;

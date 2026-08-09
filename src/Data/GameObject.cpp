@@ -114,9 +114,26 @@ GameObject::GameObject(const GameObject &g) :
 	if (!this->_idleAnims.empty())
 		this->_idleTimer = random_distrib(game->gameRandom, this->_idleTimerRange.first, this->_idleTimerRange.second);
 
-	for (auto &weapon : this->_weapons)
-		for (auto &tag : weapon.weapon->canHitTags())
-			this->_weaponByTag[tag].push_back(&weapon);
+	std::unordered_map<std::string, std::set<ObjectBarrel *>> barrelByTag;
+
+	for (auto &barrel : this->_barrels)
+		for (auto &weapon : barrel.weapons)
+			for (auto &tag : weapon.weapon->canHitTags()) {
+				this->_weaponByTag[tag].push_back(&weapon);
+				barrelByTag[tag].emplace(&barrel);
+			}
+	for (auto &p : barrelByTag) {
+		std::vector<ObjectBarrel *> &b = this->_barrelByTag[p.first];
+
+		b.insert(b.begin(), p.second.begin(), p.second.end());
+		std::ranges::sort(b, [](ObjectBarrel *a, ObjectBarrel *b){
+			return a->priority < b->priority;
+		});
+	}
+	for (auto &w : this->_weaponByTag | std::ranges::views::values)
+		std::ranges::sort(w, [](ObjectWeapon *a, ObjectWeapon *b){
+			return a->priority < b->priority;
+		});
 }
 
 GameObject::GameObject(
@@ -153,7 +170,7 @@ GameObject::GameObject(
 	for (size_t i = 0; i < json["tags"].size(); i++)
 		assert_msg(json["tags"][i].is_string(), "json[\"tags\"][\"" + std::to_string(i) + "\"]");
 	assert_exp(json.contains("anims") && json["anims"].is_array());
-	assert_exp(!json.contains("weapons") || json["weapons"].is_array());
+	assert_exp(!json.contains("barrels") || json["barrels"].is_array());
 	assert_exp(!json.contains("sight") || json["sight"].is_number());
 	assert_exp(!json.contains("turn_speed") || json["turn_speed"].is_number());
 	assert_exp(!json.contains("do_sound") || json["do_sound"].is_string());
@@ -531,12 +548,11 @@ GameObject::GameObject(
 			std::make_unique<ConditionalAnim>(base, this, animList, json["dump"]["start_anim"]),
 			std::make_unique<ConditionalAnim>(base, this, animList, json["dump"]["stop_anim"])
 		);
-	if (json.contains("weapons")) {
-		for (auto &weapon : json["weapons"])
-			this->_weapons.emplace_back(base, weapons, weapon);
-		std::ranges::sort(this->_weapons, [](const ObjectWeapon &a, const ObjectWeapon &b) -> bool {
-			return a.priority < b.priority;
-		});
+	if (json.contains("barrels")) {
+		unsigned index = 0;
+
+		for (auto &barrel : json["barrels"])
+			this->_barrels.emplace_back(index++, base, weapons, barrel);
 	}
 
 	if (json.contains("select")) {
@@ -592,9 +608,27 @@ GameObject::GameObject(
 		this->_currentTilePosition = PFFREEMASK_NONE;
 	this->_oldTilePosition = this->_currentTilePosition;
 	assert_exp(!this->_stackable || this->_boundToGrid);
-	for (auto &weapon : this->_weapons)
-		for (auto &tag : weapon.weapon->canHitTags())
-			this->_weaponByTag[tag].push_back(&weapon);
+
+	std::unordered_map<std::string, std::set<ObjectBarrel *>> barrelByTag;
+
+	for (auto &barrel : this->_barrels)
+		for (auto &weapon : barrel.weapons)
+			for (auto &tag : weapon.weapon->canHitTags()) {
+				this->_weaponByTag[tag].push_back(&weapon);
+				barrelByTag[tag].emplace(&barrel);
+			}
+	for (auto &p : barrelByTag) {
+		std::vector<ObjectBarrel *> &b = this->_barrelByTag[p.first];
+
+		b.insert(b.begin(), p.second.begin(), p.second.end());
+		std::ranges::sort(b, [](ObjectBarrel *a, ObjectBarrel *b){
+			return a->priority < b->priority;
+		});
+	}
+	for (auto &w : this->_weaponByTag | std::ranges::views::values)
+		std::ranges::sort(w, [](ObjectWeapon *a, ObjectWeapon *b){
+			return a->priority < b->priority;
+		});
 }
 
 GameObject::~GameObject()
@@ -2413,19 +2447,31 @@ unsigned GameObject::getSpeed() const
 	return this->_speed;
 }
 
-ObjectWeapon::ObjectWeapon(const Mod &base, const std::unordered_map<std::string, Weapon> &weapons, const nlohmann::json &j)
+ObjectBarrel::ObjectBarrel(unsigned index, const Mod &base, const std::unordered_map<std::string, Weapon> &wList, const nlohmann::json &j)
+{
+	assert_exp(j.contains("weapons") && j["weapons"].is_array());
+	assert_exp(!j.contains("priority") || j["priority"].is_number());
+
+	this->priority = (j.contains("priority") ? j["priority"].get<unsigned short>() : 0);
+	for (auto &wj : j["weapons"])
+		this->weapons.emplace_back(this->priority * UINT16_MAX, index, base, wList, wj);
+	std::ranges::sort(this->weapons, [](const ObjectWeapon &a, const ObjectWeapon &b) -> bool {
+		return a.priority < b.priority;
+	});
+}
+
+ObjectWeapon::ObjectWeapon(unsigned short extraPrio, unsigned barrel, const Mod &base, const std::unordered_map<std::string, Weapon> &weapons, const nlohmann::json &j)
 {
 	assert_exp(j.contains("name") && j["name"].is_string());
-	assert_exp(j.contains("priority") && j["priority"].is_number());
-	assert_exp(j.contains("barrel") && j["barrel"].is_number());
 	assert_exp(j.contains("cooldown") && j["cooldown"].is_number());
+	assert_exp(!j.contains("priority") || j["priority"].is_number());
 
 	std::string weaponName = RESOURCE(base.getName(), j["name"].get<std::string>());
 
 	assert_exp(weapons.contains(weaponName));
 	this->weapon = &weapons.at(weaponName);
-	this->priority = j["priority"];
-	this->barrel = j["barrel"];
+	this->priority = (j.contains("priority") ? j["priority"].get<unsigned short>() : 0) + extraPrio;
+	this->barrel = barrel;
 	this->cooldown = j["cooldown"];
 }
 
