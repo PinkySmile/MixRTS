@@ -181,12 +181,17 @@ public:
 		return this->x * this->x + this->y * this->y;
 	}
 
-	[[nodiscard]] double angle(const Vector2<T> &o) const noexcept
+	[[nodiscard]] double angle() const noexcept
+	{
+		return std::atan2(this->y, this->x);
+	}
+
+	[[nodiscard]] double angle(const Vector2 &o) const noexcept
 	{
 		return std::atan2(o.y - this->y, o.x - this->x);
 	}
 
-	[[nodiscard]] Vector2<float> normal(const Vector2<T> &p2)
+	[[nodiscard]] Vector2<float> normal(const Vector2 &p2)
 	{
 		return Vector2<float>{this->y - p2.y, p2.x - this->x}.normalized();
 	}
@@ -238,7 +243,7 @@ public:
 		return result;
 	}
 
-	[[nodiscard]] Vector2<T> abs() noexcept
+	[[nodiscard]] Vector2 abs() noexcept
 	{
 		return {
 			std::abs(this->x),

@@ -1306,16 +1306,24 @@ bool GameObject::_updateAttack(const GameObject *obj)
 	unsigned range = weapon->weapon->getRange();
 	Vector2f myCenter = this->_position + this->_size / 2;
 	Vector2f opCenter = obj->_position + obj->_size / 2;
-	Vector2f diff = (opCenter - myCenter).abs();
+	Vector2f diff = opCenter - myCenter;
+	Vector2f diffAbs = diff.abs();
 
 	range *= range;
-	if (range < diff.magnitude2()) {
+	if (range < diffAbs.magnitude2()) {
 		if (this->_updateMove(opCenter, false, obj)) {
-		
+			// TODO: Handle when unit is blocked
 		}
 		return false;
 	}
 	if (!this->_updateFinishMovement())
+		return false;
+
+	double realAngle = diff.angle();
+	unsigned angle = round((realAngle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+
+	angle %= this->_anims.size();
+	if (angle != this->_currentDir && !this->_updateTurn(angle))
 		return false;
 	return false;
 }

@@ -359,13 +359,15 @@ protected:
 
 	[[nodiscard]] const ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel) const;
 	[[nodiscard]] ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel);
+	[[nodiscard]] unsigned _getFreeBarrelFor(const GameObject *obj) const;
 	[[nodiscard]] Vector2f _getTileOffsetFromCenter() const;
-	bool _updateTurn(unsigned target);
 	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);
 	bool _tileAvailableFor(Vector2i tile) const;
 	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size) const;
 	CollisionResolution _resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject);
 	CollisionResolution _resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject);
+	// Order update functions
+	bool _updateTurn(unsigned target);
 	bool _updateMove(Vector2i pos, bool force, const GameObject *ignoreObject);
 	bool _updateCheckMove(Vector2i pos, void (GameObject::*fail)());
 	bool _updateHarvest();
@@ -373,7 +375,6 @@ protected:
 	bool _updateDeploy();
 	bool _updateAttack(const GameObject *obj);
 	bool _updateFinishMovement();
-	unsigned _getFreeBarrelFor(const GameObject *obj) const;
 
 	void _harvestClosestResource();
 	void _dumpInClosestResourceDump();
