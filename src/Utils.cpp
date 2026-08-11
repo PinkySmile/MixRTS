@@ -2,6 +2,9 @@
 // Created by PinkySmile on 10/01/2026.
 //
 
+#ifdef __GNUG__
+#include <cxxabi.h>
+#endif
 #include "Utils.hpp"
 #include "Resources/Assert.hpp"
 
@@ -27,6 +30,22 @@ std::string toHex(const unsigned char *buffer, size_t size, bool endian)
 {
 	char digits[] = "0123456789ABCDEF";
 	std::string result;
+
+	result.resize(size * 2);
+	for (size_t i = 0; i < size; i++) {
+		size_t index = endian == TOHEX_ENDIAN_BIG ? i : size - i - 1;
+		unsigned char c = buffer[index];
+
+		result[i * 2 + 0] = digits[c >> 4];
+		result[i * 2 + 1] = digits[c & 0xF];
+	}
+	return result;
+}
+
+std::wstring wtoHex(const unsigned char *buffer, size_t size, bool endian)
+{
+	wchar_t digits[] = L"0123456789ABCDEF";
+	std::wstring result;
 
 	result.resize(size * 2);
 	for (size_t i = 0; i < size; i++) {
@@ -92,4 +111,25 @@ Color HSLColor::toRGB() const
 	};
 
 	return Color(f(0) * 255, f(8) * 255, f(4) * 255, 255);
+}
+
+std::string getLastExceptionName()
+{
+#ifdef __GNUG__
+	int status;
+	char *value;
+	std::string name;
+
+	auto val = abi::__cxa_current_exception_type();
+
+	if (!val)
+		return "No exception";
+
+	value = abi::__cxa_demangle(val->name(), nullptr, nullptr, &status);
+	name = value;
+	free(value);
+	return name;
+#else
+	return "Unknown exception";
+#endif
 }

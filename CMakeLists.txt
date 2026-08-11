@@ -5,8 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_compile_definitions(_USE_MATH_DEFINES)
 
-
-
 if (CMAKE_SYSTEM_NAME STREQUAL Emscripten)
 	set(BUILD_STATIC ON)
 	set(WEB_BUILD ON)
@@ -105,7 +103,14 @@ else ()
 	option(DEBUG_CHECKS "Debug checks" OFF)
 endif ()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-	add_compile_options("-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/src=src" "-ffile-prefix-map=${CMAKE_SOURCE_DIR}/src=src")
+	add_compile_options("-fmacro-prefix-map=${CMAKE_SOURCE_DIR}=/MixRTS")
+	add_compile_options("-ffile-prefix-map=${CMAKE_SOURCE_DIR}=/MixRTS")
+	add_compile_options("-fdebug-prefix-map=${CMAKE_SOURCE_DIR}=/MixRTS")
+	add_link_options("-fdebug-prefix-map=${CMAKE_SOURCE_DIR}=/MixRTS")
+	add_compile_options("-fmacro-prefix-map=${CMAKE_BINARY_DIR}/_deps/=/")
+	add_compile_options("-ffile-prefix-map=${CMAKE_BINARY_DIR}/_deps/=/")
+	add_compile_options("-fdebug-prefix-map=${CMAKE_BINARY_DIR}/_deps/=/")
+	add_link_options("-fdebug-prefix-map=${CMAKE_BINARY_DIR}/_deps/=/")
 endif ()
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 if (ASAN)
@@ -125,6 +130,29 @@ if (UBSAN)
 	add_link_options(-fsanitize=undefined)
 endif ()
 
+
+include(FetchContent)
+FetchContent_Declare(
+	cpptrace
+	GIT_REPOSITORY https://github.com/jeremy-rifkin/cpptrace.git
+	GIT_TAG        v1.0.4
+)
+set(CPPTRACE_DISABLE_CXX_20_MODULES ON)
+if (WIN32)
+	set(CPPTRACE_GET_SYMBOLS_WITH_LIBBACKTRACE ON CACHE BOOL "" FORCE)
+endif ()
+set(CPPTRACE_UNWIND_WITH_LIBUNWIND ON CACHE BOOL "" FORCE)
+set(CPPTRACE_UNPREFIXED_TRY_CATCH ON)
+FetchContent_MakeAvailable(cpptrace)
+
+
+if (WIN32)
+	set(EXTRA_LIBS ntdll dbghelp)
+	set(EXTRA_SOURCES src/Debug/CrashWindows.cpp)
+else ()
+	set(EXTRA_SOURCES src/Debug/CrashUnix.cpp
+		src/Debug/CrashHandlerMain.cpp)
+endif()
 add_executable(
 	MixRTS
 	src/Data/Animation.cpp
@@ -205,6 +233,9 @@ add_executable(
 	src/Data/Weapon.hpp
 	src/Data/Effect.cpp
 	src/Data/Effect.hpp
+	src/Debug/Crash.hpp
+	src/Debug/CrashHandlerMain.cpp
+	${EXTRA_SOURCES}
 )
 
 target_link_libraries(
@@ -213,4 +244,15 @@ target_link_libraries(
 	SFML::Audio
 	SFML::Network
 	TGUI::TGUI
+	cpptrace::cpptrace
+	${EXTRA_LIBS}
 )
+
+if (WIN32)
+	add_custom_command(
+		TARGET MixRTS POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		$<TARGET_FILE:cpptrace::cpptrace>
+		$<TARGET_FILE_DIR:MixRTS>
+	)
+endif()

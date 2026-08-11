@@ -3,6 +3,8 @@
 //
 
 #include "MultiSound.hpp"
+
+#include "../../cmake-build-debug-mingw-64/_deps/cpptrace-src/include/cpptrace/from_current.hpp"
 #include "Resources/Game.hpp"
 #include "Resources/Assert.hpp"
 
@@ -31,15 +33,15 @@ void MultiSound::init(const std::filesystem::path &base, const nlohmann::json &j
 		return this->addObject(base, json);
 
 	for (size_t i = 0; i < json.size(); i++) {
-	#ifndef PROPAGATE_CRASH
-		try {
-	#endif
+		cpptrace::try_catch([&]{
 			this->addObject(base, json[i]);
-	#ifndef PROPAGATE_CRASH
-		} catch (std::exception &e) {
-			throw _AssertionFailedException("At index " + std::to_string(i) + "\n" + e.what());
-		}
-	#endif
+		}, [&](cpptrace::lazy_exception &e) {
+			throw _AssertionFailedException("At index " + std::to_string(i) + "\n" + e.what(), e);
+		}, [&](std::exception &e) {
+			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+			throw _AssertionFailedException("At index " + std::to_string(i) + "\n" + e.what(), std::move(trace));
+		});
 	}
 }
 

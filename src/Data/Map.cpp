@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <cpptrace/from_current.hpp>
 #include "Resources/Game.hpp"
 #include "Mod.hpp"
 #include "Map.hpp"
@@ -94,15 +95,15 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 		auto &anim = json["animations"][i];
 
 		assert_msg(anim.is_string(), "json[\"animations\"][" + std::to_string(i) + "]");
-	#ifndef PROPAGATE_CRASH
-		try {
-	#endif
+		cpptrace::try_catch([&]{
 			mod.loadAnimations(path.parent_path() / anim.get<std::string>(), this->animations);
-	#ifndef PROPAGATE_CRASH
-		} catch (std::exception &e) {
-			throw _AssertionFailedException("In key [\"animations\"][" + std::to_string(i) + "]\n" + e.what());
-		}
-	#endif
+		}, [&](cpptrace::lazy_exception &e) {
+			throw _AssertionFailedException("In key [\"animations\"][" + std::to_string(i) + "]\n" + e.what(), e);
+		}, [&](std::exception &e) {
+			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+			throw _AssertionFailedException("In key [\"animations\"][" + std::to_string(i) + "]\n" + e.what(), std::move(trace));
+		});
 	}
 	for (size_t i = 0; i < json["generators"].size(); i++) {
 		auto &anim = json["generators"][i];
@@ -114,25 +115,23 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 
 		assert_msg(anim.is_object(), "json[\"resources\"][" + std::to_string(i) + "]");
 
-	#ifndef PROPAGATE_CRASH
-		try {
-	#endif
+		cpptrace::try_catch([&]{
 			MapResource res{path.parent_path(), anim};
 
 			this->resources.emplace(res.id, res);
-	#ifndef PROPAGATE_CRASH
-		} catch (std::exception &e) {
-			throw _AssertionFailedException("In key [\"resources\"][" + std::to_string(i) + "]\n" + e.what());
-		}
-	#endif
+		}, [&](cpptrace::lazy_exception &e) {
+			throw _AssertionFailedException("In key [\"resources\"][" + std::to_string(i) + "]\n" + e.what(), e);
+		}, [&](std::exception &e) {
+			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+			throw _AssertionFailedException("In key [\"resources\"][" + std::to_string(i) + "]\n" + e.what(), std::move(trace));
+		});
 	}
 	for (auto &[key, value] : json["skirts"].items()) {
 		assert_msg(value.is_array(), "json[\"skirts\"][" + key + "]");
 		for (size_t i = 0; i < value.size(); i++)
 			assert_msg(value[i].is_number_unsigned(), "json[\"skirts\"][" + key + "][" + std::to_string(i) + "]");
-	#ifndef PROPAGATE_CRASH
-		try {
-	#endif
+		cpptrace::try_catch([&]{
 			Vector2u size;
 			auto pos = key.find('x');
 
@@ -142,11 +141,13 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 			assert_exp(!this->skirts.contains(size));
 			this->skirts[size] = value.get<std::vector<unsigned>>();
 			assert_exp(this->skirts[size].size() == size.x * size.y);
-	#ifndef PROPAGATE_CRASH
-		} catch (std::exception &e) {
-			throw _AssertionFailedException("In key [\"skirts\"][" + key + "]\n" + e.what());
-		}
-	#endif
+		}, [&](cpptrace::lazy_exception &e) {
+			throw _AssertionFailedException("In key [\"skirts\"][" + key + "]\n" + e.what(), e);
+		}, [&](std::exception &e) {
+			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+			throw _AssertionFailedException("In key [\"skirts\"][" + key + "]\n" + e.what(), std::move(trace));
+		});
 	}
 	if (!json.contains("skirts_conc"))
 		this->skirtsConcrete = this->skirts;
@@ -154,9 +155,7 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 		assert_msg(value.is_array(), "json[\"skirts_conc\"][" + key + "]");
 		for (size_t i = 0; i < value.size(); i++)
 			assert_msg(value[i].is_number_unsigned(), "json[\"skirts_conc\"][" + key + "][" + std::to_string(i) + "]");
-	#ifndef PROPAGATE_CRASH
-		try {
-	#endif
+		cpptrace::try_catch([&]{
 			Vector2u size;
 			auto pos = key.find('x');
 
@@ -166,11 +165,13 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 			assert_exp(!this->skirtsConcrete.contains(size));
 			this->skirtsConcrete[size] = value.get<std::vector<unsigned>>();
 			assert_exp(this->skirtsConcrete[size].size() == size.x * size.y);
-	#ifndef PROPAGATE_CRASH
-		} catch (std::exception &e) {
-			throw _AssertionFailedException("In key [\"skirts_conc\"][" + key + "]\n" + e.what());
-		}
-	#endif
+		}, [&](cpptrace::lazy_exception &e) {
+			throw _AssertionFailedException("In key [\"skirts_conc\"][" + key + "]\n" + e.what(), e);
+		}, [&](std::exception &e) {
+			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+			throw _AssertionFailedException("In key [\"skirts_conc\"][" + key + "]\n" + e.what(), std::move(trace));
+		});
 	}
 }
 
@@ -216,15 +217,15 @@ void LoadedMap::load(Mod &mod, const std::filesystem::path &path)
 
 	std::string tileset = json["tileset"].get<std::string>();
 
-#ifndef PROPAGATE_CRASH
-	try {
-#endif
+	cpptrace::try_catch([&]{
 		this->metadata.load(mod, path / tileset / "metadata.json");
-#ifndef PROPAGATE_CRASH
-	} catch (std::exception &e) {
-		throw _AssertionFailedException("While loading map metadata " + (path / tileset / "metadata.json").string() + "\n" + e.what());
-	}
-#endif
+	}, [&](cpptrace::lazy_exception &e) {
+		throw _AssertionFailedException("While loading map metadata " + (path / tileset / "metadata.json").string() + "\n" + e.what(), e);
+	}, [&](std::exception &e) {
+		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+		throw _AssertionFailedException("While loading map metadata " + (path / tileset / "metadata.json").string() + "\n" + e.what(), std::move(trace));
+	});
 	assert_exp(this->renderCache.resize({
 		this->grid.tileSize.x * this->grid.gridSize.x,
 		this->grid.tileSize.y * this->grid.gridSize.y

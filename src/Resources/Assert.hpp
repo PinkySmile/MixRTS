@@ -7,6 +7,7 @@
 
 
 #include <string>
+#include <cpptrace/cpptrace.hpp>
 
 #ifdef __GNUC__
 #define FCT_NAME __PRETTY_FUNCTION__
@@ -53,28 +54,26 @@
 	"Debug Assertion " + std::string(expr) +                  \
 	" failed in " + __FILE__ +                                \
 	" at line " + std::to_string(__LINE__) +                  \
-	" in " + FCT_NAME                                         \
+	"\n\tin " + FCT_NAME                                      \
 )
 #define AssertionFailedExceptionMsg(expr, msg) _AssertionFailedException( \
 	"Debug Assertion " + std::string(expr) +                          \
 	" failed in " + __FILE__ +                                        \
 	" at line " + std::to_string(__LINE__) +                          \
-	" in " + FCT_NAME + ": " + msg                                    \
+	"\n\tin " + FCT_NAME + ":\n\t" + msg                              \
 )
 
-class _AssertionFailedException : public std::exception {
+class _AssertionFailedException : public cpptrace::lazy_exception {
 private:
 	std::string _msg;
 
 public:
 	_AssertionFailedException(const std::string &&msg);
+	_AssertionFailedException(const std::string &&msg, cpptrace::raw_trace &&trace);
+	_AssertionFailedException(const std::string &&msg, const lazy_exception &parent);
 	const char *what() const noexcept override;
 };
 
-
-#if defined(_DEBUG) && defined(__linux__)
-#define PROPAGATE_CRASH
-#endif
 
 
 #endif //MIXRTS_ASSERT_HPP

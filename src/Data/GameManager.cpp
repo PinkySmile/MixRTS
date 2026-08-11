@@ -3,6 +3,7 @@
 //
 
 #include <fstream>
+#include <cpptrace/from_current.hpp>
 #include "GameManager.hpp"
 #include "Faction.hpp"
 #include "Animation.hpp"
@@ -46,15 +47,19 @@ GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers)
 
 void GameManager::loadMap(Mod &mod, const std::filesystem::path &path)
 {
-#ifndef PROPAGATE_CRASH
-	try {
-#endif
-		this->_map.load(mod, path);
-#ifndef PROPAGATE_CRASH
-	} catch (std::exception &e) {
-		throw _AssertionFailedException("While loading map \"" + path.string() + "\"\n" + e.what());
-	}
-#endif
+	cpptrace::try_catch(
+		[&]{
+			this->_map.load(mod, path);
+		},
+		[&](cpptrace::lazy_exception &e) {
+			throw _AssertionFailedException("While loading map \"" + path.string() + "\"\n" + e.what(), e);
+		},
+		[&](std::exception &e) {
+			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+			throw _AssertionFailedException("While loading map \"" + path.string() + "\"\n" + e.what(), std::move(trace));
+		}
+	);
 
 	// TODO: Properly convert
 	for (auto &state : this->_mapStates)

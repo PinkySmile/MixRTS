@@ -1,6 +1,8 @@
+#include <iostream>
+#include <cfenv>
 #include <SFML/Graphics.hpp>
 #include <nlohmann/json.hpp>
-#include <cfenv>
+#include <cpptrace/from_current.hpp>
 #include "Data/Animation.hpp"
 #include "Data/Upgrade.hpp"
 #include "Data/Effect.hpp"
@@ -10,6 +12,8 @@
 #include "Data/Player.hpp"
 #include "Data/GameManager.hpp"
 #include "UI.hpp"
+#include "Debug/Crash.hpp"
+#include "Utils.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -24,10 +28,10 @@ struct Args {
 	bool loadingOnly = false;
 };
 
-void reloadViews(Vector2u size)
+void reloadViews(sf::RenderWindow &win, tgui::Gui &gui, Vector2u size, Vector2f offset)
 {
 	sf::View view{sf::FloatRect{
-		{0, -20 * guiScale},
+		offset,
 		{
 			static_cast<float>(size.x),
 			static_cast<float>(size.y)
@@ -41,8 +45,8 @@ void reloadViews(Vector2u size)
 		}
 	};
 
-	game->screen->setView(view);
-	game->gui.setAbsoluteView(viewGui);
+	win.setView(view);
+	gui.setAbsoluteView(viewGui);
 }
 
 void dispFPS(float frameTime)
@@ -69,7 +73,7 @@ int parseArgs(int argc, char **argv, Args &args)
 		{'l', [&args] { args.loadingOnly = true; }}
 	};
 
-	for (int i = 0; i < argc; i++) {
+	for (int i = 1; i < argc; i++) {
 		if (argv[i][0] == '-') {
 			if (argv[i][1] == '-') {
 				auto it = longToShort.find(&argv[i][2]);
@@ -93,8 +97,127 @@ int parseArgs(int argc, char **argv, Args &args)
 	return EXIT_SUCCESS;
 }
 
+void handleCrash(cpptrace::stacktrace st, const std::exception &e)
+{
+	sf::RenderWindow *window;
+	tgui::Gui *gui;
+	tgui::ChildWindow::Ptr out;
+	tgui::Panel::Ptr panel;
+	sf::Texture *background;
+	sf::Sprite *sprite;
+
+	cleanStackTrace(st);
+	guiScale = 1;
+	if (game) {
+		std::stringstream ss;
+
+		st.print(ss, false);
+		game->logger.fatal(e.what());
+		game->logger.fatal(ss.str());
+		window = &*game->screen;
+		background = new sf::Texture(window->getSize());
+		background->update(*window);
+		sprite = new sf::Sprite{*background};
+		gui = &game->gui;
+		gui->removeAllWidgets();
+
+		auto pan = tgui::Panel::create({"100%", "100%"});
+
+		pan->getRenderer()->setBackgroundColor({0, 0, 0, 175});
+		pan->setUserData(false);
+		gui->add(pan);
+
+		out = tgui::ChildWindow::create();
+		out->setSize(1000, 600);
+		out->setPosition("(&.w - w) / 2", "(&.h - h) / 2");
+		gui->add(out);
+		out->setFocused(true);
+		out->setTitleButtons(0);
+	} else {
+		std::cerr << e.what() << std::endl;
+		st.print();
+		window = new sf::RenderWindow{sf::VideoMode{sf::Vector2u{1000, 600}}, "Game crashed!"};
+		gui = new tgui::Gui{*window};
+	}
+
+	reloadViews(*window, *gui, window->getSize(), {0, 0});
+	window->setMouseCursorGrabbed(false);
+	window->setMouseCursorVisible(true);
+	panel = tgui::Panel::create({"100%", "100%"});
+
+	auto traceFont = new tgui::Font("mods/NotoSansMono-Regular.ttf");
+	auto title = tgui::Label::create("Game crashed !");
+	auto exception = tgui::RichTextLabel::create("Exception: <color=#ff0000>" + getLastExceptionName() + "</color>");
+	auto what = tgui::Label::create(e.what());
+	std::stringstream ss;
+
+	title->setTextSize(40);
+	title->getRenderer()->setTextStyle(tgui::TextStyle::Bold);
+	title->setPosition({10, 10});
+	title->setSize({"&.w - 20", 60});
+	title->setHorizontalAlignment(tgui::HorizontalAlignment::Center);
+	panel->add(title, "title");
+
+	exception->setPosition({10, "title.y + title.h + 10"});
+	exception->setSize({"&.w - 20", 20});
+	panel->add(exception, "signal");
+
+	what->setPosition({10, "signal.y + signal.h + 10"});
+	what->setAutoSize(true);
+	panel->add(what, "faultAddr");
+	what->setSize({tgui::Layout{"max(&.w - 20, " + std::to_string(what->getSize().x) + ")"}, what->getSize().y});
+
+	std::string richString = stacktraceToRichString(st);
+
+	auto stackTrace = tgui::RichTextLabel::create(richString);
+	stackTrace->setPosition({10, "faultAddr.y + faultAddr.h + 10"});
+	stackTrace->setAutoSize(true);
+	stackTrace->getScrollbar()->setPolicy(tgui::Scrollbar::Policy::Automatic);
+	stackTrace->getRenderer()->setTextColor(tgui::Color::Black);
+	stackTrace->getRenderer()->setFont(*traceFont);
+	stackTrace->getRenderer()->setBackgroundColor(tgui::Color{0xA0, 0xA0, 0xA0});
+	panel->add(stackTrace, "last");
+	stackTrace->setSize({"&.w - 20", "&.h - y - 10"});
+
+	if (out)
+		out->add(panel);
+	else
+		gui->add(panel);
+	window->setFramerateLimit(30);
+	while (window->isOpen()) {
+		while (auto event = window->pollEvent()) {
+			if (event->is<sf::Event::Closed>())
+				window->close();
+			else if (auto resized = event->getIf<sf::Event::Resized>())
+				reloadViews(*window, *gui, resized->size, {0, 0});
+			gui->handleEvent(*event);
+		}
+		window->clear(sf::Color{0xC0, 0xC0, 0xC0});
+		if (sprite) {
+			sprite->setScale({
+				static_cast<float>(window->getSize().x) / background->getSize().x,
+				static_cast<float>(window->getSize().y) / background->getSize().y
+			});
+			window->draw(*sprite);
+		}
+		gui->draw();
+		window->display();
+	}
+	delete traceFont;
+	if (!game) {
+		delete window;
+		delete gui;
+	}
+	delete sprite;
+	delete background;
+}
+
 int main(int argc, char **argv)
 {
+	if (argc != 0 && strcmp(argv[0], "crash_handler") == 0)
+		return crashHandlerMain();
+	initCrashHandler();
+
 	Args args;
 	int ret = parseArgs(argc, argv, args);
 
@@ -106,9 +229,7 @@ int main(int argc, char **argv)
 	unsigned int current_word;
 	_controlfp_s(&current_word, 0, _EM_INVALID);
 #endif
-#ifndef PROPAGATE_CRASH
-	try {
-#endif
+	cpptrace::try_catch([&]{
 		new Game("mods/NotoSans-Regular.ttf");
 	#ifdef _WIN32
 		ShowWindow(game->screen->getNativeHandle(), SW_MAXIMIZE);
@@ -179,7 +300,7 @@ int main(int argc, char **argv)
 
 		music.play();
 		music.setLooping(true);
-		reloadViews(game->screen->getSize());
+		reloadViews(*game->screen, game->gui, game->screen->getSize(), {0, -20 * guiScale});
 		if (args.loadingOnly)
 			game->screen->close();
 		while (game->screen->isOpen()) {
@@ -187,7 +308,7 @@ int main(int argc, char **argv)
 				if (event->is<sf::Event::Closed>())
 					game->screen->close();
 				else if (auto resized = event->getIf<sf::Event::Resized>())
-					reloadViews(resized->size);
+					reloadViews(*game->screen, game->gui, resized->size, {0, -20 * guiScale});
 				else if (auto key = event->getIf<sf::Event::KeyPressed>()) {
 				#ifdef _DEBUG
 					if (key->code == sf::Keyboard::Key::F4) {
@@ -217,16 +338,11 @@ int main(int argc, char **argv)
 			game->screen->setMouseCursorGrabbed(!game->paused);
 		}
 		return 0;
-#ifndef PROPAGATE_CRASH
-	} catch (const std::exception &e) {
-		if (game)
-			game->logger.fatal(e.what());
-		else
-			fprintf(stderr, "[FATAL]: Failed to init: %s\n", e.what());
+	}, [&](const cpptrace::exception &e) {
+		handleCrash(e.trace(), e);
 		delete game;
-#ifdef _WIN32
-		MessageBoxA(nullptr, e.what(), "Fatal error", MB_ICONERROR);
-#endif
-	}
-#endif
+	}, [&](const std::exception &e) {
+		handleCrash(cpptrace::from_current_exception(), e);
+		delete game;
+	});
 }

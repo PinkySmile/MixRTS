@@ -2,6 +2,8 @@
 // Created by PinkySmile on 29/03/2026.
 //
 
+#include <cpptrace/cpptrace.hpp>
+#include <cpptrace/from_current.hpp>
 #include "Resources/Assert.hpp"
 #include "Faction.hpp"
 #include "Mod.hpp"
@@ -126,26 +128,30 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 
 void Faction::load()
 {
-#ifndef PROPAGATE_CRASH
-	try {
-#endif
-		for (auto &a: this->_animations)
-			this->_base.loadAnimations(a, this->_loadedAnimations);
-		for (auto &a: this->_sounds)
-			this->_base.loadSounds(a, this->_loadedSounds);
-		for (auto &e: this->_effects)
-			this->_base.loadEffects(e, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects);
-		for (auto &w: this->_weapons)
-			this->_base.loadWeapons(w, this->_loadedEffects, this->_loadedSounds, this->_loadedWeapons);
-		for (auto &u: this->_objects)
-			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedWeapons, this->_loadedObjects);
-		for (auto &u: this->_upgrades)
-			this->_base.loadUpgrades(u, *this, this->_loadedUpgrades);
-#ifndef PROPAGATE_CRASH
-	} catch (std::exception &e) {
-		throw _AssertionFailedException("While loading faction \"" + this->_name + "\"\n" + e.what());
-	}
-#endif
+	cpptrace::try_catch(
+		[&]{
+			for (auto &a: this->_animations)
+				this->_base.loadAnimations(a, this->_loadedAnimations);
+			for (auto &a: this->_sounds)
+				this->_base.loadSounds(a, this->_loadedSounds);
+			for (auto &e: this->_effects)
+				this->_base.loadEffects(e, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects);
+			for (auto &w: this->_weapons)
+				this->_base.loadWeapons(w, this->_loadedEffects, this->_loadedSounds, this->_loadedWeapons);
+			for (auto &u: this->_objects)
+				this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedWeapons, this->_loadedObjects);
+			for (auto &u: this->_upgrades)
+				this->_base.loadUpgrades(u, *this, this->_loadedUpgrades);
+		},
+		[&](cpptrace::lazy_exception &e) {
+			throw _AssertionFailedException("While loading faction \"" + this->_name + "\"\n" + e.what(), e);
+		},
+		[&](std::exception &e) {
+			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+			throw _AssertionFailedException("While loading faction \"" + this->_name + "\"\n" + e.what(), std::move(trace));
+		}
+	);
 }
 
 const std::unordered_map<std::string, GameObject> &Faction::getObjects() const
