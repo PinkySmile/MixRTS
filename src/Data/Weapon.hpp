@@ -24,6 +24,8 @@ private:
 	const Effect *_hitEffect = nullptr;
 	unsigned _damage = 0;
 	unsigned _range = 0;
+	double _inaccuracyDist = 0;
+	double _inaccuracyBase = 0;
 	std::string _warhead;
 	std::vector<std::string> _canHitTags;
 
@@ -42,6 +44,7 @@ public:
 	[[nodiscard]] unsigned getRange() const;
 	[[nodiscard]] const std::string &getWarhead() const;
 	[[nodiscard]] const std::vector<std::string> &canHitTags() const;
+	[[nodiscard]] double getInaccuracy(double dist) const;
 };
 
 

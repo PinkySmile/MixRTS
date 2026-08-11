@@ -11,11 +11,13 @@
 #include <unordered_map>
 #include <nlohmann/json_fwd.hpp>
 #include "forward.hpp"
+#include "Vector.hpp"
 
 class Effect {
 private:
 	std::vector<Animation> _anim;
 	const MultiSound *_sound = nullptr;
+	Vector2f _position;
 	unsigned _delay = 0;
 	unsigned _totalDelay = 0;
 	unsigned _index = 0;
@@ -29,14 +31,10 @@ public:
 		const nlohmann::json &data
 	);
 	bool update();
-	void reset();
+	void render();
 	void playSound() const;
-	[[nodiscard]] Animation &getAnim();
-	[[nodiscard]] const Animation &getAnim() const;
-	[[nodiscard]] const std::vector<Animation> &getAnims() const;
+	void setPosition(Vector2f pos);
 	[[nodiscard]] int getLayer() const;
-	[[nodiscard]] size_t size() const;
-	[[nodiscard]] unsigned current() const;
 	[[nodiscard]] const MultiSound *getSound() const;
 };
 

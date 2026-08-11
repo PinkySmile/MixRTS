@@ -166,6 +166,15 @@ void GameManager::update()
 		for (auto &p: this->_players)
 			p.mouseOnUi();
 
+	for (auto &arr : this->_effects) {
+		auto ite = arr.begin();
+		while (ite != arr.end())
+			if (ite->update())
+				ite = arr.erase(ite);
+			else
+				++ite;
+	}
+
 	for (auto &list : this->_renderObjects | std::ranges::views::values) {
 		auto it = list.begin();
 
@@ -361,10 +370,13 @@ void GameManager::render()
 		}
 	}});
 	game->screen->draw(sprite);
-	for (int layer = -2; layer <= 0; layer++)
+	for (int layer = -2; layer <= 0; layer++) {
 		for (auto &list : this->_renderObjects | std::ranges::views::values)
 			for (auto b : list)
 				b->render(layer);
+		for (auto &e : this->_effects[layer + 2])
+			e.render();
+	}
 	if (this->_debugGrid == 0) {
 		this->_renderPathFindingGrid(this->_map.pathFindingGrid);
 		dPFGrid = true;
@@ -382,10 +394,13 @@ void GameManager::render()
 		} else
 			displayGrid(this->_mapStates[(this->_debugGrid - 3) / 2]);
 	}
-	for (int layer = 1; layer <= 2; layer++)
+	for (int layer = 1; layer <= 2; layer++) {
 		for (auto &list : this->_renderObjects | std::ranges::views::values)
 			for (auto b : list)
 				b->render(layer);
+		for (auto &e : this->_effects[layer + 2])
+			e.render();
+	}
 
 	if (dPFGrid) {
 		for (auto &list : this->_renderObjects | std::ranges::views::values)
@@ -1232,6 +1247,15 @@ std::pair<std::string, unsigned> GameManager::convertResource(const std::string 
 	assert_exp(!expected.empty());
 	// TODO:
 	assert_not_reached();
+}
+
+void GameManager::spawnEffect(const Effect &effect, Vector2f pos)
+{
+	assert_exp(effect.getLayer() >= -2 && effect.getLayer() <= 2);
+	auto &arr = this->_effects[effect.getLayer() + 2];
+
+	arr.emplace_back(effect);
+	arr.back().setPosition(pos);
 }
 
 void GameManager::centerCameraOn(Vector2f target)

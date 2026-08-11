@@ -704,6 +704,26 @@ static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 		return true;
 	if (p.y + octx->hitBoxSize.y > octx->grid->gridSize.y)
 		return true;
+	if (octx->ignoreObject) {
+		Vector2i pos = octx->ignoreObject->getPosition();
+		Vector2u size = octx->ignoreObject->getSize();
+		MapState::Quad absP = {
+			Vector2f(p.x, p.y),
+			Vector2f(p.x + 1, p.y),
+			Vector2f(p.x + 1, p.y + 1),
+			Vector2f(p.x, p.y + 1)
+		};
+
+		if (octx->ggrid)
+			absP = octx->ggrid->tileCoordToAbs(p);
+		if (
+			pos.x + size.x > absP.pt1.x &&
+			pos.y + size.y > absP.pt1.y &&
+			pos.x <= absP.pt3.x &&
+			pos.y <= absP.pt3.y
+		)
+			return false;
+	}
 	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
 		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
 			auto attrs = octx->grid->grid[(p.x + x) + (p.y + y) * octx->grid->gridSize.x];
@@ -1331,22 +1351,35 @@ bool GameObject::_updateDeploy()
 	return true;
 }
 
-bool GameObject::_updateAttack(const GameObject *obj)
+bool GameObject::_updateAttack(GameObject *obj)
 {
 	if (obj == nullptr || obj->isDead())
 		return true;
 
-	const ObjectWeapon *weapon = this->_getBestWeaponFor(obj, this->_getFreeBarrelFor(obj));
-	unsigned range = weapon->weapon->getRange();
 	Vector2f myCenter = this->_position + this->_size / 2;
 	Vector2f opCenter = obj->_position + obj->_size / 2;
 	Vector2f diff = opCenter - myCenter;
 	Vector2f diffAbs = diff.abs();
+	const ObjectWeapon *weapon = this->_getBestWeaponFor(obj, UINT32_MAX, true);
+	if (weapon == nullptr) {
+		double realAngle = diff.angle();
+		unsigned angle = round((realAngle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+
+		angle %= this->_anims.size();
+		if (angle != this->_currentDir)
+			this->_updateTurn(angle);
+		return false;
+	}
+
+	ObjectBarrel &barrel = this->_barrels[weapon->barrel];
+	unsigned range = weapon->weapon->getRange();
 
 	range *= range;
 	if (range < diffAbs.magnitude2()) {
 		if (this->_updateMove(opCenter, false, obj)) {
 			// TODO: Handle when unit is blocked
+			if (opCenter != this->_cachedDest)
+				this->_pathCached = false;
 		}
 		return false;
 	}
@@ -1359,6 +1392,33 @@ bool GameObject::_updateAttack(const GameObject *obj)
 	angle %= this->_anims.size();
 	if (angle != this->_currentDir && !this->_updateTurn(angle))
 		return false;
+
+	double inaccuracy = weapon->weapon->getInaccuracy(diff.magnitude());
+	std::uniform_real_distribution<> dist(0, inaccuracy);
+	double offset = dist(game->gameRandom);
+	uint64_t dangle = random_distrib(game->gameRandom, 0, 360);
+	const MultiSound *sound = weapon->weapon->getSound();
+	const Effect *effect = weapon->weapon->getEffect();
+	const Effect *hitEffect = weapon->weapon->getHitEffect();
+	Vector2f targetPos = opCenter;
+
+	barrel.shootTimer = weapon->cooldown;
+	targetPos.x += std::cos(dangle * M_PI / 180) * offset;
+	targetPos.y += std::sin(dangle * M_PI / 180) * offset;
+	if (sound)
+		sound->play();
+	switch (weapon->weapon->getType()) {
+	case WEAPONTYPE_HITSCAN:
+		if (effect)
+			this->manager->spawnEffect(*effect, this->_position);
+		if (hitEffect)
+			this->manager->spawnEffect(*hitEffect, targetPos);
+		break;
+	case WEAPONTYPE_PROJECTILE:
+		// TODO:
+	default:
+		assert_not_reached();
+	}
 	return false;
 }
 
@@ -1408,11 +1468,6 @@ bool GameObject::_handleOrder(const Order &o)
 	return true;
 }
 
-unsigned GameObject::_getFreeBarrelFor(const GameObject *obj) const
-{
-	return 0;
-}
-
 void GameObject::playBuiltSound() const
 {
 	if (this->_buildSound)
@@ -1443,6 +1498,9 @@ void GameObject::update()
 			this->_repairTimer = 0;
 	}
 	this->_moving = false;
+	for (auto &barrel : this->_barrels)
+		if (barrel.shootTimer)
+			barrel.shootTimer--;
 	if (!this->_orderQueue.empty()) {
 		if (this->_firstEvent) {
 			this->_pathCached = false;
@@ -1889,7 +1947,7 @@ void GameObject::harvest()
 	this->_harvestClosestResource();
 }
 
-void GameObject::attack(const GameObject *obj)
+void GameObject::attack(GameObject *obj)
 {
 	this->_orderQueue.emplace_back(AttackUnitOrder{obj});
 }
@@ -2403,7 +2461,7 @@ void GameObject::nextDirection()
 	this->_currentDir = (this->_currentDir + 1) % this->_anims.size();
 }
 
-const ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel) const
+const ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel, bool isFree) const
 {
 	const std::vector<std::string> &tags = obj->getTags();
 
@@ -2416,20 +2474,22 @@ const ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigne
 		for (auto &weapon : it->second) {
 			if (barrel != UINT32_MAX && weapon->barrel != barrel)
 				continue;
+			if (isFree && this->_barrels[weapon->barrel].shootTimer != 0)
+				continue;
 			return weapon;
 		}
 	}
 	return nullptr;
 }
 
-ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel)
+ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel, bool isFree)
 {
-	return const_cast<ObjectWeapon *>(static_cast<const GameObject *>(this)->_getBestWeaponFor(obj, barrel));
+	return const_cast<ObjectWeapon *>(static_cast<const GameObject *>(this)->_getBestWeaponFor(obj, barrel, isFree));
 }
 
 bool GameObject::canAttack(const GameObject *obj) const
 {
-	return this->_getBestWeaponFor(obj, UINT32_MAX) != nullptr;
+	return this->_getBestWeaponFor(obj, UINT32_MAX, false) != nullptr;
 }
 
 const std::vector<std::string> &GameObject::getTags() const
@@ -2458,6 +2518,14 @@ ObjectBarrel::ObjectBarrel(unsigned index, const Mod &base, const std::unordered
 	std::ranges::sort(this->weapons, [](const ObjectWeapon &a, const ObjectWeapon &b) -> bool {
 		return a.priority < b.priority;
 	});
+}
+
+void ObjectBarrel::update()
+{
+	if (this->shootTimer != 0) {
+		this->shootTimer--;
+		return;
+	}
 }
 
 ObjectWeapon::ObjectWeapon(unsigned short extraPrio, unsigned barrel, const Mod &base, const std::unordered_map<std::string, Weapon> &weapons, const nlohmann::json &j)

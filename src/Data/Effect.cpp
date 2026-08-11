@@ -9,6 +9,7 @@
 #include "Mod.hpp"
 #include "Resources/Assert.hpp"
 #include "Utils.hpp"
+#include "Resources/Game.hpp"
 
 Effect::Effect(
 	const Mod &base,
@@ -53,40 +54,33 @@ bool Effect::update()
 	return false;
 }
 
-void Effect::reset()
+void Effect::render()
 {
-	this->_index = 0;
-	this->_totalDelay = 0;
+	Animation &anim = this->_anim[this->_index];
+	Sprite &sprite = anim.getSprite();
+
+	sprite.setPosition({
+		sprite.getPosition().x + this->_position.x,
+		sprite.getPosition().y + this->_position.y
+	});
+	switch (anim.getBlending()) {
+	case Animation::BLEND_ADD:
+		game->screen->draw(sprite, sf::BlendAdd);
+		break;
+	case Animation::BLEND_ALPHA:
+		game->screen->draw(sprite);
+		break;
+	}
 }
 
-Animation &Effect::getAnim()
+void Effect::setPosition(Vector2f pos)
 {
-	return this->_anim[this->_index];
-}
-
-const Animation &Effect::getAnim() const
-{
-	return this->_anim[this->_index];
-}
-
-const std::vector<Animation> &Effect::getAnims() const
-{
-	return this->_anim;
+	this->_position = pos;
 }
 
 int Effect::getLayer() const
 {
 	return this->_layer;
-}
-
-size_t Effect::size() const
-{
-	return this->_anim.size();
-}
-
-unsigned Effect::current() const
-{
-	return this->_index;
 }
 
 const MultiSound *Effect::getSound() const

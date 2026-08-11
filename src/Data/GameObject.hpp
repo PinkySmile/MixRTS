@@ -57,7 +57,7 @@ struct MoveCheckOrder {
 	Vector2i destination;
 };
 struct AttackUnitOrder {
-	const GameObject *target;
+	GameObject *target;
 };
 
 // Result of resolving a dynamic collision while a grid-bound unit moves.
@@ -123,6 +123,7 @@ struct ObjectBarrel {
 	unsigned short priority;
 
 	ObjectBarrel(unsigned index, const Mod &base, const std::unordered_map<std::string, Weapon> &wList, const nlohmann::json &j);
+	void update();
 };
 
 class GameObjectData {
@@ -279,7 +280,7 @@ public:
 	void setHealth(unsigned health);
 	void harvest(const Vector2i &pos, bool automatic = false);
 	void harvest();
-	void attack(const GameObject *obj);
+	void attack(GameObject *obj);
 	void moveTo(const Vector2i &pos, bool automatic = false);
 	bool moveAside(GameObject *asker);
 	void dumpResourcesTo(GameObject *dump, bool automatic = false);
@@ -367,9 +368,8 @@ protected:
 	std::unordered_map<std::string, std::vector<ObjectBarrel *>> _barrelByTag;
 	std::unordered_map<std::string, std::vector<ObjectWeapon *>> _weaponByTag;
 
-	[[nodiscard]] const ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel) const;
-	[[nodiscard]] ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel);
-	[[nodiscard]] unsigned _getFreeBarrelFor(const GameObject *obj) const;
+	[[nodiscard]] const ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree) const;
+	[[nodiscard]] ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree);
 	[[nodiscard]] Vector2f _getTileOffsetFromCenter() const;
 	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);
 	bool _tileAvailableFor(Vector2i tile) const;
@@ -383,7 +383,7 @@ protected:
 	bool _updateHarvest();
 	bool _updateDump(GameObject *place);
 	bool _updateDeploy();
-	bool _updateAttack(const GameObject *obj);
+	bool _updateAttack(GameObject *obj);
 	bool _updateFinishMovement();
 
 	void _harvestClosestResource();

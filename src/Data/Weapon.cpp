@@ -24,6 +24,8 @@ Weapon::Weapon(
 	assert_exp(data.contains("can_hit_tags") && data["can_hit_tags"].is_array());
 	for (auto &j : data["can_hit_tags"])
 		assert_exp(j.is_string());
+	assert_exp(!data.contains("inaccuracy_dist") || data["inaccuracy_dist"].is_number());
+	assert_exp(!data.contains("inaccuracy_base") || data["inaccuracy_base"].is_number());
 	assert_exp(!data.contains("effect") || data["effect"].is_null() || data["effect"].is_string());
 	assert_exp(!data.contains("hit_effect") || data["hit_effect"].is_null() || data["hit_effect"].is_string());
 	assert_exp(!data.contains("sound") || data["sound"].is_null() || data["sound"].is_string());
@@ -42,6 +44,10 @@ Weapon::Weapon(
 	this->_warhead = data["warhead"];
 	this->_canHitTags = data["can_hit_tags"];
 
+	if (data.contains("inaccuracy_base"))
+		this->_inaccuracyBase = data["inaccuracy_base"];
+	if (data.contains("inaccuracy_dist"))
+		this->_inaccuracyDist = data["inaccuracy_dist"];
 	if (data.contains("effect") && !data["effect"].is_null()) {
 		std::string effect = RESOURCE(base.getName(), data["effect"].get<std::string>());
 
@@ -100,4 +106,9 @@ const std::string &Weapon::getWarhead() const
 const std::vector<std::string> &Weapon::canHitTags() const
 {
 	return this->_canHitTags;
+}
+
+double Weapon::getInaccuracy(double dist) const
+{
+	return this->_inaccuracyBase + this->_inaccuracyDist * dist;
 }

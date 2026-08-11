@@ -364,8 +364,13 @@ void Player::handleUiEvents()
 				this->playEVA(UI::EVA_SELL, 120, 1, 0);
 			} else if (auto attack = std::get_if<UI::AttackUnitEvent>(&*event)) {
 				auto target = this->_parent.getObjectById(attack->target);
-				for (unsigned o : attack->indices)
-					this->_parent.getObjectById(o)->attack(target);
+				for (unsigned o : attack->indices) {
+					GameObject *obj = this->_parent.getObjectById(o);
+
+					obj->clearOrders();
+					obj->attack(target);
+					obj->playDoSound();
+				}
 			} else if (auto stop = std::get_if<UI::StopEvent>(&*event)) {
 				for (auto i: stop->indices)
 					this->_parent.getObjectById(i)->clearOrders();
