@@ -2,6 +2,8 @@
 // Created by PinkySmile on 11/08/2026.
 //
 
+#include <TGUI/Widgets/Label.hpp>
+
 #include "Crash.hpp"
 #include "Resources/Game.hpp"
 
@@ -17,6 +19,7 @@ void replace(std::string &str, const std::string &from, const std::string &to) {
 
 void simplifySym(std::string &sym)
 {
+	replace(sym, "_AssertionFailedException", "AssertionFailedException");
 	replace(sym, "nlohmann::json_abi_v3_12_0::basic_json<std::map, std::vector, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool, long, unsigned long, double, std::allocator, nlohmann::json_abi_v3_12_0::adl_serializer, std::vector<unsigned char, std::allocator<unsigned char> >, void>", "nlohmann::json");
 	replace(sym, "nlohmann::json_abi_v3_12_0::basic_json<std::map, std::vector, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool, long long, unsigned long long, double, std::allocator, nlohmann::json_abi_v3_12_0::adl_serializer, std::vector<unsigned char, std::allocator<unsigned char> >, void>", "nlohmann::json");
 	replace(sym, "std::filesystem::__cxx11::path", "std::filesystem::path");
@@ -157,7 +160,7 @@ std::string stacktraceToRichString(cpptrace::stacktrace st)
 						result += "C06000>";
 						break;
 					case '4':
-						result += "0000ff>";
+						result += "6060ff>";
 						break;
 					case '5':
 						result += "ff00ff>";
@@ -168,8 +171,11 @@ std::string stacktraceToRichString(cpptrace::stacktrace st)
 					case '7':
 						result += "ffffff>";
 						break;
-					default:
+					case '8':
 						result += "000000>";
+						break;
+					default:
+						result += "ffffff>";
 						break;
 				}
 			} else if (s[i] == '0') {
@@ -204,8 +210,24 @@ int crashHandlerMain()
 	sf::RenderWindow window{sf::VideoMode{sf::Vector2u{1000, 600}}, "Game crashed!"};
 	tgui::Gui gui{window};
 	tgui::Panel::Ptr panel = crashPacketPanel(*packet);
+	std::string folder = "crash-";
+	std::error_code err;
+	folder += timebuffer;
+	std::filesystem::path path = folder;
 
+	std::filesystem::create_directory(path, err);
+	std::filesystem::copy("latest.log", path / "log_file.log", err);
+	std::ofstream stream{path / "stacktrace.txt"};
+
+	stream << crashPacketToString(*packet);
+	stream.close();
 	panel->getRenderer()->setBackgroundColor(tgui::Color::Transparent);
+
+	auto crashPlaceLabel = tgui::Label::create(L"Crash information has been stored at " + std::filesystem::absolute(folder).wstring());
+	crashPlaceLabel->setPosition({10, "100% - h - 10"});
+	crashPlaceLabel->getRenderer()->setTextStyle(tgui::TextStyle::Bold | tgui::TextStyle::Underlined);
+	panel->setSize({"100%", "bottom.y - 10"});
+	gui.add(crashPlaceLabel, "bottom");
 	gui.add(panel);
 	window.setFramerateLimit(30);
 	while (window.isOpen()) {

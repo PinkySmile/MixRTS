@@ -274,14 +274,16 @@ tgui::Panel::Ptr crashPacketPanel(const CrashPacket &packet)
 	std::string richString = stacktraceToRichString(obj_trace.resolve());
 
 	auto stackTrace = tgui::RichTextLabel::create(richString);
-	stackTrace->setPosition({10, "faultAddr.y + faultAddr.h + 10"});
 	stackTrace->setAutoSize(true);
-	stackTrace->getScrollbar()->setPolicy(tgui::Scrollbar::Policy::Automatic);
-	stackTrace->getRenderer()->setTextColor(tgui::Color::Black);
+	stackTrace->getRenderer()->setTextColor(tgui::Color::White);
 	stackTrace->getRenderer()->setFont(traceFont);
-	stackTrace->getRenderer()->setBackgroundColor(tgui::Color{0xA0, 0xA0, 0xA0});
-	stackTrace->setSize({"&.w - 20", "&.h - y - 10"});
-	panel->add(stackTrace, "last");
+
+	auto spanel = tgui::ScrollablePanel::create();
+	spanel->setPosition({10, "faultAddr.y + faultAddr.h + 10"});
+	spanel->setSize({"&.w - 20", "&.h - y - 10"});
+	spanel->getRenderer()->setBackgroundColor(tgui::Color{0x40, 0x40, 0x40});
+	spanel->add(stackTrace);
+	panel->add(spanel, "last");
 	return panel;
 }
 

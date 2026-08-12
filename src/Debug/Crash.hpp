@@ -10,11 +10,11 @@
 
 #include <filesystem>
 #include <TGUI/Widgets/Panel.hpp>
-
-#include "../../cmake-build-debug-emscripten/_deps/cpptrace-src/include/cpptrace/cpptrace.hpp"
+#include <cpptrace/cpptrace.hpp>
 
 struct CrashPacket;
 
+void simplifySym(std::string &sym);
 CrashPacket *allocCrashPacket();
 int crashHandlerMain();
 bool initCrashHandler();

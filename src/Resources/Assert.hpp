@@ -75,5 +75,4 @@ public:
 };
 
 
-
 #endif //MIXRTS_ASSERT_HPP

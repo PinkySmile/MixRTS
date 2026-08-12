@@ -25,12 +25,17 @@ void Logger::msg(const std::string &content, const std::string &prepend, bool to
 	std::stringstream logged_str;
 	time_t timestamp = std::time(nullptr);
 	struct tm *tm = std::localtime(&timestamp);
+	std::string s;
 
-	logged_str << std::put_time(tm, "[%d-%m-%Y][%H:%M:%S]") << prepend << ": " << content << std::endl;
-	this->file << logged_str.str();
-	this->file.flush();
-	if (toStdout)
-		std::cout << logged_str.str();
+	logged_str << content << std::endl;
+	while (std::getline(logged_str, s)) {
+		if (s.empty())
+			continue;
+		this->file << std::put_time(tm, "[%d-%m-%Y][%H:%M:%S]") << prepend << ": " << s << std::endl;
+		this->file.flush();
+		if (toStdout)
+			std::cout << std::put_time(tm, "[%d-%m-%Y][%H:%M:%S]") << prepend << ": " << s << std::endl;
+	}
 	this->mutex.unlock();
 }
 

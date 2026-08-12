@@ -15,7 +15,8 @@
 #include "Utils.hpp"
 
 
-#define SIG_STACK_SIZE (1024 * 1024)
+#define MAX_RAW_STACK_FRAMES 750000
+#define SIG_STACK_SIZE (sizeof(CrashPacket) * MAX_STACK_FRAMES + sizeof(cpptrace::frame_ptr) * MAX_RAW_STACK_FRAMES + 1024 * 10)
 
 struct CrashConfig {
 	int readFd;
@@ -32,14 +33,32 @@ struct CrashPacket {
 
 static const CrashConfig *gCrashConfig = nullptr;
 
-static size_t captureSafeTrace(cpptrace::safe_object_frame* buffer, size_t max_frames)
+static size_t captureSafeTrace(cpptrace::safe_object_frame *buffer, size_t maxFrames)
 {
-	cpptrace::frame_ptr raw_frames[MAX_STACK_FRAMES];
-	size_t count = cpptrace::safe_generate_raw_trace(raw_frames, max_frames, 0);
+	cpptrace::frame_ptr raw_frames[MAX_RAW_STACK_FRAMES];
+	size_t count = cpptrace::safe_generate_raw_trace(raw_frames, MAX_RAW_STACK_FRAMES, 0);
+	cpptrace::safe_object_frame temp;
+	size_t j = 0;
 
-	for (size_t i = 0; i < count; ++i)
-		cpptrace::get_safe_object_frame(raw_frames[i], &buffer[i]);
-	return count;
+	memset(buffer, 0, maxFrames * sizeof(*buffer));
+	for (size_t i = 0; i < count && j < maxFrames; ++i) {
+		cpptrace::get_safe_object_frame(raw_frames[i], &temp);
+		if (j > 0 && memcmp(&temp, &buffer[j - 1], sizeof(temp)) == 0) {
+			buffer[j].raw_address = -1;
+			buffer[j].address_relative_to_object_start += 1;
+		} else {
+			if (buffer[j].raw_address == static_cast<cpptrace::frame_ptr>(-1)) {
+				sprintf(buffer[j].object_path, "<repeating %zu times>", buffer[j].address_relative_to_object_start);
+				j++;
+			}
+			memcpy(&buffer[j++], &temp, sizeof(temp));
+		}
+	}
+	if (buffer[j].raw_address == static_cast<cpptrace::frame_ptr>(-1)) {
+		sprintf(buffer[j].object_path, "<repeating %zu times>", buffer[j].address_relative_to_object_start);
+		j++;
+	}
+	return j;
 }
 
 static void signalHandler(int sig, siginfo_t *info, void *)
@@ -191,24 +210,26 @@ tgui::Panel::Ptr crashPacketPanel(const CrashPacket &packet)
 	signal->setSize({"&.w - 20", 20});
 	panel->add(signal, "signal");
 
+	std::string last;
 	faultAddr->setPosition({10, "signal.y + signal.h + 10"});
 	faultAddr->setSize({"&.w - 20", 20});
+	if (packet.signal == 11) {
+		panel->add(faultAddr, "faultAddr");
+		last = "faultAddr";
+	} else
+		last = "signal";
 
 	auto stackTrace = tgui::RichTextLabel::create(richString);
 	stackTrace->setAutoSize(true);
-	stackTrace->getScrollbar()->setPolicy(tgui::Scrollbar::Policy::Automatic);
-	stackTrace->getRenderer()->setTextColor(tgui::Color::Black);
+	stackTrace->getRenderer()->setTextColor(tgui::Color::White);
 	stackTrace->getRenderer()->setFont(traceFont);
-	stackTrace->getRenderer()->setBackgroundColor(tgui::Color{0xA0, 0xA0, 0xA0});
-	stackTrace->setSize({"&.w - 20", "&.h - y - 10"});
 
-	if (packet.signal == 11) {
-		stackTrace->setPosition({10, "faultAddr.y + faultAddr.h + 10"});
-		panel->add(faultAddr, "faultAddr");
-	} else
-		stackTrace->setPosition({10, "signal.y + signal.h + 10"});
-
-	panel->add(stackTrace, "last");
+	auto spanel = tgui::ScrollablePanel::create();
+	spanel->setPosition({10, tgui::Layout{last + ".y + " + last + ".h + 10"}});
+	spanel->setSize({"&.w - 20", "&.h - y - 10"});
+	spanel->getRenderer()->setBackgroundColor(tgui::Color{0x40, 0x40, 0x40});
+	spanel->add(stackTrace);
+	panel->add(spanel, "last");
 	return panel;
 }
 
@@ -217,7 +238,7 @@ std::string crashPacketToString(const CrashPacket &packet)
 	std::stringstream ss;
 
 	ss << "Signal: " << packet.signal << " (" << strsignal(packet.signal) << ")" << std::endl;
-	ss << "Fault Address: 0x" << std::hex << std::setfill('0') << std::setw(sizeof(void *) * 2) << reinterpret_cast<ptrdiff_t>(packet.faultAddress) << std::endl << std::endl;
+	ss << "Cannot access 0x" << std::hex << std::setfill('0') << std::setw(sizeof(void *) * 2) << reinterpret_cast<ptrdiff_t>(packet.faultAddress) << std::endl << std::endl;
 
 	std::vector<cpptrace::object_frame> object_frames;
 	object_frames.reserve(packet.frameCount);

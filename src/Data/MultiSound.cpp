@@ -4,7 +4,7 @@
 
 #include "MultiSound.hpp"
 
-#include "../../cmake-build-debug-mingw-64/_deps/cpptrace-src/include/cpptrace/from_current.hpp"
+#include <cpptrace/from_current.hpp>
 #include "Resources/Game.hpp"
 #include "Resources/Assert.hpp"
 

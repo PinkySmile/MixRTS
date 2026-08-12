@@ -145,10 +145,16 @@ void handleCrash(cpptrace::stacktrace st, const std::exception &e)
 	window->setMouseCursorVisible(true);
 	panel = tgui::Panel::create({"100%", "100%"});
 
+	std::string exc = getLastExceptionName();
+	if (exc == "_AssertionFailedException")
+		exc = "AssertionFailed";
+	std::string whatStr = e.what();
+	simplifySym(whatStr);
+
 	auto traceFont = new tgui::Font("mods/NotoSansMono-Regular.ttf");
 	auto title = tgui::Label::create("Game crashed !");
-	auto exception = tgui::RichTextLabel::create("Exception: <color=#ff0000>" + getLastExceptionName() + "</color>");
-	auto what = tgui::Label::create(e.what());
+	auto exception = tgui::RichTextLabel::create("Exception: <color=#ff0000>" + exc + "</color>");
+	auto what = tgui::Label::create(whatStr);
 	std::stringstream ss;
 
 	title->setTextSize(40);
@@ -170,19 +176,52 @@ void handleCrash(cpptrace::stacktrace st, const std::exception &e)
 	std::string richString = stacktraceToRichString(st);
 
 	auto stackTrace = tgui::RichTextLabel::create(richString);
-	stackTrace->setPosition({10, "faultAddr.y + faultAddr.h + 10"});
 	stackTrace->setAutoSize(true);
-	stackTrace->getScrollbar()->setPolicy(tgui::Scrollbar::Policy::Automatic);
-	stackTrace->getRenderer()->setTextColor(tgui::Color::Black);
+	stackTrace->getRenderer()->setTextColor(tgui::Color::White);
 	stackTrace->getRenderer()->setFont(*traceFont);
-	stackTrace->getRenderer()->setBackgroundColor(tgui::Color{0xA0, 0xA0, 0xA0});
-	panel->add(stackTrace, "last");
-	stackTrace->setSize({"&.w - 20", "&.h - y - 10"});
 
-	if (out)
+	auto spanel = tgui::ScrollablePanel::create();
+	spanel->setPosition({10, "faultAddr.y + faultAddr.h + 10"});
+	spanel->setSize({"&.w - 20", "&.h - y"});
+	spanel->getRenderer()->setBackgroundColor(tgui::Color{0x40, 0x40, 0x40});
+	spanel->add(stackTrace);
+	panel->add(spanel, "last");
+
+
+	time_t timer;
+	char timebuffer[31];
+	tm *tm_info;
+
+	time(&timer);
+	tm_info = localtime(&timer);
+	strftime(timebuffer, sizeof(timebuffer), "%Y-%m-%d-%H-%M-%S", tm_info);
+
+	std::string folder = "crash-";
+	std::error_code err;
+	folder += timebuffer;
+	std::filesystem::path path = folder;
+	auto crashPlaceLabel = tgui::Label::create(L"Crash information has been stored at " + std::filesystem::absolute(folder).wstring());
+
+	std::filesystem::create_directory(path, err);
+	std::filesystem::copy("latest.log", path / "log_file.log", err);
+	std::ofstream stream{path / "stacktrace.txt"};
+
+	stream << "Exception: " << exc << std::endl;
+	stream << whatStr << std::endl << std::endl;
+	st.print(stream, false);
+	stream.close();
+
+	crashPlaceLabel->setPosition({10, "100% - h - 10"});
+	crashPlaceLabel->getRenderer()->setTextStyle(tgui::TextStyle::Bold | tgui::TextStyle::Underlined);
+	panel->setSize({"100%", "bottom.y - 10"});
+	if (out) {
+		out->add(crashPlaceLabel, "bottom");
 		out->add(panel);
-	else
+	} else {
+		gui->add(crashPlaceLabel, "bottom");
 		gui->add(panel);
+	}
+
 	window->setFramerateLimit(30);
 	while (window->isOpen()) {
 		while (auto event = window->pollEvent()) {
