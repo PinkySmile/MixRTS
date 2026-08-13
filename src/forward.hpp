@@ -20,6 +20,7 @@ class Player;
 class UI;
 class GameManager;
 class Weapon;
+class Warhead;
 class Effect;
 class MultiSound;
 struct MapState;

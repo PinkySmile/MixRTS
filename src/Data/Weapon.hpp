@@ -26,7 +26,7 @@ private:
 	unsigned _range = 0;
 	double _inaccuracyDist = 0;
 	double _inaccuracyBase = 0;
-	std::string _warhead;
+	const Warhead *_warhead = nullptr;
 	std::vector<std::string> _canHitTags;
 
 public:
@@ -34,6 +34,7 @@ public:
 		const Mod &base,
 		const std::unordered_map<std::string, Effect> &effects,
 		const std::unordered_map<std::string, MultiSound> &sounds,
+		const std::unordered_map<std::string, Warhead> &warheads,
 		const nlohmann::json &data
 	);
 	[[nodiscard]] WeaponType getType() const;
@@ -42,7 +43,7 @@ public:
 	[[nodiscard]] const Effect *getHitEffect() const;
 	[[nodiscard]] unsigned getDamage() const;
 	[[nodiscard]] unsigned getRange() const;
-	[[nodiscard]] const std::string &getWarhead() const;
+	[[nodiscard]] const Warhead *getWarhead() const;
 	[[nodiscard]] const std::vector<std::string> &canHitTags() const;
 	[[nodiscard]] double getInaccuracy(double dist) const;
 };

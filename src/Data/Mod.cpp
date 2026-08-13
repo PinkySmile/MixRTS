@@ -3,6 +3,7 @@
 //
 
 #include <map>
+#include <set>
 #include <fstream>
 #include <utility>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "CursorAnimation.hpp"
 #include "Upgrade.hpp"
 #include "Effect.hpp"
+#include "Warhead.hpp"
 #include "Weapon.hpp"
 #include "Mod.hpp"
 #include "Utils.hpp"
@@ -333,7 +335,7 @@ void Mod::loadEffects(const std::filesystem::path &path, const std::unordered_ma
 	});
 }
 
-void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_map<std::string, Effect> &effects, const std::unordered_map<std::string, MultiSound> &sounds, std::unordered_map<std::string, Weapon> &weapons) const
+void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_map<std::string, Effect> &effects, const std::unordered_map<std::string, MultiSound> &sounds, const std::unordered_map<std::string, Warhead> &warheads, std::unordered_map<std::string, Weapon> &weapons) const
 {
 	cpptrace::try_catch([&]{
 		std::ifstream stream{this->_base / path};
@@ -354,7 +356,7 @@ void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_ma
 				std::string fullId = RESOURCE(this->_name, id);
 
 				assert_exp(!weapons.contains(fullId));
-				weapons.emplace(fullId, Weapon{*this, effects, sounds, mergeObjects(jweapon, gen)});
+				weapons.emplace(fullId, Weapon{*this, effects, sounds, warheads, mergeObjects(jweapon, gen)});
 			}, [&](cpptrace::lazy_exception &e) {
 				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
 			}, [&](std::exception &e) {
@@ -370,6 +372,92 @@ void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_ma
 
 		throw _AssertionFailedException("While loading weapons file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
 	});
+}
+
+void Mod::loadWarheads(const std::filesystem::path &path, std::unordered_map<std::string, Warhead> &warheads) const
+{
+	cpptrace::try_catch([&]{
+		std::ifstream stream{this->_base / path};
+		nlohmann::json json;
+		nlohmann::json gen;
+
+		assert_msg(stream, "Failed to open " + path.string());
+		stream >> json;
+		if (json.contains("_general"))
+			gen = json["_general"];
+		else
+			gen = nlohmann::json::object();
+		for (auto &[id, jwarhead] : json.items()) {
+			if (id.starts_with('_'))
+				continue;
+
+			cpptrace::try_catch([&]{
+				std::string fullId = RESOURCE(this->_name, id);
+
+				assert_exp(!warheads.contains(fullId));
+				warheads.emplace(fullId, Warhead{mergeObjects(jwarhead, gen)});
+			}, [&](cpptrace::lazy_exception &e) {
+				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
+			}, [&](std::exception &e) {
+				cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
+			});
+		}
+	}, [&](cpptrace::lazy_exception &e) {
+		throw _AssertionFailedException("While loading warheads file \"" + path.string() + "\"\n" + e.what(), e);
+	}, [&](std::exception &e) {
+		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+		throw _AssertionFailedException("While loading warheads file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
+	});
+}
+
+void Mod::loadArmors(const std::vector<std::string> &allFactions, std::unordered_map<std::string, Warhead> &warheads) const
+{
+	std::set<std::string> origins;
+
+	for (auto &faction : allFactions) {
+		auto pos = faction.find(':');
+
+		origins.insert(pos == std::string::npos ? faction : faction.substr(0, pos));
+	}
+	for (auto &origin : origins) {
+		std::filesystem::path relPath = std::filesystem::path("armors") / (origin + ".json");
+		std::filesystem::path fullPath = this->_base / relPath;
+
+		cpptrace::try_catch([&]{
+			std::ifstream stream{fullPath};
+			nlohmann::json json;
+
+			assert_msg(std::filesystem::exists(fullPath), "Missing armor file " + relPath.string());
+			assert_msg(stream, "Failed to open " + relPath.string());
+			stream >> json;
+			for (auto &[id, jarmor] : json.items()) {
+				if (id.starts_with('_'))
+					continue;
+
+				cpptrace::try_catch([&]{
+					std::string fullId = RESOURCE(this->_name, id);
+
+					assert_msg(warheads.contains(fullId), fullId);
+					warheads.at(fullId).loadArmor(origin, jarmor);
+				}, [&](cpptrace::lazy_exception &e) {
+					throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
+				}, [&](std::exception &e) {
+					cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+					throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
+				});
+			}
+		}, [&](cpptrace::lazy_exception &e) {
+			throw _AssertionFailedException("While loading armor file \"" + relPath.string() + "\"\n" + e.what(), e);
+		}, [&](std::exception &e) {
+			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
+
+			throw _AssertionFailedException("While loading armor file \"" + relPath.string() + "\"\n" + e.what(), std::move(trace));
+		});
+	}
 }
 
 const std::filesystem::path &Mod::getBase() const

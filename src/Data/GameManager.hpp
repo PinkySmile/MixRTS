@@ -43,6 +43,7 @@ private:
 
 	template<typename T>
 	void _checkObjectLocked(const std::string &name, T &object, Player &owner);
+	void _validateArmors() const;
 	void _unlockAll();
 	void _recomputeLocked();
 	bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size) const;
@@ -87,6 +88,7 @@ public:
 	void deinitUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map);
 	std::pair<std::string, unsigned> convertResource(const std::string &source, const std::vector<std::string> &expected, unsigned value);
 	void spawnEffect(const Effect &effect, Vector2f pos);
+	void warheadAt(unsigned damage, const Warhead *warhead, Vector2f position, size_t owner);
 
 	inline void centerCameraOn(const GameObject &object)
 	{

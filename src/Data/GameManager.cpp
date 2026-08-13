@@ -2,6 +2,7 @@
 // Created by PinkySmile on 07/04/2026.
 //
 
+#include <set>
 #include <fstream>
 #include <cpptrace/from_current.hpp>
 #include "GameManager.hpp"
@@ -10,6 +11,7 @@
 #include "Upgrade.hpp"
 #include "Effect.hpp"
 #include "Weapon.hpp"
+#include "Warhead.hpp"
 #include "Player.hpp"
 #include "Mod.hpp"
 #include "UI.hpp"
@@ -38,11 +40,30 @@ static bool isMouseOverUI()
 GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers) :
 	_factions(factions)
 {
+	std::vector<std::string> allFactions;
+
+	allFactions.reserve(this->_factions.size());
+	for (auto &f : this->_factions)
+		allFactions.push_back(f.getName());
 	for (auto &f : this->_factions) {
-		f.load();
+		f.load(allFactions);
 		this->_mapStates.emplace_back();
 	}
+	this->_validateArmors();
 	this->_players.reserve(nbPlayers);
+}
+
+void GameManager::_validateArmors() const
+{
+	std::set<std::string> armors;
+
+	for (auto &f : this->_factions)
+		for (auto &object : f.getObjects() | std::ranges::views::values)
+			armors.insert(object.getArmor());
+	for (auto &f : this->_factions)
+		for (auto &[whId, wh] : f.getWarheads())
+			for (auto &armor : armors)
+				assert_msg(wh.getArmorMultipliers().contains(armor), "Warhead \"" + whId + "\" is missing a multiplier for armor \"" + armor + "\"");
 }
 
 void GameManager::loadMap(Mod &mod, const std::filesystem::path &path)
@@ -1261,6 +1282,29 @@ void GameManager::spawnEffect(const Effect &effect, Vector2f pos)
 
 	arr.emplace_back(effect);
 	arr.back().setPosition(pos);
+}
+
+void GameManager::warheadAt(unsigned damage, const Warhead *warhead, Vector2f position, size_t owner)
+{
+	unsigned radius = warhead->getRadius();
+	double dist = radius * radius;
+
+	// OPTIMIZE: Split the map into quadrants
+	for (auto &b : this->_liveObjects) {
+		if (b.isDisposable() || b.isDead())
+			continue;
+
+		double d = b.getPosition().distance2(position);
+
+		if (d < dist) {
+			double result = damage;
+
+			result *= (dist - d) / dist;
+			result *= warhead->getMultiplier(b.getArmor());
+			b.damage(std::ceil(result), warhead->getDmgType());
+			// TODO: Extra effects
+		}
+	}
 }
 
 void GameManager::centerCameraOn(Vector2f target)

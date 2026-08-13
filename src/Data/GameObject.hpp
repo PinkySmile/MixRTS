@@ -19,6 +19,7 @@
 #include "MultiSound.hpp"
 #include "FindPath.hpp"
 #include "ConditionalAnim.hpp"
+#include "Warhead.hpp"
 
 struct TurnOrder;
 struct MoveOrder;
@@ -167,6 +168,7 @@ protected:
 	mutable sf::Texture _cachedDebugTex;
 	std::deque<Order> _orderQueue;
 	std::string _group;
+	std::string _armor;
 	std::string _id;
 	IntRect _selectBox;
 	IntRect _skirt{0, 0, 0, 0};
@@ -276,7 +278,7 @@ public:
 	void setDirection(float angle);
 	void setPosition(const Vector2f &pos);
 	void heal(unsigned amount);
-	void damage(unsigned amount);
+	void damage(unsigned amount, DamageType type = DMGTYPE_GENERIC);
 	void setHealth(unsigned health);
 	void harvest(const Vector2i &pos, bool automatic = false);
 	void harvest();
@@ -339,6 +341,7 @@ public:
 	[[nodiscard]] const Faction &getFaction() const;
 	[[nodiscard]] unsigned getBuildSpeed() const;
 	[[nodiscard]] const std::string &getGroup() const;
+	[[nodiscard]] const std::string &getArmor() const;
 	[[nodiscard]] bool isObstructed() const;
 	[[nodiscard]] unsigned getLimit() const;
 	[[nodiscard]] unsigned getPassFlags() const;

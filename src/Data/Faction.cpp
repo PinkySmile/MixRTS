@@ -11,6 +11,7 @@
 #include "Upgrade.hpp"
 #include "Effect.hpp"
 #include "Weapon.hpp"
+#include "Warhead.hpp"
 #include "GameObject.hpp"
 #include "D2K/D2KUI.hpp"
 
@@ -49,6 +50,10 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	assert_exp(data.contains("weapons") && data["weapons"].is_array());
 	for (size_t i = 0; i < data["weapons"].size(); i++)
 		assert_msg(data["weapons"][i].is_string(), "data[\"weapons\"][" + std::to_string(i) + "]");
+
+	assert_exp(data.contains("warheads") && data["warheads"].is_array());
+	for (size_t i = 0; i < data["warheads"].size(); i++)
+		assert_msg(data["warheads"][i].is_string(), "data[\"warheads\"][" + std::to_string(i) + "]");
 
 	assert_exp(data.contains("starting_money") && data["starting_money"].is_object());
 	for (auto &[key, value] : data["starting_money"].items())
@@ -90,6 +95,7 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	this->_upgrades = data["upgrades"];
 	this->_effects = data["effects"];
 	this->_weapons = data["weapons"];
+	this->_warheads = data["warheads"];
 	this->_sounds = data["sounds"];
 	this->_startingMoney = data["starting_money"];
 	this->_uiData = data["ui"];
@@ -126,7 +132,7 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	}
 }
 
-void Faction::load()
+void Faction::load(const std::vector<std::string> &allFactions)
 {
 	cpptrace::try_catch(
 		[&]{
@@ -136,8 +142,12 @@ void Faction::load()
 				this->_base.loadSounds(a, this->_loadedSounds);
 			for (auto &e: this->_effects)
 				this->_base.loadEffects(e, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects);
+			for (auto &w: this->_warheads)
+				this->_base.loadWarheads(w, this->_loadedWarheads);
+			if (!this->_warheads.empty())
+				this->_base.loadArmors(allFactions, this->_loadedWarheads);
 			for (auto &w: this->_weapons)
-				this->_base.loadWeapons(w, this->_loadedEffects, this->_loadedSounds, this->_loadedWeapons);
+				this->_base.loadWeapons(w, this->_loadedEffects, this->_loadedSounds, this->_loadedWarheads, this->_loadedWeapons);
 			for (auto &u: this->_objects)
 				this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedWeapons, this->_loadedObjects);
 			for (auto &u: this->_upgrades)
@@ -177,6 +187,11 @@ const std::unordered_map<std::string, Effect> &Faction::getEffects() const
 const std::unordered_map<std::string, Weapon> &Faction::getWeapons() const
 {
 	return this->_loadedWeapons;
+}
+
+const std::unordered_map<std::string, Warhead> &Faction::getWarheads() const
+{
+	return this->_loadedWarheads;
 }
 
 const std::unordered_map<std::string, unsigned> &Faction::getStartingMoney() const

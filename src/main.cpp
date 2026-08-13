@@ -7,6 +7,7 @@
 #include "Data/Upgrade.hpp"
 #include "Data/Effect.hpp"
 #include "Data/Weapon.hpp"
+#include "Data/Warhead.hpp"
 #include "Resources/Game.hpp"
 #include "Resources/Assert.hpp"
 #include "Data/Player.hpp"

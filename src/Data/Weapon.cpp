@@ -6,6 +6,7 @@
 #include "Weapon.hpp"
 #include "Effect.hpp"
 #include "MultiSound.hpp"
+#include "Warhead.hpp"
 #include "Mod.hpp"
 #include "Resources/Assert.hpp"
 #include "Utils.hpp"
@@ -14,6 +15,7 @@ Weapon::Weapon(
 	const Mod &base,
 	const std::unordered_map<std::string, Effect> &effects,
 	const std::unordered_map<std::string, MultiSound> &sounds,
+	const std::unordered_map<std::string, Warhead> &warheads,
 	const nlohmann::json &data
 )
 {
@@ -41,8 +43,12 @@ Weapon::Weapon(
 
 	this->_damage = data["damage"];
 	this->_range = data["range"];
-	this->_warhead = data["warhead"];
 	this->_canHitTags = data["can_hit_tags"];
+
+	std::string warhead = RESOURCE(base.getName(), data["warhead"].get<std::string>());
+
+	assert_msg(warheads.contains(warhead), warhead);
+	this->_warhead = &warheads.at(warhead);
 
 	if (data.contains("inaccuracy_base"))
 		this->_inaccuracyBase = data["inaccuracy_base"];
@@ -98,7 +104,7 @@ unsigned Weapon::getRange() const
 	return this->_range;
 }
 
-const std::string &Weapon::getWarhead() const
+const Warhead *Weapon::getWarhead() const
 {
 	return this->_warhead;
 }

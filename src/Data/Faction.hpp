@@ -28,12 +28,14 @@ private:
 	std::vector<std::string> _animations;
 	std::vector<std::string> _effects;
 	std::vector<std::string> _weapons;
+	std::vector<std::string> _warheads;
 	std::unordered_map<std::string, MultiSound> _loadedSounds;
 	std::unordered_map<std::string, Upgrade> _loadedUpgrades;
 	std::unordered_map<std::string, GameObject> _loadedObjects;
 	std::unordered_map<std::string, std::vector<Animation>> _loadedAnimations;
 	std::unordered_map<std::string, Effect> _loadedEffects;
 	std::unordered_map<std::string, Weapon> _loadedWeapons;
+	std::unordered_map<std::string, Warhead> _loadedWarheads;
 	std::unordered_map<std::string, unsigned> _startingMoney;
 	std::vector<StartObject> _startingObjects;
 	std::optional<std::string> _primaryQueue;
@@ -54,13 +56,16 @@ public:
 	};
 
 	Faction(const Mod &base, const std::string &name, const nlohmann::json &data);
-	void load();
+	//! @brief Loads all the resources of this faction.
+	//! @param allFactions The full list of every faction id being loaded in this session (used to determine which armor files are needed for the warheads).
+	void load(const std::vector<std::string> &allFactions);
 	[[nodiscard]] const std::optional<std::string> &getPrimaryQueue() const;
 	[[nodiscard]] const std::unordered_map<std::string, MultiSound> &getSounds() const;
 	[[nodiscard]] const std::unordered_map<std::string, Upgrade> &getUpgrades() const;
 	[[nodiscard]] const std::unordered_map<std::string, GameObject> &getObjects() const;
 	[[nodiscard]] const std::unordered_map<std::string, Effect> &getEffects() const;
 	[[nodiscard]] const std::unordered_map<std::string, Weapon> &getWeapons() const;
+	[[nodiscard]] const std::unordered_map<std::string, Warhead> &getWarheads() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getStartingMoney() const;
 	[[nodiscard]] const std::vector<StartObject> &getStartingObjects() const;
 	[[nodiscard]] UI *createUI() const;

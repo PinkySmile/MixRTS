@@ -44,10 +44,22 @@ public:
 		const std::unordered_map<std::string, MultiSound> &sounds,
 		std::unordered_map<std::string, Effect> &effects
 	) const;
+	void loadWarheads(
+		const std::filesystem::path &path,
+		std::unordered_map<std::string, Warhead> &warheads
+	) const;
+	//! @brief Loads the armor multiplier tables of every mod whose factions are being loaded (armors/<origin>.json) into warheads.
+	//! @param allFactions The full list of every faction id being loaded in this session, used to determine which armor files are needed.
+	//! @param warheads The already loaded warheads (from loadWarheads) that the armor multipliers will be merged into.
+	void loadArmors(
+		const std::vector<std::string> &allFactions,
+		std::unordered_map<std::string, Warhead> &warheads
+	) const;
 	void loadWeapons(
 		const std::filesystem::path &path,
 		const std::unordered_map<std::string, Effect> &effects,
 		const std::unordered_map<std::string, MultiSound> &sounds,
+		const std::unordered_map<std::string, Warhead> &warheads,
 		std::unordered_map<std::string, Weapon> &weapons
 	) const;
 	void loadObjects(

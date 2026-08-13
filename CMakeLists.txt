@@ -231,6 +231,8 @@ add_executable(
 	src/Data/Map.hpp
 	src/Data/Weapon.cpp
 	src/Data/Weapon.hpp
+	src/Data/Warhead.cpp
+	src/Data/Warhead.hpp
 	src/Data/Effect.cpp
 	src/Data/Effect.hpp
 	src/Debug/Crash.hpp

@@ -169,6 +169,7 @@ GameObject::GameObject(
 	assert_exp(json.contains("tags") && json["tags"].is_array());
 	for (size_t i = 0; i < json["tags"].size(); i++)
 		assert_msg(json["tags"][i].is_string(), "json[\"tags\"][\"" + std::to_string(i) + "\"]");
+	assert_exp(json.contains("armor") && json["armor"].is_string());
 	assert_exp(json.contains("anims") && json["anims"].is_array());
 	assert_exp(!json.contains("barrels") || json["barrels"].is_array());
 	assert_exp(!json.contains("sight") || json["sight"].is_number());
@@ -323,6 +324,7 @@ GameObject::GameObject(
 	this->_cost = json["cost"];
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 	this->_tags = json["tags"];
+	this->_armor = RESOURCE(base.getName(), json["armor"].get<std::string>());
 	// TODO: Apply right any_ flag
 	this->_tags.emplace_back("any_ground");
 	this->_tags.emplace_back("any");
@@ -1413,6 +1415,7 @@ bool GameObject::_updateAttack(GameObject *obj)
 			this->manager->spawnEffect(*effect, this->_position);
 		if (hitEffect)
 			this->manager->spawnEffect(*hitEffect, targetPos);
+		this->manager->warheadAt(weapon->weapon->getDamage(), weapon->weapon->getWarhead(), targetPos, this->owner->state.index);
 		break;
 	case WEAPONTYPE_PROJECTILE:
 		// TODO:
@@ -1783,8 +1786,10 @@ void GameObject::heal(unsigned int amount)
 	this->setHealth(this->_hp + amount);
 }
 
-void GameObject::damage(unsigned int amount)
+void GameObject::damage(unsigned amount, DamageType type)
 {
+	if (this->isDead())
+		return;
 	this->setHealth(std::max<int>(this->_hp - amount, 0));
 }
 
@@ -1863,6 +1868,11 @@ unsigned GameObject::getBuildSpeed() const
 const std::string &GameObject::getGroup() const
 {
 	return this->_group;
+}
+
+const std::string &GameObject::getArmor() const
+{
+	return this->_armor;
 }
 
 bool GameObject::isObstructed() const
