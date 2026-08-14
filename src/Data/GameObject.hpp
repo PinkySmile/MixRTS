@@ -148,6 +148,7 @@ protected:
 	const MultiSound *_doSound = nullptr;
 	const MultiSound *_selectSound = nullptr;
 	const MultiSound *_deathSound = nullptr;
+	ConditionalAnim *_deathAnim = nullptr;
 	std::vector<ObjectBarrel> _barrels;
 	std::vector<std::string> _tags;
 	std::optional<std::string> _giveQueue;
@@ -240,7 +241,6 @@ protected:
 	bool _sold = false;
 	bool _producing = false;
 	bool _produced = false;
-	bool _crushed = false;
 	bool _isPrimary = false;
 	bool _lowerPowerWhenDamaged = false;
 
@@ -368,6 +368,7 @@ protected:
 	std::vector<ConditionalAnim> _crawlFireAnim;
 	std::vector<ConditionalAnim> _idleAnims;
 	std::vector<ConditionalAnim> _harvestAnims;
+	std::vector<ConditionalAnim> _deathAnims;
 	std::unordered_map<std::string, std::vector<ObjectBarrel *>> _barrelByTag;
 	std::unordered_map<std::string, std::vector<ObjectWeapon *>> _weaponByTag;
 

@@ -90,6 +90,11 @@ void D2KUI::_loadEvaSounds(const std::filesystem::path &base, const std::string 
 	this->_evaSounds[EVA_UNIT_READY]       = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "unit_ready.ogg");
 	this->_evaSounds[EVA_UPGRADING]        = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "upgrading.ogg");
 	this->_evaSounds[EVA_REQUIRE_STORAGE]  = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "silo_needed.ogg");
+	this->_evaSounds[EVA_UNIT_LOST]        = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "unit_lost.ogg");
+	this->_evaSounds[EVA_HARV_UNDER_ATTACK]= std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "harvester_attacked.ogg");
+	this->_evaSounds[EVA_BUILDING_CAPTURED]= std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "captured.ogg");
+	this->_evaSounds[EVA_HAZARD_SPAWNED]   = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "worm_sign.ogg");
+	this->_evaSounds[EVA_HAZARD_ATTACKED]  = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "worm_attack.ogg");
 	this->_evaSounds[EVA_CASH_DOWN]        = std::make_unique<sf::SoundBuffer>(base / "sounds/CASHTIK1.ogg");
 	this->_evaSounds[EVA_CASH_UP]          = std::make_unique<sf::SoundBuffer>(base / "sounds/CASHTIK1.ogg");
 	this->_evaSounds[EVA_POWER_OFF]        = std::make_unique<sf::SoundBuffer>(base / "sounds/POWRDN1.ogg");

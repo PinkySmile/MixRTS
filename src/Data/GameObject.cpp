@@ -102,6 +102,9 @@ GameObject::GameObject(const GameObject &g) :
 	this->_harvestAnims.reserve(g._harvestAnims.size());
 	for (auto &anim : g._harvestAnims)
 		this->_harvestAnims.emplace_back(this, anim);
+	this->_deathAnims.reserve(g._deathAnims.size());
+	for (auto &anim : g._deathAnims)
+		this->_deathAnims.emplace_back(this, anim);
 
 	this->_anims.reserve(g._anims.size());
 	for (auto &animVec : g._anims) {
@@ -180,6 +183,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("fake") || json["fake"].is_boolean());
 	assert_exp(!json.contains("proxy") || json["proxy"].is_string());
 	assert_exp(!json.contains("harvest_anim") || json["harvest_anim"].is_object());
+	assert_exp(!json.contains("death") || json["death"].is_object());
 	assert_exp(!json.contains("resource_storage") || json["resource_storage"].is_number_unsigned());
 	assert_exp(!json.contains("harvest_time") || json["harvest_time"].is_number_unsigned());
 	assert_exp(!json.contains("harvest_delay") || json["harvest_delay"].is_number_unsigned());
@@ -540,6 +544,23 @@ GameObject::GameObject(
 
 		for (size_t i = 0; i < dirs; i++)
 			this->_harvestAnims.emplace_back(base, this, animList, json["harvest_anim"], i);
+	}
+	if (json.contains("death")) {
+		static_assert(DMGTYPE_COUNT - DMGTYPE_START == 4);
+		static_assert(DMGTYPE_BULLET  == DMGTYPE_START);
+		static_assert(DMGTYPE_MISSILE == DMGTYPE_START + 1);
+		static_assert(DMGTYPE_BLAST   == DMGTYPE_START + 2);
+		static_assert(DMGTYPE_SONIC   == DMGTYPE_START + 3);
+		assert_exp(!json["death"].contains("generic") || json["death"]["generic"].is_object());
+		assert_exp(json["death"].contains("generic") || (json["death"].contains("bullet") && json["death"]["bullet"].is_object()));
+		assert_exp(json["death"].contains("generic") || (json["death"].contains("missile") && json["death"]["missile"].is_object()));
+		assert_exp(json["death"].contains("generic") || (json["death"].contains("blast") && json["death"]["blast"].is_object()));
+		assert_exp(json["death"].contains("generic") || (json["death"].contains("sonic") && json["death"]["sonic"].is_object()));
+
+		this->_deathAnims.emplace_back(base, this, animList, json["death"].contains("bullet")  ? json["death"]["bullet"]  : json["death"]["generic"]);
+		this->_deathAnims.emplace_back(base, this, animList, json["death"].contains("missile") ? json["death"]["missile"] : json["death"]["generic"]);
+		this->_deathAnims.emplace_back(base, this, animList, json["death"].contains("blast")   ? json["death"]["blast"]   : json["death"]["generic"]);
+		this->_deathAnims.emplace_back(base, this, animList, json["death"].contains("sonic")   ? json["death"]["sonic"]   : json["death"]["generic"]);
 	}
 	if (json.contains("dump"))
 		this->_dump.emplace(
@@ -1427,7 +1448,7 @@ bool GameObject::_updateAttack(GameObject *obj)
 
 bool GameObject::_updateFinishMovement()
 {
-	if (!this->_boundToGrid)
+	if (!this->_boundToGrid || this->_pathCache.empty())
 		return true;
 
 	auto center = this->_getTileOffsetFromCenter();
@@ -1479,8 +1500,8 @@ void GameObject::playBuiltSound() const
 
 void GameObject::update()
 {
-	if (this->_crushed) {
-		if (this->_crushAnim->update())
+	if (this->_deathAnim) {
+		if (this->_deathAnim->update())
 			this->_disposable = true;
 		return;
 	}
@@ -1658,9 +1679,9 @@ void GameObject::render(int layer)
 {
 	if (this->_repairing && this->_repairAnim && (*this->_repairAnim)())
 		this->_displayAnim(this->_repairAnim->getAnim(), this->_size / 2);
-	if (this->_crushed) {
-		if ((*this->_crushAnim)() && this->_crushAnim->getLayer() == layer)
-			this->_displayAnim(this->_crushAnim->getAnim());
+	if (this->_deathAnim) {
+		if ((*this->_deathAnim)() && this->_deathAnim->getLayer() == layer)
+			this->_displayAnim(this->_deathAnim->getAnim());
 		return;
 	}
 	if (layer == -1)
@@ -1791,14 +1812,30 @@ void GameObject::damage(unsigned amount, DamageType type)
 	if (this->isDead())
 		return;
 	this->setHealth(std::max<int>(this->_hp - amount, 0));
+	if (this->_resourceStorage != 0)
+		this->owner->playEVA(UI::EVA_HARV_UNDER_ATTACK, 300, 3, 600, this->_id);
+	if (!this->isDead())
+		return;
+	if (this->_deathAnims.empty() || type == DMGTYPE_VOID) {
+		this->_disposable = true;
+		return;
+	}
+	this->deinitGlobalGrid();
+	this->_solid = false;
+	if (type == DMGTYPE_GENERIC)
+		type = static_cast<DamageType>(random_distrib(game->gameRandom, DMGTYPE_START, DMGTYPE_COUNT - 1));
+	this->_deathAnim = &this->_deathAnims[type - DMGTYPE_START];
 }
 
 void GameObject::setHealth(unsigned health)
 {
 	if (this->_lowerPowerWhenDamaged)
 		this->owner->state.producedPower += this->getPower();
-	if (health == 0 && this->_deathSound)
-		this->_deathSound->play();
+	if (health == 0) {
+		if (this->_deathSound)
+			this->_deathSound->play();
+		this->owner->playEVA(UI::EVA_UNIT_LOST, 300, 3, 0, this->_id);
+	}
 	this->_hp = std::min(health, this->_maxHp);
 	if (this->_lowerPowerWhenDamaged)
 		this->owner->state.producedPower -= this->getPower();
@@ -2233,7 +2270,7 @@ void GameObject::crushedBy(GameObject *)
 	this->deinitGlobalGrid();
 	this->setHealth(0);
 	this->_crushSound->play();
-	this->_crushed = true;
+	this->_deathAnim = &*this->_crushAnim;
 	this->_solid = false;
 }
 

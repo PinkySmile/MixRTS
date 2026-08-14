@@ -16,6 +16,10 @@ enum WeaponType {
 	WEAPONTYPE_PROJECTILE
 };
 
+struct WeaponProjectile {
+
+};
+
 class Weapon {
 private:
 	WeaponType _type;
@@ -28,6 +32,7 @@ private:
 	double _inaccuracyBase = 0;
 	const Warhead *_warhead = nullptr;
 	std::vector<std::string> _canHitTags;
+	std::optional<WeaponProjectile> _projectile;
 
 public:
 	Weapon(
@@ -46,6 +51,7 @@ public:
 	[[nodiscard]] const Warhead *getWarhead() const;
 	[[nodiscard]] const std::vector<std::string> &canHitTags() const;
 	[[nodiscard]] double getInaccuracy(double dist) const;
+	[[nodiscard]] const std::optional<WeaponProjectile> &getProjectileData() const;
 };
 
 

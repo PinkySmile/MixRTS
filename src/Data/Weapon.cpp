@@ -118,3 +118,8 @@ double Weapon::getInaccuracy(double dist) const
 {
 	return this->_inaccuracyBase + this->_inaccuracyDist * dist;
 }
+
+const std::optional<WeaponProjectile> & Weapon::getProjectileData() const
+{
+	return this->_projectile;
+}

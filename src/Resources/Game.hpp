@@ -18,6 +18,7 @@
 #include "TextureManager.hpp"
 #include "Data/ModManager.hpp"
 
+//! Random from r, between mi and ma (included)
 #define random_distrib(r, mi, ma) ((((uint64_t)(r)() - (r).min()) * ((ma) - (mi))) / ((r).max() - (r).min()) + (mi))
 
 struct Game {

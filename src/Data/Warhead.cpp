@@ -16,14 +16,18 @@ Warhead::Warhead(const nlohmann::json &data)
 
 	std::string dmgType = data["dmg_type"];
 
-	if (dmgType == "fire")
-		this->_dmgType = DMGTYPE_FIRE;
+	if (dmgType == "blast")
+		this->_dmgType = DMGTYPE_BLAST;
 	else if (dmgType == "bullet")
 		this->_dmgType = DMGTYPE_BULLET;
-	else if (dmgType == "explosion")
-		this->_dmgType = DMGTYPE_EXPLOSION;
+	else if (dmgType == "missile")
+		this->_dmgType = DMGTYPE_MISSILE;
+	else if (dmgType == "void")
+		this->_dmgType = DMGTYPE_VOID;
 	else if (dmgType == "sonic")
 		this->_dmgType = DMGTYPE_SONIC;
+	//else if (dmgType == "fire")
+	//	this->_dmgType = DMGTYPE_FIRE;
 	//else if (dmgType == "electric")
 	//	this->_dmgType = DMGTYPE_ELECTRIC;
 	//else if (dmgType == "melee")

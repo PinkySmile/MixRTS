@@ -79,7 +79,7 @@ void UI::update()
 	auto it = this->state->selectedObjects.begin();
 
 	while (it != this->state->selectedObjects.end())
-		if ((*it)->isDisposable())
+		if ((*it)->isDisposable() || (*it)->isDead())
 			it = this->state->selectedObjects.erase(it);
 		else
 			++it;
