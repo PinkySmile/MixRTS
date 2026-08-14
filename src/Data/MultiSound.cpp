@@ -33,15 +33,9 @@ void MultiSound::init(const std::filesystem::path &base, const nlohmann::json &j
 		return this->addObject(base, json);
 
 	for (size_t i = 0; i < json.size(); i++) {
-		cpptrace::try_catch([&]{
+		TRY {
 			this->addObject(base, json[i]);
-		}, [&](cpptrace::lazy_exception &e) {
-			throw _AssertionFailedException("At index " + std::to_string(i) + "\n" + e.what(), e);
-		}, [&](std::exception &e) {
-			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-			throw _AssertionFailedException("At index " + std::to_string(i) + "\n" + e.what(), std::move(trace));
-		});
+		} CATCH_AND_RETHROW("At index " + std::to_string(i) + "\n")
 	}
 }
 

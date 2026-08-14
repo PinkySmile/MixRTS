@@ -68,19 +68,9 @@ void GameManager::_validateArmors() const
 
 void GameManager::loadMap(Mod &mod, const std::filesystem::path &path)
 {
-	cpptrace::try_catch(
-		[&]{
-			this->_map.load(mod, path);
-		},
-		[&](cpptrace::lazy_exception &e) {
-			throw _AssertionFailedException("While loading map \"" + path.string() + "\"\n" + e.what(), e);
-		},
-		[&](std::exception &e) {
-			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-			throw _AssertionFailedException("While loading map \"" + path.string() + "\"\n" + e.what(), std::move(trace));
-		}
-	);
+	TRY {
+		this->_map.load(mod, path);
+	} CATCH_AND_RETHROW("While loading map \"" + path.string() + "\"\n")
 
 	// TODO: Properly convert
 	for (auto &state : this->_mapStates)

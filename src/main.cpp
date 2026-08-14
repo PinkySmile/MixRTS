@@ -269,7 +269,7 @@ int main(int argc, char **argv)
 	unsigned int current_word;
 	_controlfp_s(&current_word, 0, _EM_INVALID);
 #endif
-	cpptrace::try_catch([&]{
+	TRY {
 		new Game("mods/NotoSans-Regular.ttf");
 	#ifdef _WIN32
 		ShowWindow(game->screen->getNativeHandle(), SW_MAXIMIZE);
@@ -378,11 +378,11 @@ int main(int argc, char **argv)
 			game->screen->setMouseCursorGrabbed(!game->paused);
 		}
 		return 0;
-	}, [&](const cpptrace::exception &e) {
-		handleCrash(e.trace(), e);
+	} CPPTRACE_CATCH(const std::exception &e) {
+		if (auto *ce = dynamic_cast<const cpptrace::exception *>(&e))
+			handleCrash(ce->trace(), *ce);
+		else
+			handleCrash(cpptrace::from_current_exception(), e);
 		delete game;
-	}, [&](const std::exception &e) {
-		handleCrash(cpptrace::from_current_exception(), e);
-		delete game;
-	});
+	}
 }

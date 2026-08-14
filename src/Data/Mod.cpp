@@ -29,7 +29,7 @@ Mod::Mod(std::filesystem::path base, const nlohmann::json &metadata) :
 
 void Mod::loadFactions(const std::filesystem::path &path, std::unordered_map<std::string, Faction> &factions) const
 {
-	cpptrace::try_catch([&]{
+	TRY {
 		std::ifstream stream{this->_base / path};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -44,31 +44,19 @@ void Mod::loadFactions(const std::filesystem::path &path, std::unordered_map<std
 			if (id.starts_with('_'))
 				continue;
 
-			cpptrace::try_catch([&]{
+			TRY {
 				std::string rid = RESOURCE(this->_name, id);
 
 				assert(!factions.contains(rid));
 				factions.emplace(rid, Faction{*this, rid, mergeObjects(jfaction, gen)});
-			}, [&](cpptrace::lazy_exception &e) {
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
-			}, [&](std::exception &e) {
-				cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
-			});
+			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	}, [&](cpptrace::lazy_exception &e) {
-		throw _AssertionFailedException("While loading factions file \"" + path.string() + "\"\n" + e.what(), e);
-	}, [&](std::exception &e) {
-		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-		throw _AssertionFailedException("While loading factions file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
-	});
+	} CATCH_AND_RETHROW("While loading factions file \"" + path.string() + "\"\n")
 }
 
 void Mod::loadCursors(const std::filesystem::path &path, std::unordered_map<std::string, CursorAnimation> &cursors) const
 {
-	cpptrace::try_catch([&]{
+	TRY {
 		std::ifstream stream{this->_base / path};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -83,29 +71,17 @@ void Mod::loadCursors(const std::filesystem::path &path, std::unordered_map<std:
 			if (id.starts_with('_'))
 				continue;
 
-			cpptrace::try_catch([&]{
+			TRY {
 				assert(!cursors.contains(id));
 				cursors.emplace(id, CursorAnimation{this->_base, jcursorArr, gen});
-			}, [&](cpptrace::lazy_exception &e) {
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
-			}, [&](std::exception &e) {
-				cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
-			});
+			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	}, [&](cpptrace::lazy_exception &e) {
-		throw _AssertionFailedException("While loading cursors file \"" + path.string() + "\"\n" + e.what(), e);
-	}, [&](std::exception &e) {
-		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-		throw _AssertionFailedException("While loading cursors file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
-	});
+	} CATCH_AND_RETHROW("While loading cursors file \"" + path.string() + "\"\n")
 }
 
 void Mod::loadSounds(const std::filesystem::path &path, std::unordered_map<std::string, MultiSound> &sounds) const
 {
-	cpptrace::try_catch([&]{
+	TRY {
 		std::ifstream stream{this->_base / path};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -116,32 +92,20 @@ void Mod::loadSounds(const std::filesystem::path &path, std::unordered_map<std::
 			if (id.starts_with('_'))
 				continue;
 
-			cpptrace::try_catch([&]{
+			TRY {
 				std::string fullId = RESOURCE(this->_name, id);
 				assert_exp(!sounds.contains(fullId));
 
 				sounds[fullId].init(this->_base, jsound);
-			}, [&](cpptrace::lazy_exception &e) {
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
-			}, [&](std::exception &e) {
-				cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
-			});
+			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
 
-	}, [&](cpptrace::lazy_exception &e) {
-		throw _AssertionFailedException("While loading sounds file \"" + path.string() + "\"\n" + e.what(), e);
-	}, [&](std::exception &e) {
-		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-		throw _AssertionFailedException("While loading sounds file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
-	});
+	} CATCH_AND_RETHROW("While loading sounds file \"" + path.string() + "\"\n")
 }
 
 void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<std::string, std::vector<Animation>> &anims) const
 {
-	cpptrace::try_catch([&]{
+	TRY {
 		std::ifstream stream{this->_base / path};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -156,7 +120,7 @@ void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<s
 			if (id.starts_with('_'))
 				continue;
 
-			cpptrace::try_catch([&]{
+			TRY {
 				std::string fullId = RESOURCE(this->_name, id);
 				assert_exp(!anims.contains(fullId));
 				auto &v = anims[fullId];
@@ -194,21 +158,9 @@ void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<s
 						for (size_t i = 0; i < count; i++)
 							v.emplace_back(c[i]);
 				}
-			}, [&](cpptrace::lazy_exception &e) {
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
-			}, [&](std::exception &e) {
-				cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
-			});
+			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	}, [&](cpptrace::lazy_exception &e) {
-		throw _AssertionFailedException("While loading animations file \"" + path.string() + "\"\n" + e.what(), e);
-	}, [&](std::exception &e) {
-		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-		throw _AssertionFailedException("While loading animations file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
-	});
+	} CATCH_AND_RETHROW("While loading animations file \"" + path.string() + "\"\n")
 }
 
 void Mod::loadObjects(
@@ -220,7 +172,7 @@ void Mod::loadObjects(
 	std::unordered_map<std::string, GameObject> &objects
 ) const
 {
-	cpptrace::try_catch([&]{
+	TRY {
 		std::ifstream stream{this->_base / path};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -235,31 +187,19 @@ void Mod::loadObjects(
 			if (id.starts_with('_'))
 				continue;
 
-			cpptrace::try_catch([&]{
+			TRY {
 				std::string fullId = RESOURCE(this->_name, id);
 
 				assert_exp(!objects.contains(fullId));
 				objects.emplace(fullId, GameObject{base, fullId, anims, sounds, weapons, mergeObjects(jbuilding, gen)});
-			}, [&](cpptrace::lazy_exception &e) {
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
-			}, [&](std::exception &e) {
-				cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
-			});
+			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	}, [&](cpptrace::lazy_exception &e) {
-		throw _AssertionFailedException("While loading objects file \"" + path.string() + "\"\n" + e.what(), e);
-	}, [&](std::exception &e) {
-		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-		throw _AssertionFailedException("While loading objects file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
-	});
+	} CATCH_AND_RETHROW("While loading objects file \"" + path.string() + "\"\n")
 }
 
 void Mod::loadUpgrades(const std::filesystem::path &path, const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades) const
 {
-	cpptrace::try_catch([&]{
+	TRY {
 		std::ifstream stream{this->_base / path};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -274,31 +214,19 @@ void Mod::loadUpgrades(const std::filesystem::path &path, const Faction &base, s
 			if (id.starts_with('_'))
 				continue;
 
-			cpptrace::try_catch([&]{
+			TRY {
 				std::string fullId = RESOURCE(this->_name, id);
 
 				assert_exp(!upgrades.contains(fullId));
 				upgrades.emplace(fullId, Upgrade{base, fullId, mergeObjects(jupgrade, gen)});
-			}, [&](cpptrace::lazy_exception &e) {
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
-			}, [&](std::exception &e) {
-				cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
-			});
+			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	}, [&](cpptrace::lazy_exception &e) {
-		throw _AssertionFailedException("While loading upgrades file \"" + path.string() + "\"\n" + e.what(), e);
-	}, [&](std::exception &e) {
-		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-		throw _AssertionFailedException("While loading upgrades file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
-	});
+	} CATCH_AND_RETHROW("While loading upgrades file \"" + path.string() + "\"\n")
 }
 
 void Mod::loadEffects(const std::filesystem::path &path, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, MultiSound> &sounds, std::unordered_map<std::string, Effect> &effects) const
 {
-	cpptrace::try_catch([&]{
+	TRY {
 		std::ifstream stream{this->_base / path};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -313,31 +241,19 @@ void Mod::loadEffects(const std::filesystem::path &path, const std::unordered_ma
 			if (id.starts_with('_'))
 				continue;
 
-			cpptrace::try_catch([&]{
+			TRY {
 				std::string fullId = RESOURCE(this->_name, id);
 
 				assert_exp(!effects.contains(fullId));
 				effects.emplace(fullId, Effect{*this, anims, sounds, mergeObjects(jeffect, gen)});
-			}, [&](cpptrace::lazy_exception &e) {
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
-			}, [&](std::exception &e) {
-				cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
-			});
+			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	}, [&](cpptrace::lazy_exception &e) {
-		throw _AssertionFailedException("While loading effects file \"" + path.string() + "\"\n" + e.what(), e);
-	}, [&](std::exception &e) {
-		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-		throw _AssertionFailedException("While loading effects file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
-	});
+	} CATCH_AND_RETHROW("While loading effects file \"" + path.string() + "\"\n")
 }
 
 void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_map<std::string, Effect> &effects, const std::unordered_map<std::string, MultiSound> &sounds, const std::unordered_map<std::string, Warhead> &warheads, std::unordered_map<std::string, Weapon> &weapons) const
 {
-	cpptrace::try_catch([&]{
+	TRY {
 		std::ifstream stream{this->_base / path};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -352,31 +268,19 @@ void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_ma
 			if (id.starts_with('_'))
 				continue;
 
-			cpptrace::try_catch([&]{
+			TRY {
 				std::string fullId = RESOURCE(this->_name, id);
 
 				assert_exp(!weapons.contains(fullId));
 				weapons.emplace(fullId, Weapon{*this, effects, sounds, warheads, mergeObjects(jweapon, gen)});
-			}, [&](cpptrace::lazy_exception &e) {
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
-			}, [&](std::exception &e) {
-				cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
-			});
+			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	}, [&](cpptrace::lazy_exception &e) {
-		throw _AssertionFailedException("While loading weapons file \"" + path.string() + "\"\n" + e.what(), e);
-	}, [&](std::exception &e) {
-		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-		throw _AssertionFailedException("While loading weapons file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
-	});
+	} CATCH_AND_RETHROW("While loading weapons file \"" + path.string() + "\"\n")
 }
 
 void Mod::loadWarheads(const std::filesystem::path &path, std::unordered_map<std::string, Warhead> &warheads) const
 {
-	cpptrace::try_catch([&]{
+	TRY {
 		std::ifstream stream{this->_base / path};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -391,26 +295,14 @@ void Mod::loadWarheads(const std::filesystem::path &path, std::unordered_map<std
 			if (id.starts_with('_'))
 				continue;
 
-			cpptrace::try_catch([&]{
+			TRY {
 				std::string fullId = RESOURCE(this->_name, id);
 
 				assert_exp(!warheads.contains(fullId));
 				warheads.emplace(fullId, Warhead{mergeObjects(jwarhead, gen)});
-			}, [&](cpptrace::lazy_exception &e) {
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
-			}, [&](std::exception &e) {
-				cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-				throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
-			});
+			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	}, [&](cpptrace::lazy_exception &e) {
-		throw _AssertionFailedException("While loading warheads file \"" + path.string() + "\"\n" + e.what(), e);
-	}, [&](std::exception &e) {
-		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-		throw _AssertionFailedException("While loading warheads file \"" + path.string() + "\"\n" + e.what(), std::move(trace));
-	});
+	} CATCH_AND_RETHROW("While loading warheads file \"" + path.string() + "\"\n")
 }
 
 void Mod::loadArmors(const std::vector<std::string> &allFactions, std::unordered_map<std::string, Warhead> &warheads) const
@@ -426,7 +318,7 @@ void Mod::loadArmors(const std::vector<std::string> &allFactions, std::unordered
 		std::filesystem::path relPath = std::filesystem::path("armors") / (origin + ".json");
 		std::filesystem::path fullPath = this->_base / relPath;
 
-		cpptrace::try_catch([&]{
+		TRY {
 			std::ifstream stream{fullPath};
 			nlohmann::json json;
 
@@ -437,26 +329,14 @@ void Mod::loadArmors(const std::vector<std::string> &allFactions, std::unordered
 				if (id.starts_with('_'))
 					continue;
 
-				cpptrace::try_catch([&]{
+				TRY {
 					std::string fullId = RESOURCE(this->_name, id);
 
 					assert_msg(warheads.contains(fullId), fullId);
 					warheads.at(fullId).loadArmor(origin, jarmor);
-				}, [&](cpptrace::lazy_exception &e) {
-					throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), e);
-				}, [&](std::exception &e) {
-					cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-					throw _AssertionFailedException("In key \"" + id + "\"\n" + e.what(), std::move(trace));
-				});
+				} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 			}
-		}, [&](cpptrace::lazy_exception &e) {
-			throw _AssertionFailedException("While loading armor file \"" + relPath.string() + "\"\n" + e.what(), e);
-		}, [&](std::exception &e) {
-			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-			throw _AssertionFailedException("While loading armor file \"" + relPath.string() + "\"\n" + e.what(), std::move(trace));
-		});
+		} CATCH_AND_RETHROW("While loading armor file \"" + relPath.string() + "\"\n")
 	}
 }
 

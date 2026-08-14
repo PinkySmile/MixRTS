@@ -95,15 +95,9 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 		auto &anim = json["animations"][i];
 
 		assert_msg(anim.is_string(), "json[\"animations\"][" + std::to_string(i) + "]");
-		cpptrace::try_catch([&]{
+		TRY {
 			mod.loadAnimations(path.parent_path() / anim.get<std::string>(), this->animations);
-		}, [&](cpptrace::lazy_exception &e) {
-			throw _AssertionFailedException("In key [\"animations\"][" + std::to_string(i) + "]\n" + e.what(), e);
-		}, [&](std::exception &e) {
-			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-			throw _AssertionFailedException("In key [\"animations\"][" + std::to_string(i) + "]\n" + e.what(), std::move(trace));
-		});
+		} CATCH_AND_RETHROW("In key [\"animations\"][" + std::to_string(i) + "]\n")
 	}
 	for (size_t i = 0; i < json["generators"].size(); i++) {
 		auto &anim = json["generators"][i];
@@ -115,23 +109,17 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 
 		assert_msg(anim.is_object(), "json[\"resources\"][" + std::to_string(i) + "]");
 
-		cpptrace::try_catch([&]{
+		TRY {
 			MapResource res{path.parent_path(), anim};
 
 			this->resources.emplace(res.id, res);
-		}, [&](cpptrace::lazy_exception &e) {
-			throw _AssertionFailedException("In key [\"resources\"][" + std::to_string(i) + "]\n" + e.what(), e);
-		}, [&](std::exception &e) {
-			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-			throw _AssertionFailedException("In key [\"resources\"][" + std::to_string(i) + "]\n" + e.what(), std::move(trace));
-		});
+		} CATCH_AND_RETHROW("In key [\"resources\"][" + std::to_string(i) + "]\n")
 	}
 	for (auto &[key, value] : json["skirts"].items()) {
 		assert_msg(value.is_array(), "json[\"skirts\"][" + key + "]");
 		for (size_t i = 0; i < value.size(); i++)
 			assert_msg(value[i].is_number_unsigned(), "json[\"skirts\"][" + key + "][" + std::to_string(i) + "]");
-		cpptrace::try_catch([&]{
+		TRY {
 			Vector2u size;
 			auto pos = key.find('x');
 
@@ -141,13 +129,7 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 			assert_exp(!this->skirts.contains(size));
 			this->skirts[size] = value.get<std::vector<unsigned>>();
 			assert_exp(this->skirts[size].size() == size.x * size.y);
-		}, [&](cpptrace::lazy_exception &e) {
-			throw _AssertionFailedException("In key [\"skirts\"][" + key + "]\n" + e.what(), e);
-		}, [&](std::exception &e) {
-			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-			throw _AssertionFailedException("In key [\"skirts\"][" + key + "]\n" + e.what(), std::move(trace));
-		});
+		} CATCH_AND_RETHROW("In key [\"skirts\"][" + key + "]\n")
 	}
 	if (!json.contains("skirts_conc"))
 		this->skirtsConcrete = this->skirts;
@@ -155,7 +137,7 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 		assert_msg(value.is_array(), "json[\"skirts_conc\"][" + key + "]");
 		for (size_t i = 0; i < value.size(); i++)
 			assert_msg(value[i].is_number_unsigned(), "json[\"skirts_conc\"][" + key + "][" + std::to_string(i) + "]");
-		cpptrace::try_catch([&]{
+		TRY {
 			Vector2u size;
 			auto pos = key.find('x');
 
@@ -165,13 +147,7 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 			assert_exp(!this->skirtsConcrete.contains(size));
 			this->skirtsConcrete[size] = value.get<std::vector<unsigned>>();
 			assert_exp(this->skirtsConcrete[size].size() == size.x * size.y);
-		}, [&](cpptrace::lazy_exception &e) {
-			throw _AssertionFailedException("In key [\"skirts_conc\"][" + key + "]\n" + e.what(), e);
-		}, [&](std::exception &e) {
-			cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-			throw _AssertionFailedException("In key [\"skirts_conc\"][" + key + "]\n" + e.what(), std::move(trace));
-		});
+		} CATCH_AND_RETHROW("In key [\"skirts_conc\"][" + key + "]\n")
 	}
 }
 
@@ -217,15 +193,9 @@ void LoadedMap::load(Mod &mod, const std::filesystem::path &path)
 
 	std::string tileset = json["tileset"].get<std::string>();
 
-	cpptrace::try_catch([&]{
+	TRY {
 		this->metadata.load(mod, path / tileset / "metadata.json");
-	}, [&](cpptrace::lazy_exception &e) {
-		throw _AssertionFailedException("While loading map metadata " + (path / tileset / "metadata.json").string() + "\n" + e.what(), e);
-	}, [&](std::exception &e) {
-		cpptrace::raw_trace trace = cpptrace::raw_trace_from_current_exception();
-
-		throw _AssertionFailedException("While loading map metadata " + (path / tileset / "metadata.json").string() + "\n" + e.what(), std::move(trace));
-	});
+	} CATCH_AND_RETHROW("While loading map metadata " + (path / tileset / "metadata.json").string() + "\n")
 	assert_exp(this->renderCache.resize({
 		this->grid.tileSize.x * this->grid.gridSize.x,
 		this->grid.tileSize.y * this->grid.gridSize.y

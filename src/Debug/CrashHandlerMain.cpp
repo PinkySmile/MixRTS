@@ -22,6 +22,7 @@ void simplifySym(std::string &sym)
 	replace(sym, "_AssertionFailedException", "AssertionFailedException");
 	replace(sym, "nlohmann::json_abi_v3_12_0::basic_json<std::map, std::vector, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool, long, unsigned long, double, std::allocator, nlohmann::json_abi_v3_12_0::adl_serializer, std::vector<unsigned char, std::allocator<unsigned char> >, void>", "nlohmann::json");
 	replace(sym, "nlohmann::json_abi_v3_12_0::basic_json<std::map, std::vector, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool, long long, unsigned long long, double, std::allocator, nlohmann::json_abi_v3_12_0::adl_serializer, std::vector<unsigned char, std::allocator<unsigned char> >, void>", "nlohmann::json");
+	replace(sym, "nlohmann::json_abi_v3_12_0", "nlohmann");
 	replace(sym, "std::filesystem::__cxx11::path", "std::filesystem::path");
 	replace(sym, "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >", "std::string");
 

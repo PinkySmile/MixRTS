@@ -74,5 +74,14 @@ public:
 	const char *what() const noexcept override;
 };
 
+#define TRY CPPTRACE_TRY
+
+#define CATCH_AND_RETHROW(msg) CPPTRACE_CATCH (std::exception &e) {\
+	if (auto *le = dynamic_cast<cpptrace::lazy_exception *>(&e))\
+		throw _AssertionFailedException(std::string(msg) + e.what(), *le);\
+	auto trace = cpptrace::raw_trace_from_current_exception();\
+	throw _AssertionFailedException(std::string(msg) + e.what(), std::move(trace));\
+}
+
 
 #endif //MIXRTS_ASSERT_HPP
