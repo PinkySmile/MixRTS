@@ -252,7 +252,7 @@ void Mod::loadEffects(const std::filesystem::path &path, const std::unordered_ma
 	} CATCH_AND_RETHROW("While loading effects file \"" + path.string() + "\"\n")
 }
 
-void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_map<std::string, Effect> &effects, const std::unordered_map<std::string, MultiSound> &sounds, const std::unordered_map<std::string, Warhead> &warheads, std::unordered_map<std::string, Weapon> &weapons) const
+void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, Effect> &effects, const std::unordered_map<std::string, MultiSound> &sounds, const std::unordered_map<std::string, Warhead> &warheads, std::unordered_map<std::string, Weapon> &weapons) const
 {
 	TRY {
 		std::ifstream stream{this->_base / path};
@@ -273,7 +273,7 @@ void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_ma
 				std::string fullId = RESOURCE(this->_name, id);
 
 				assert_exp(!weapons.contains(fullId));
-				weapons.emplace(fullId, Weapon{*this, effects, sounds, warheads, mergeObjects(jweapon, gen)});
+				weapons.emplace(fullId, Weapon{*this, anims, effects, sounds, warheads, mergeObjects(jweapon, gen)});
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
 	} CATCH_AND_RETHROW("While loading weapons file \"" + path.string() + "\"\n")

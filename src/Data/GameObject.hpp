@@ -242,6 +242,7 @@ protected:
 	bool _repairing = false;
 	bool _animFinished = false;
 	// TODO: Find a better way to do this
+	bool _shooting = false;
 	bool _dumpStop = false;
 	bool _dumpStart = false;
 	bool _dumping = false;
@@ -408,7 +409,7 @@ protected:
 	void _goToClosestResource();
 	void _goToClosestResourceDump();
 	bool _shortenOrder(Order &o);
-	void _displayAnim(Animation &anim, Vector2f offset = {});
+	void _displayAnim(Animation &anim, Vector2f offset = {}) const;
 	virtual bool _handleOrder(const Order &o);
 };
 

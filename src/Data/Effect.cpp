@@ -22,7 +22,8 @@ Effect::Effect(
 	assert_exp(data["anim"].contains("anim") && data["anim"]["anim"].is_string());
 	assert_exp(data["anim"].contains("layer") && data["anim"]["layer"].is_number());
 	assert_exp(!data["anim"].contains("delay") || data["anim"]["delay"].is_number());
-	assert_exp(!data.contains("sound") || data["sound"].is_null() || data["sound"].is_string());
+	assert_exp(!data.contains("opacity") || data["opacity"].is_number());
+	assert_exp(!data.contains("sound") || data["sound"].is_string());
 
 	std::string animName = RESOURCE(base.getName(), data["anim"]["anim"].get<std::string>());
 
@@ -31,7 +32,9 @@ Effect::Effect(
 	this->_layer = data["anim"]["layer"];
 	if (data["anim"].contains("delay"))
 		this->_delay = data["anim"]["delay"];
-	if (data.contains("sound") && !data["sound"].is_null()) {
+	if (data.contains("opacity"))
+		this->_opacity = data["opacity"];
+	if (data.contains("sound")) {
 		std::string soundName = RESOURCE(base.getName(), data["sound"].get<std::string>());
 
 		assert_msg(sounds.contains(soundName), soundName);
@@ -59,6 +62,7 @@ void Effect::render()
 	Animation &anim = this->_anim[this->_index];
 	Sprite &sprite = anim.getSprite();
 
+	sprite.setColor(sf::Color{0xFF, 0xFF, 0xFF, static_cast<std::uint8_t>(0xFF * this->_opacity)});
 	sprite.setPosition({
 		sprite.getPosition().x + this->_position.x,
 		sprite.getPosition().y + this->_position.y

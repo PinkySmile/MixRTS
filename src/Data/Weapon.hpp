@@ -17,7 +17,17 @@ enum WeaponType {
 };
 
 struct WeaponProjectile {
+	std::vector<ConditionalAnim> anims;
+	const Effect *trail;
+	unsigned trailInterval = 0;
+	unsigned speed;
 
+	WeaponProjectile(
+		const Mod &base,
+		const std::unordered_map<std::string, std::vector<Animation>> &animList,
+		const std::unordered_map<std::string, Effect> &effects,
+		const nlohmann::json &json
+	);
 };
 
 class Weapon {
@@ -37,6 +47,7 @@ private:
 public:
 	Weapon(
 		const Mod &base,
+		const std::unordered_map<std::string, std::vector<Animation>> &animList,
 		const std::unordered_map<std::string, Effect> &effects,
 		const std::unordered_map<std::string, MultiSound> &sounds,
 		const std::unordered_map<std::string, Warhead> &warheads,

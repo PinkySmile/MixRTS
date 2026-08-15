@@ -29,6 +29,7 @@ private:
 	std::vector<Player> _players;
 	std::vector<Faction> _factions;
 	std::array<std::vector<Effect>, 5> _effects;
+	std::list<Projectile> _liveProjectiles;
 	std::list<GameObject> _liveObjects;
 	unsigned _lastObjectId = 0;
 	std::unordered_map<unsigned, GameObject *> _objectMap;
@@ -87,8 +88,9 @@ public:
 	float initUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map);
 	void deinitUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map);
 	std::pair<std::string, unsigned> convertResource(const std::string &source, const std::vector<std::string> &expected, unsigned value);
-	void spawnEffect(const Effect &effect, Vector2f pos);
-	void warheadAt(unsigned damage, const Warhead *warhead, Vector2f position, size_t owner);
+	Effect &spawnEffect(const Effect &effect, Vector2f pos);
+	Projectile &spawnProjectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, Vector2f target);
+	void weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f position, size_t owner);
 
 	inline void centerCameraOn(const GameObject &object)
 	{

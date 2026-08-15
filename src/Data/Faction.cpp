@@ -146,7 +146,7 @@ void Faction::load(const std::vector<std::string> &allFactions)
 		if (!this->_warheads.empty())
 			this->_base.loadArmors(allFactions, this->_loadedWarheads);
 		for (auto &w: this->_weapons)
-			this->_base.loadWeapons(w, this->_loadedEffects, this->_loadedSounds, this->_loadedWarheads, this->_loadedWeapons);
+			this->_base.loadWeapons(w, this->_loadedAnimations, this->_loadedEffects, this->_loadedSounds, this->_loadedWarheads, this->_loadedWeapons);
 		for (auto &u: this->_objects)
 			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects, this->_loadedWeapons, this->_loadedObjects);
 		for (auto &u: this->_upgrades)

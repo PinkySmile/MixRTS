@@ -237,6 +237,8 @@ add_executable(
 	src/Debug/Crash.hpp
 	src/Debug/CrashHandlerMain.cpp
 	${EXTRA_SOURCES}
+	src/Data/Projectile.cpp
+	src/Data/Projectile.hpp
 )
 
 target_link_libraries(

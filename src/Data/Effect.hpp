@@ -21,6 +21,7 @@ private:
 	unsigned _delay = 0;
 	unsigned _totalDelay = 0;
 	unsigned _index = 0;
+	float _opacity = 1;
 	int _layer = 0;
 
 public:

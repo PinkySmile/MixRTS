@@ -2,7 +2,10 @@
 // Created by PinkySmile on 03/08/2026.
 //
 
-#include "nlohmann/json.hpp"
+#include <cpptrace/from_current.hpp>
+#include <nlohmann/json.hpp>
+#include "Animation.hpp"
+#include "ConditionalAnim.hpp"
 #include "Weapon.hpp"
 #include "Effect.hpp"
 #include "MultiSound.hpp"
@@ -13,6 +16,7 @@
 
 Weapon::Weapon(
 	const Mod &base,
+	const std::unordered_map<std::string, std::vector<Animation>> &animList,
 	const std::unordered_map<std::string, Effect> &effects,
 	const std::unordered_map<std::string, MultiSound> &sounds,
 	const std::unordered_map<std::string, Warhead> &warheads,
@@ -26,6 +30,7 @@ Weapon::Weapon(
 	assert_exp(data.contains("can_hit_tags") && data["can_hit_tags"].is_array());
 	for (auto &j : data["can_hit_tags"])
 		assert_exp(j.is_string());
+	assert_exp(!data.contains("projectile") || data["projectile"].is_object());
 	assert_exp(!data.contains("inaccuracy_dist") || data["inaccuracy_dist"].is_number());
 	assert_exp(!data.contains("inaccuracy_base") || data["inaccuracy_base"].is_number());
 	assert_exp(!data.contains("effect") || data["effect"].is_null() || data["effect"].is_string());
@@ -40,6 +45,7 @@ Weapon::Weapon(
 		this->_type = WEAPONTYPE_PROJECTILE;
 	else
 		assert_not_reached_msg("Invalid weapon type \"" + type + "\"");
+	assert_exp(this->_type != WEAPONTYPE_PROJECTILE || data.contains("projectile"));
 
 	this->_damage = data["damage"];
 	this->_range = data["range"];
@@ -50,6 +56,10 @@ Weapon::Weapon(
 	assert_msg(warheads.contains(warhead), warhead);
 	this->_warhead = &warheads.at(warhead);
 
+	if (data.contains("projectile"))
+		TRY {
+			this->_projectile.emplace(base, animList, effects, data["projectile"]);
+		} CATCH_AND_RETHROW("In key \"projectile\"\n")
 	if (data.contains("inaccuracy_base"))
 		this->_inaccuracyBase = data["inaccuracy_base"];
 	if (data.contains("inaccuracy_dist"))
@@ -122,4 +132,40 @@ double Weapon::getInaccuracy(double dist) const
 const std::optional<WeaponProjectile> & Weapon::getProjectileData() const
 {
 	return this->_projectile;
+}
+
+WeaponProjectile::WeaponProjectile(
+	const Mod &base,
+	const std::unordered_map<std::string, std::vector<Animation>> &animList,
+	const std::unordered_map<std::string, Effect> &effects,
+	const nlohmann::json &data
+)
+{
+	assert_exp(data.contains("anim") && data["anim"].is_object());
+	assert_exp(data.contains("speed") && data["speed"].is_number());
+	assert_exp(!data.contains("trail") || !data["trail"].is_object());
+	assert_exp(!data.contains("trail_interval") || !data["trail_interval"].is_number());
+	assert_exp(!data.contains("directions") || data["directions"].is_number());
+
+	std::optional<unsigned> directions;
+
+	this->speed = data["speed"];
+	if (data.contains("trail_interval"))
+		this->trailInterval = data["trail_interval"];
+	if (data.contains("trail")) {
+		std::string trail = RESOURCE(base.getName(), data["trail"].get<std::string>());
+
+		assert_msg(effects.contains(trail), trail);
+		this->trail = &effects.at(trail);
+	}
+	if (data.contains("directions")) {
+		directions = data["directions"].get<unsigned>();
+		assert_msg(*directions % 8 == 0, "Number of directions must be divisible by 8");
+	}
+	if (directions) {
+		this->anims.reserve(*directions);
+		for (size_t i = 0; i < *directions; i++)
+			this->anims.emplace_back(base, nullptr, animList, data["anim"], i);
+	} else
+		this->anims.emplace_back(base, nullptr, animList, data["anim"]);
 }

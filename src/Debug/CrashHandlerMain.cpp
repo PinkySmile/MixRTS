@@ -25,6 +25,7 @@ void simplifySym(std::string &sym)
 	replace(sym, "nlohmann::json_abi_v3_12_0", "nlohmann");
 	replace(sym, "std::filesystem::__cxx11::path", "std::filesystem::path");
 	replace(sym, "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >", "std::string");
+	replace(sym, "std::__cxx11::basic_string<char>", "std::string");
 
 	size_t pos = 0;
 	while (true) {

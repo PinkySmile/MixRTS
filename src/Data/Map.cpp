@@ -97,7 +97,7 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 		assert_msg(anim.is_string(), "json[\"animations\"][" + std::to_string(i) + "]");
 		TRY {
 			mod.loadAnimations(path.parent_path() / anim.get<std::string>(), this->animations);
-		} CATCH_AND_RETHROW("In key [\"animations\"][" + std::to_string(i) + "]\n")
+		} CATCH_AND_RETHROW("In key \"animations\"[" + std::to_string(i) + "]\n")
 	}
 	for (size_t i = 0; i < json["generators"].size(); i++) {
 		auto &anim = json["generators"][i];
@@ -113,7 +113,7 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 			MapResource res{path.parent_path(), anim};
 
 			this->resources.emplace(res.id, res);
-		} CATCH_AND_RETHROW("In key [\"resources\"][" + std::to_string(i) + "]\n")
+		} CATCH_AND_RETHROW("In key \"resources\"[" + std::to_string(i) + "]\n")
 	}
 	for (auto &[key, value] : json["skirts"].items()) {
 		assert_msg(value.is_array(), "json[\"skirts\"][" + key + "]");
@@ -129,7 +129,7 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 			assert_exp(!this->skirts.contains(size));
 			this->skirts[size] = value.get<std::vector<unsigned>>();
 			assert_exp(this->skirts[size].size() == size.x * size.y);
-		} CATCH_AND_RETHROW("In key [\"skirts\"][" + key + "]\n")
+		} CATCH_AND_RETHROW("In key \"skirts\".\"" + key + "\"\n")
 	}
 	if (!json.contains("skirts_conc"))
 		this->skirtsConcrete = this->skirts;
@@ -147,7 +147,7 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 			assert_exp(!this->skirtsConcrete.contains(size));
 			this->skirtsConcrete[size] = value.get<std::vector<unsigned>>();
 			assert_exp(this->skirtsConcrete[size].size() == size.x * size.y);
-		} CATCH_AND_RETHROW("In key [\"skirts_conc\"][" + key + "]\n")
+		} CATCH_AND_RETHROW("In key \"skirts_conc\".\"" + key + "\"\n")
 	}
 }
 

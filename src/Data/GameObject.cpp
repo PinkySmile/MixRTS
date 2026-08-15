@@ -38,7 +38,7 @@ bool GameObject::_shortenOrder(Order &o)
 	return true;
 }
 
-void GameObject::_displayAnim(Animation &anim, Vector2f offset)
+void GameObject::_displayAnim(Animation &anim, Vector2f offset) const
 {
 	Sprite &sprite = anim.getSprite();
 
@@ -421,7 +421,7 @@ GameObject::GameObject(
 	if (json.contains("crush_anim") && !json["crush_anim"].is_null())
 		TRY {
 			this->_crushAnim.emplace(base, this, animList, effects, json["crush_anim"]);
-		} CATCH_AND_RETHROW("In key [\"crush_anim\"]\n")
+		} CATCH_AND_RETHROW("In key \"crush_anim\"\n")
 	if (json.contains("producing_anim") && !json["producing_anim"].is_null())
 		this->_producingAnim.emplace(base, this, animList, json["producing_anim"]);
 	if (json.contains("produced_anim") && !json["produced_anim"].is_null())
@@ -566,7 +566,7 @@ GameObject::GameObject(
 		for (const char *s : anims)
 			TRY {
 				this->_deathAnims.emplace_back(base, this, animList, effects, json["death"].contains(s) ? json["death"][s] : json["death"]["generic"]);
-			} CATCH_AND_RETHROW("In key [\"death\"][\"" + std::string(s) + "\"]\n")
+			} CATCH_AND_RETHROW("In key \"death\".\"" + std::string(s) + "\"\n")
 	}
 	if (json.contains("dump"))
 		this->_dump.emplace(
@@ -1385,8 +1385,43 @@ bool GameObject::_updateAttack(GameObject *obj)
 	if (obj == nullptr || obj->isDead())
 		return true;
 
-	Vector2f myCenter = this->_position + this->_size / 2;
-	Vector2f opCenter = obj->_position + obj->_size / 2;
+	Vector2f myCenter;
+	if (this->_boundToGrid) {
+		MapState::Quad abs = this->map->tileCoordToAbs(this->_gridPos);
+
+		myCenter = (abs.pt1 + abs.pt2 + abs.pt3 + abs.pt4) / 4;
+	} else
+		myCenter = this->_position + this->_size / 2;
+
+	Vector2f opCenter;
+	if (obj->_tiles) {
+		double dist = std::numeric_limits<double>::infinity();
+
+		opCenter = {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity()};
+		for (size_t gy = 0; gy < obj->_tiles->size(); gy++) {
+			auto &line = (*obj->_tiles)[gy];
+
+			for (size_t gx = 0; gx < line.size(); gx++) {
+				if (!line[gx].solid)
+					continue;
+
+				MapState::Quad abs = obj->map->tileCoordToAbs(obj->_gridPos + Vector2{gx, gy});
+				Vector2f center = (abs.pt1 + abs.pt2 + abs.pt3 + abs.pt4) / 4;
+				double d = this->_position.distance2(center);
+
+				if (d >= dist)
+					continue;
+				dist = d;
+				opCenter = center;
+			}
+		}
+	} else if (obj->_boundToGrid) {
+		MapState::Quad abs = obj->map->tileCoordToAbs(obj->_gridPos);
+
+		opCenter = (abs.pt1 + abs.pt2 + abs.pt3 + abs.pt4) / 4;
+	} else
+		opCenter = obj->_position + obj->_size / 2;
+
 	Vector2f diff = opCenter - myCenter;
 	Vector2f diffAbs = diff.abs();
 	const ObjectWeapon *weapon = this->_getBestWeaponFor(obj, UINT32_MAX, true);
@@ -1436,16 +1471,18 @@ bool GameObject::_updateAttack(GameObject *obj)
 	targetPos.y += std::sin(dangle * M_PI / 180) * offset;
 	if (sound)
 		sound->play();
+	if (effect)
+		this->manager->spawnEffect(*effect, this->_position + this->_size / 2);
+	this->_shooting = true;
 	switch (weapon->weapon->getType()) {
 	case WEAPONTYPE_HITSCAN:
-		if (effect)
-			this->manager->spawnEffect(*effect, this->_position + this->_size / 2);
 		if (hitEffect)
 			this->manager->spawnEffect(*hitEffect, targetPos);
-		this->manager->warheadAt(weapon->weapon->getDamage(), weapon->weapon->getWarhead(), targetPos, this->owner->state.index);
+		this->manager->weaponUsedAt(weapon->weapon->getDamage(), weapon->weapon, targetPos, this->owner->state.index);
 		break;
 	case WEAPONTYPE_PROJECTILE:
-		// TODO:
+		this->manager->spawnProjectile(this, weapon->weapon, this->_position + this->_size / 2, targetPos);
+		break;
 	default:
 		assert_not_reached();
 	}
@@ -1541,6 +1578,7 @@ void GameObject::update()
 	if (!this->_orderQueue.empty()) {
 		if (this->_firstEvent) {
 			this->_pathCached = false;
+			this->_shooting = false;
 			this->_gpTimer[0] = 0;
 			this->_gpTimer[1] = 0;
 			this->_gpTimer[2] = 0;
@@ -1566,6 +1604,10 @@ void GameObject::update()
 		}
 	} else
 		this->_currentIdle = 0;
+	if (this->_shooting) {
+		if (!this->_fireAnim.empty() && this->_fireAnim[this->_currentDir].update())
+			this->_shooting = false;
+	}
 	if (this->_built) {
 		if (!this->_buildAnim || !(*this->_buildAnim)() || this->_buildAnim->update())
 			this->_built = false;
@@ -1615,7 +1657,7 @@ void GameObject::update()
 		this->_lastResourceDump = nullptr;
 	if (this->_asideCooldown != 0)
 		this->_asideCooldown--;
-	if (!this->_dumpStop && !this->_dumpStart && !this->_dumping && !this->_currentIdle) {
+	if (!this->_shooting && !this->_dumpStop && !this->_dumpStart && !this->_dumping && !this->_currentIdle) {
 		if (this->_moving && !this->_moveAnim.empty()) {
 			if (this->_moveAnim[this->_currentDir]())
 				this->_moveAnim[this->_currentDir].update();
@@ -1714,7 +1756,12 @@ void GameObject::render(int layer)
 		display = false;
 	if (display) {
 		if (!this->_dumpStop && !this->_dumpStart && !this->_dumping) {
-			if (this->_moving && !this->_moveAnim.empty()) {
+			if (this->_shooting && !this->_fireAnim.empty()) {
+				auto &anim = this->_fireAnim[this->_currentDir];
+
+				if (anim() && anim.getLayer() == layer)
+					this->_displayAnim(anim.getAnim());
+			} else if (this->_moving && !this->_moveAnim.empty()) {
 				auto &anim = this->_moveAnim[this->_currentDir];
 
 				if (anim() && anim.getLayer() == layer)

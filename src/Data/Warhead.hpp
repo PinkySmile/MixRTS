@@ -33,9 +33,6 @@ private:
 
 public:
 	explicit Warhead(const nlohmann::json &data);
-	//! @brief Merges the multipliers of an armor file into this warhead.
-	//! @param origin The name of the mod whose armor vocabulary is described by data (used to qualify the armor type keys).
-	//! @param data The json object mapping armor type names to their multiplier for this warhead.
 	void loadArmor(const std::string &origin, const nlohmann::json &data);
 	[[nodiscard]] unsigned getRadius() const;
 	[[nodiscard]] DamageType getDmgType() const;

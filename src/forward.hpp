@@ -23,6 +23,7 @@ class Weapon;
 class Warhead;
 class Effect;
 class MultiSound;
+class Projectile;
 struct MapState;
 struct MapMetadata;
 struct LoadedMap;
@@ -30,6 +31,7 @@ struct PlayerState;
 struct UIState;
 struct PlayerQueue;
 struct Game;
+struct WeaponProjectile;
 
 extern MYDLL_API Game *game;
 

@@ -12,6 +12,7 @@
 #include "Effect.hpp"
 #include "Weapon.hpp"
 #include "Warhead.hpp"
+#include "Projectile.hpp"
 #include "Player.hpp"
 #include "Mod.hpp"
 #include "UI.hpp"
@@ -174,6 +175,8 @@ void GameManager::update()
 	this->_checkScroll();
 	for (auto &o : this->_liveObjects)
 		o.update();
+	for (auto &p : this->_liveProjectiles)
+		p.update();
 	for (auto &player : this->_players)
 		player.update();
 	for (auto &player : this->_players)
@@ -200,6 +203,16 @@ void GameManager::update()
 			else
 				++it;
 	}
+
+	auto itp = this->_liveProjectiles.begin();
+	while (itp != this->_liveProjectiles.end())
+		// TODO: Objects above expect the pointers to stay valid until they can check isDisposable
+		//       which isn't the case here. We should hold on to disposable objects for a full tick
+		//       to allow all objects to properly dispose of the pointers to dead objects.
+		if (itp->isDisposable())
+			itp = this->_liveProjectiles.erase(itp);
+		else
+			++itp;
 
 	auto itb = this->_liveObjects.begin();
 	std::set<Player *> toRecompute;
@@ -1265,7 +1278,7 @@ std::pair<std::string, unsigned> GameManager::convertResource(const std::string 
 	assert_not_reached();
 }
 
-void GameManager::spawnEffect(const Effect &effect, Vector2f pos)
+Effect &GameManager::spawnEffect(const Effect &effect, Vector2f pos)
 {
 	assert_exp(effect.getLayer() >= -2 && effect.getLayer() <= 2);
 	auto &arr = this->_effects[effect.getLayer() + 2];
@@ -1274,10 +1287,19 @@ void GameManager::spawnEffect(const Effect &effect, Vector2f pos)
 	arr.back().setPosition(pos);
 	auto sound = arr.back().getSound();
 	if (sound) sound->play();
+	return arr.back();
 }
 
-void GameManager::warheadAt(unsigned damage, const Warhead *warhead, Vector2f position, size_t owner)
+Projectile &GameManager::spawnProjectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, Vector2f target)
 {
+	this->_liveProjectiles.emplace_back(parent, weapon, pos, target);
+	this->_liveProjectiles.back().manager = this;
+	return this->_liveProjectiles.back();
+}
+
+void GameManager::weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f position, size_t owner)
+{
+	const Warhead *warhead = weapon->getWarhead();
 	unsigned radius = warhead->getRadius();
 	double dist = radius * radius;
 
@@ -1286,13 +1308,14 @@ void GameManager::warheadAt(unsigned damage, const Warhead *warhead, Vector2f po
 		if (b.isDisposable() || b.isDead())
 			continue;
 
-		double d = b.getPosition().distance2(position);
+		double d = (b.getPosition() + b.getSize() / 2).distance2(position);
 
 		if (d < dist) {
 			double result = damage;
+			float mult = warhead->getMultiplier(b.getArmor());
 
-			result *= (dist - d) / dist;
-			result *= warhead->getMultiplier(b.getArmor());
+			result *= (radius - sqrt(d)) / radius;
+			result *= mult;
 			b.damage(std::ceil(result), warhead->getDmgType());
 			// TODO: Extra effects
 		}

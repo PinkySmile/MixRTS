@@ -41,11 +41,13 @@ void ConditionalAnim::_init(const std::unordered_map<std::string, std::vector<An
 	if (j.contains("when_hp_lower"))
 		cb = [cb, hp = j["when_hp_lower"].get<float>()](const ConditionalAnim &This) {
 			if (!cb(This)) return false;
+			assert_exp(This._parent);
 			return This._parent->animationState.health * 100.f < hp;
 		};
 	if (j.contains("when_hp_bigger"))
 		cb = [cb, hp = j["when_hp_bigger"].get<float>()](const ConditionalAnim &This) {
 			if (!cb(This)) return false;
+			assert_exp(This._parent);
 			return This._parent->animationState.health * 100.f >= hp;
 		};
 	if (j.contains("when_storage_is_in")) {
@@ -54,6 +56,7 @@ void ConditionalAnim::_init(const std::unordered_map<std::string, std::vector<An
 		auto range = j["when_storage_is_in"].get<std::vector<unsigned>>();
 		cb = [cb, range](const ConditionalAnim &This) {
 			if (!cb(This)) return false;
+			assert_exp(This._parent);
 			unsigned total = This._parent->owner->state.totalStorage[This._parent->animationState.storageKey];
 			unsigned maxVal = This._parent->owner->state.money[This._parent->animationState.storageKey];
 			float percent = maxVal * 100.f / total;
@@ -63,6 +66,7 @@ void ConditionalAnim::_init(const std::unordered_map<std::string, std::vector<An
 	if (j.contains("when_storage_bigger"))
 		cb = [cb, storage = j["when_storage_bigger"].get<float>()](const ConditionalAnim &This) {
 			if (!cb(This)) return false;
+			assert_exp(This._parent);
 			unsigned total = This._parent->owner->state.totalStorage[This._parent->animationState.storageKey];
 			unsigned maxVal = This._parent->owner->state.money[This._parent->animationState.storageKey];
 			float percent = maxVal * 100.f / total;
@@ -89,7 +93,6 @@ ConditionalAnim::ConditionalAnim(const Mod &base, const GameObject *parent, cons
 
 bool ConditionalAnim::operator()() const
 {
-	assert_exp(this->_parent);
 	return this->_cond(*this);
 }
 

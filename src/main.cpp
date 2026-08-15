@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <cpptrace/from_current.hpp>
 #include "Data/Animation.hpp"
+#include "Data/Projectile.hpp"
 #include "Data/Upgrade.hpp"
 #include "Data/Effect.hpp"
 #include "Data/Weapon.hpp"
