@@ -67,6 +67,7 @@ public:
 		const Faction &base,
 		const std::unordered_map<std::string, std::vector<Animation>> &anims,
 		const std::unordered_map<std::string, MultiSound> &sounds,
+		const std::unordered_map<std::string, Effect> &effects,
 		const std::unordered_map<std::string, Weapon> &weapons,
 		std::unordered_map<std::string, GameObject> &objects
 	) const;

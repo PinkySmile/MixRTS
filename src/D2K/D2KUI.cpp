@@ -780,7 +780,7 @@ void D2KUI::_displaySelectedObjectUI(const GameObject &object)
 	if (object.animationState.health >= 0.5)
 		rect.setFillColor(sf::Color::Green);
 	else if (object.animationState.health >= 0.3)
-		rect.setFillColor(sf::Color{0xFF, 0x80, 0x00});
+		rect.setFillColor(sf::Color::Yellow);
 	else
 		rect.setFillColor(sf::Color::Red);
 	game->screen->draw(rect);

@@ -127,6 +127,16 @@ struct ObjectBarrel {
 	void update();
 };
 
+struct ObjectDeathParams {
+	std::optional<ConditionalAnim> anim;
+	std::optional<unsigned> fadeTime;
+	std::optional<unsigned> stayTime;
+	const Effect *effect = nullptr;
+
+	ObjectDeathParams(const Mod &base, const GameObject *obj, const std::unordered_map<std::string, std::vector<Animation>> &animMap, const std::unordered_map<std::string, Effect> &effectMap, const nlohmann::json &json);
+	ObjectDeathParams(const GameObject *obj, const ObjectDeathParams &other);
+};
+
 class GameObjectData {
 public:
 	struct AnimationState {
@@ -148,7 +158,7 @@ protected:
 	const MultiSound *_doSound = nullptr;
 	const MultiSound *_selectSound = nullptr;
 	const MultiSound *_deathSound = nullptr;
-	ConditionalAnim *_deathAnim = nullptr;
+	ObjectDeathParams *_deathAnim = nullptr;
 	std::vector<ObjectBarrel> _barrels;
 	std::vector<std::string> _tags;
 	std::optional<std::string> _giveQueue;
@@ -210,6 +220,7 @@ protected:
 	std::pair<unsigned, unsigned> _idleTimerRange;
 	int _power = 0;
 	float _speed = 0;
+	float _alpha = 1;
 	PFFreeMask _oldTilePosition;
 	PFFreeMask _currentTilePosition;
 	unsigned char _buildMaxDistance = 0;
@@ -229,6 +240,7 @@ protected:
 	bool _canCrush = false;
 	bool _isRadar = false;
 	bool _repairing = false;
+	bool _animFinished = false;
 	// TODO: Find a better way to do this
 	bool _dumpStop = false;
 	bool _dumpStart = false;
@@ -256,6 +268,7 @@ public:
 		const std::string &id,
 		const std::unordered_map<std::string, std::vector<Animation>> &animList,
 		const std::unordered_map<std::string, MultiSound> &sounds,
+		const std::unordered_map<std::string, Effect> &effects,
 		const std::unordered_map<std::string, Weapon> &weapons,
 		const nlohmann::json &json
 	);
@@ -355,10 +368,10 @@ protected:
 	// Fields here (and not in GameObjectData) require a special copy procedure
 	std::optional<DumpInfo> _dump;
 	std::vector<std::vector<ConditionalAnim>> _anims;
+	std::optional<ObjectDeathParams> _crushAnim;
 	std::optional<ConditionalAnim> _sellAnim;
 	std::optional<ConditionalAnim> _repairAnim;
 	std::optional<ConditionalAnim> _buildAnim;
-	std::optional<ConditionalAnim> _crushAnim;
 	std::optional<ConditionalAnim> _producingAnim;
 	std::optional<ConditionalAnim> _producedAnim;
 	std::vector<ConditionalAnim> _moveAnim;
@@ -368,7 +381,7 @@ protected:
 	std::vector<ConditionalAnim> _crawlFireAnim;
 	std::vector<ConditionalAnim> _idleAnims;
 	std::vector<ConditionalAnim> _harvestAnims;
-	std::vector<ConditionalAnim> _deathAnims;
+	std::vector<ObjectDeathParams> _deathAnims;
 	std::unordered_map<std::string, std::vector<ObjectBarrel *>> _barrelByTag;
 	std::unordered_map<std::string, std::vector<ObjectWeapon *>> _weaponByTag;
 

@@ -2,7 +2,9 @@
 // Created by PinkySmile on 20/04/2026.
 //
 
+#include <cpptrace/from_current.hpp>
 #include "Faction.hpp"
+#include "Effect.hpp"
 #include "GameObject.hpp"
 #include "GameManager.hpp"
 #include "Animation.hpp"
@@ -144,6 +146,7 @@ GameObject::GameObject(
 	const std::string &id,
 	const std::unordered_map<std::string, std::vector<Animation>> &animList,
 	const std::unordered_map<std::string, MultiSound> &sounds,
+	const std::unordered_map<std::string, Effect> &effects,
 	const std::unordered_map<std::string, Weapon> &weapons,
 	const nlohmann::json &json
 ) :
@@ -416,7 +419,9 @@ GameObject::GameObject(
 	if (json.contains("build_anim") && !json["build_anim"].is_null())
 		this->_buildAnim.emplace(base, this, animList, json["build_anim"]);
 	if (json.contains("crush_anim") && !json["crush_anim"].is_null())
-		this->_crushAnim.emplace(base, this, animList, json["crush_anim"]);
+		TRY {
+			this->_crushAnim.emplace(base, this, animList, effects, json["crush_anim"]);
+		} CATCH_AND_RETHROW("In key [\"crush_anim\"]\n")
 	if (json.contains("producing_anim") && !json["producing_anim"].is_null())
 		this->_producingAnim.emplace(base, this, animList, json["producing_anim"]);
 	if (json.contains("produced_anim") && !json["produced_anim"].is_null())
@@ -552,15 +557,16 @@ GameObject::GameObject(
 		static_assert(DMGTYPE_BLAST   == DMGTYPE_START + 2);
 		static_assert(DMGTYPE_SONIC   == DMGTYPE_START + 3);
 		assert_exp(!json["death"].contains("generic") || json["death"]["generic"].is_object());
-		assert_exp(json["death"].contains("generic") || (json["death"].contains("bullet") && json["death"]["bullet"].is_object()));
-		assert_exp(json["death"].contains("generic") || (json["death"].contains("missile") && json["death"]["missile"].is_object()));
-		assert_exp(json["death"].contains("generic") || (json["death"].contains("blast") && json["death"]["blast"].is_object()));
-		assert_exp(json["death"].contains("generic") || (json["death"].contains("sonic") && json["death"]["sonic"].is_object()));
 
-		this->_deathAnims.emplace_back(base, this, animList, json["death"].contains("bullet")  ? json["death"]["bullet"]  : json["death"]["generic"]);
-		this->_deathAnims.emplace_back(base, this, animList, json["death"].contains("missile") ? json["death"]["missile"] : json["death"]["generic"]);
-		this->_deathAnims.emplace_back(base, this, animList, json["death"].contains("blast")   ? json["death"]["blast"]   : json["death"]["generic"]);
-		this->_deathAnims.emplace_back(base, this, animList, json["death"].contains("sonic")   ? json["death"]["sonic"]   : json["death"]["generic"]);
+		const char *anims[] = { "bullet", "missile", "blast", "sonic" };
+
+		for (const char *s : anims)
+			assert_msg(json["death"].contains("generic") || (json["death"].contains(s) && json["death"][s].is_object()), s);
+
+		for (const char *s : anims)
+			TRY {
+				this->_deathAnims.emplace_back(base, this, animList, effects, json["death"].contains(s) ? json["death"][s] : json["death"]["generic"]);
+			} CATCH_AND_RETHROW("In key [\"death\"][\"" + std::string(s) + "\"]\n")
 	}
 	if (json.contains("dump"))
 		this->_dump.emplace(
@@ -1433,7 +1439,7 @@ bool GameObject::_updateAttack(GameObject *obj)
 	switch (weapon->weapon->getType()) {
 	case WEAPONTYPE_HITSCAN:
 		if (effect)
-			this->manager->spawnEffect(*effect, this->_position);
+			this->manager->spawnEffect(*effect, this->_position + this->_size / 2);
 		if (hitEffect)
 			this->manager->spawnEffect(*hitEffect, targetPos);
 		this->manager->warheadAt(weapon->weapon->getDamage(), weapon->weapon->getWarhead(), targetPos, this->owner->state.index);
@@ -1501,7 +1507,14 @@ void GameObject::playBuiltSound() const
 void GameObject::update()
 {
 	if (this->_deathAnim) {
-		if (this->_deathAnim->update())
+		if (this->_animFinished || !this->_deathAnim->anim || this->_deathAnim->anim->update())
+			this->_animFinished = true;
+		if (this->_deathAnim->stayTime && this->_gpTimer[3] < *this->_deathAnim->stayTime)
+			this->_gpTimer[3]++;
+		else if (this->_deathAnim->fadeTime && this->_gpTimer[2] < *this->_deathAnim->fadeTime) {
+			this->_gpTimer[2]++;
+			this->_alpha = static_cast<float>(*this->_deathAnim->fadeTime - this->_gpTimer[2]) / *this->_deathAnim->fadeTime;
+		} else if (this->_animFinished)
 			this->_disposable = true;
 		return;
 	}
@@ -1680,9 +1693,15 @@ void GameObject::render(int layer)
 	if (this->_repairing && this->_repairAnim && (*this->_repairAnim)())
 		this->_displayAnim(this->_repairAnim->getAnim(), this->_size / 2);
 	if (this->_deathAnim) {
-		if ((*this->_deathAnim)() && this->_deathAnim->getLayer() == layer)
-			this->_displayAnim(this->_deathAnim->getAnim());
-		return;
+		if (this->_deathAnim->anim && !this->_animFinished) {
+			if ((*this->_deathAnim->anim)() && this->_deathAnim->anim->getLayer() == layer)
+				this->_displayAnim(this->_deathAnim->anim->getAnim());
+			return;
+		}
+		if (this->_deathAnim->stayTime && this->_gpTimer[3] >= *this->_deathAnim->stayTime)
+			return;
+		if (this->_deathAnim->anim)
+			return;
 	}
 	if (layer == -1)
 		this->drawSkirt();
@@ -1825,6 +1844,10 @@ void GameObject::damage(unsigned amount, DamageType type)
 	if (type == DMGTYPE_GENERIC)
 		type = static_cast<DamageType>(random_distrib(game->gameRandom, DMGTYPE_START, DMGTYPE_COUNT - 1));
 	this->_deathAnim = &this->_deathAnims[type - DMGTYPE_START];
+	this->_gpTimer[2] = 0;
+	this->_gpTimer[3] = 0;
+	if (this->_deathAnim->effect)
+		this->manager->spawnEffect(*this->_deathAnim->effect, this->_position + this->_size / 2);
 }
 
 void GameObject::setHealth(unsigned health)
@@ -2271,6 +2294,8 @@ void GameObject::crushedBy(GameObject *)
 	this->setHealth(0);
 	this->_crushSound->play();
 	this->_deathAnim = &*this->_crushAnim;
+	this->_gpTimer[2] = 0;
+	this->_gpTimer[3] = 0;
 	this->_solid = false;
 }
 
@@ -2573,6 +2598,36 @@ void ObjectBarrel::update()
 		this->shootTimer--;
 		return;
 	}
+}
+
+ObjectDeathParams::ObjectDeathParams(const Mod &base, const GameObject *obj, const std::unordered_map<std::string, std::vector<Animation>> &animMap, const std::unordered_map<std::string, Effect> &effectMap, const nlohmann::json &json)
+{
+	assert_exp(!json.contains("anim") || json["anim"].is_object());
+	assert_exp(!json.contains("fade") || json["fade"].is_number_unsigned());
+	assert_exp(!json.contains("stay") || json["stay"].is_number_unsigned());
+	assert_exp(!json.contains("effect") || json["effect"].is_string());
+
+	if (json.contains("anim"))
+		this->anim.emplace(base, obj, animMap, json["anim"]);
+	if (json.contains("fade"))
+		this->fadeTime.emplace(json["fade"]);
+	if (json.contains("stay"))
+		this->stayTime.emplace(json["stay"]);
+	if (json.contains("effect")) {
+		std::string effect = RESOURCE(base.getName(), json["effect"]);
+
+		assert_msg(effectMap.contains(effect), effect);
+		this->effect = &effectMap.at(effect);
+	}
+}
+
+ObjectDeathParams::ObjectDeathParams(const GameObject *obj, const ObjectDeathParams &other)
+{
+	if (other.anim)
+		this->anim.emplace(obj, *other.anim);
+	this->fadeTime = other.fadeTime;
+	this->stayTime = other.stayTime;
+	this->effect = other.effect;
 }
 
 ObjectWeapon::ObjectWeapon(unsigned short extraPrio, unsigned barrel, const Mod &base, const std::unordered_map<std::string, Weapon> &weapons, const nlohmann::json &j)

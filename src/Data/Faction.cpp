@@ -148,7 +148,7 @@ void Faction::load(const std::vector<std::string> &allFactions)
 		for (auto &w: this->_weapons)
 			this->_base.loadWeapons(w, this->_loadedEffects, this->_loadedSounds, this->_loadedWarheads, this->_loadedWeapons);
 		for (auto &u: this->_objects)
-			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedWeapons, this->_loadedObjects);
+			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects, this->_loadedWeapons, this->_loadedObjects);
 		for (auto &u: this->_upgrades)
 			this->_base.loadUpgrades(u, *this, this->_loadedUpgrades);
 	} CATCH_AND_RETHROW("While loading faction \"" + this->_name + "\"\n")

@@ -1272,6 +1272,8 @@ void GameManager::spawnEffect(const Effect &effect, Vector2f pos)
 
 	arr.emplace_back(effect);
 	arr.back().setPosition(pos);
+	auto sound = arr.back().getSound();
+	if (sound) sound->play();
 }
 
 void GameManager::warheadAt(unsigned damage, const Warhead *warhead, Vector2f position, size_t owner)
