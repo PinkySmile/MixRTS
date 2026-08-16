@@ -317,6 +317,7 @@ public:
 	void nextDirection();
 	void setOwner(Player *player, unsigned time, unsigned timeDecOnAtk);
 
+	[[nodiscard]] bool isInObject(Vector2f pos, Vector2f size, bool fullTile) const;
 	[[nodiscard]] Vector2f getHitboxCenter(Vector2f pos) const;
 	[[nodiscard]] bool canAttack(const GameObject *obj) const;
 	[[nodiscard]] const std::vector<std::string> &getTags() const;

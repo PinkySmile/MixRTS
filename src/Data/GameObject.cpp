@@ -734,8 +734,6 @@ static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 	if (p.y + octx->hitBoxSize.y > octx->grid->gridSize.y)
 		return true;
 	if (octx->ignoreObject) {
-		Vector2i pos = octx->ignoreObject->getPosition();
-		Vector2u size = octx->ignoreObject->getSize();
 		MapState::Quad absP = {
 			Vector2f(p.x, p.y),
 			Vector2f(p.x + 1, p.y),
@@ -745,12 +743,12 @@ static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 
 		if (octx->ggrid)
 			absP = octx->ggrid->tileCoordToAbs(p);
-		if (
-			pos.x + size.x > absP.pt1.x &&
-			pos.y + size.y > absP.pt1.y &&
-			pos.x <= absP.pt3.x &&
-			pos.y <= absP.pt3.y
-		)
+
+		Vector2f tl{absP.pt1.x, absP.pt1.y};
+		Vector2f br{absP.pt3.x, absP.pt3.y};
+
+		// TODO: Handle non-square grids
+		if (octx->ignoreObject->isInObject(tl, br - tl, false))
 			return false;
 	}
 	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
@@ -768,10 +766,27 @@ static float GetTileCostMovableUnits(Vector2i p, void *ctx)
 	auto octx = static_cast<ObstructionContext *>(ctx);
 	float cost = 0;
 
-	if (p == octx->dest && octx->ignoreObject)
-		return 0;
 	for (size_t y = 0; y < octx->hitBoxSize.y; y++)
 		for (size_t x = 0; x < octx->hitBoxSize.x; x++) {
+			if (octx->ignoreObject) {
+				MapState::Quad absP = {
+					Vector2f(p.x + x, p.y + y),
+					Vector2f(p.x + x + 1, p.y + y),
+					Vector2f(p.x + x + 1, p.y + y + 1),
+					Vector2f(p.x + x, p.y + y + 1)
+				};
+
+				if (octx->ggrid)
+					absP = octx->ggrid->tileCoordToAbs(p);
+
+				Vector2f tl{absP.pt1.x, absP.pt1.y};
+				Vector2f br{absP.pt3.x, absP.pt3.y};
+
+				// TODO: Handle non-square grids
+				if (octx->ignoreObject->isInObject(tl, br - tl, false))
+					return 0;
+			}
+
 			auto index = (p.x + x) + (p.y + y) * octx->grid->gridSize.x;
 			auto attrs = octx->grid->grid[index];
 			auto stackCount = PFGRIDMASK_STACK_COUNT(attrs);
@@ -2608,6 +2623,52 @@ void GameObject::setOwner(Player *player, unsigned time, unsigned timeDecOnAtk)
 		this->_timeDecOnAtk = timeDecOnAtk;
 	} else
 		this->_takeControlTime = 0;
+}
+
+bool GameObject::isInObject(Vector2f pos, Vector2f size, bool fullTile) const
+{
+	if (this->_tiles) {
+		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
+			auto &line = (*this->_tiles)[gy];
+
+			for (size_t gx = 0; gx < line.size(); gx++) {
+				if (!line[gx].solid)
+					continue;
+
+				MapState::Quad abs = this->map->tileCoordToAbs(this->_gridPos + Vector2{gx, gy});
+				Vector2f tlPos = Vector2f{
+					std::min(std::min(abs.pt1.x, abs.pt2.x), std::min(abs.pt3.x, abs.pt4.x)),
+					std::min(std::min(abs.pt1.y, abs.pt2.y), std::min(abs.pt3.y, abs.pt4.y))
+				};
+				Vector2f brPos = Vector2f{
+					std::max(std::max(abs.pt1.x, abs.pt2.x), std::max(abs.pt3.x, abs.pt4.x)),
+					std::max(std::max(abs.pt1.y, abs.pt2.y), std::max(abs.pt3.y, abs.pt4.y))
+				};
+
+				if (pos.x + size.x < tlPos.x)
+					continue;
+				if (pos.y + size.y < tlPos.y)
+					continue;
+				if (pos.x >= brPos.x)
+					continue;
+				if (pos.y >= brPos.y)
+					continue;
+				return true;
+			}
+		}
+	} else {
+		auto mypos = this->_position;
+		auto mysize = this->_size;
+
+		if (
+			pos.x + size.x > mypos.x &&
+			pos.y + size.y > mypos.y &&
+			pos.x <= mypos.x + mysize.x &&
+			pos.y <= mypos.y + mysize.y
+		)
+			return true;
+	}
+	return false;
 }
 
 Vector2f GameObject::getHitboxCenter(Vector2f pos) const
