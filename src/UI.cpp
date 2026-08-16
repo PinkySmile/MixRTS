@@ -9,6 +9,100 @@
 #include "Resources/Assert.hpp"
 
 
+std::string UI::EVAToString(EVASound snd)
+{
+	switch (snd) {
+	case EVA_BUILDING:
+		return "EVA_BUILDING";
+	case EVA_BUILDING_DONE:
+		return "EVA_BUILDING_DONE";
+	case EVA_CANCEL:
+		return "EVA_CANCEL";
+	case EVA_CANNOT_DEPLOY:
+		return "EVA_CANNOT_DEPLOY";
+	case EVA_CANNOT_BUILD:
+		return "EVA_CANNOT_BUILD";
+	case EVA_GUARDING:
+		return "EVA_GUARDING";
+	case EVA_HOLD_QUEUE:
+		return "EVA_HOLD_QUEUE";
+	case EVA_LOST:
+		return "EVA_LOST";
+	case EVA_WON:
+		return "EVA_WON";
+	case EVA_LOW_POWER:
+		return "EVA_LOW_POWER";
+	case EVA_UNLOCKED:
+		return "EVA_UNLOCKED";
+	case EVA_NO_CREDITS:
+		return "EVA_NO_CREDITS";
+	case EVA_PRIMARY_SELECTED:
+		return "EVA_PRIMARY_SELECTED";
+	case EVA_RETREAT:
+		return "EVA_RETREAT";
+	case EVA_SELL:
+		return "EVA_SELL";
+	case EVA_TRAINING:
+		return "EVA_TRAINING";
+	case EVA_UNIT_READY:
+		return "EVA_UNIT_READY";
+	case EVA_UPGRADING:
+		return "EVA_UPGRADING";
+	case EVA_CASH_UP:
+		return "EVA_CASH_UP";
+	case EVA_CASH_DOWN:
+		return "EVA_CASH_DOWN";
+	case EVA_REQUIRE_STORAGE:
+		return "EVA_REQUIRE_STORAGE";
+	case EVA_ALREADY_BUILDING:
+		return "EVA_ALREADY_BUILDING";
+	case EVA_POWER_OFF:
+		return "EVA_POWER_OFF";
+	case EVA_POWER_ON:
+		return "EVA_POWER_ON";
+	case EVA_RADAR_UP:
+		return "EVA_RADAR_UP";
+	case EVA_MY_BUILDING_CAPTURED:
+		return "EVA_MY_BUILDING_CAPTURED";
+	case EVA_BUILDING_CAPTURED:
+		return "EVA_BUILDING_CAPTURED";
+	case EVA_BUILDING_ATTACKED:
+		return "EVA_BUILDING_ATTACKED";
+	case EVA_BUILDING_LOST:
+		return "EVA_BUILDING_LOST";
+	case EVA_MY_UNIT_CAPTURED:
+		return "EVA_MY_UNIT_CAPTURED";
+	case EVA_UNIT_CAPTURED:
+		return "EVA_UNIT_CAPTURED";
+	case EVA_UNIT_ATTACKED:
+		return "EVA_UNIT_ATTACKED";
+	case EVA_ALLIED_MY_BUILDING_CAPTURED:
+		return "EVA_ALLIED_MY_BUILDING_CAPTURED";
+	case EVA_ALLIED_BUILDING_CAPTURED:
+		return "EVA_ALLIED_BUILDING_CAPTURED";
+	case EVA_ALLIED_BUILDING_ATTACKED:
+		return "EVA_ALLIED_BUILDING_ATTACKED";
+	case EVA_ALLIED_BUILDING_LOST:
+		return "EVA_ALLIED_BUILDING_LOST";
+	case EVA_ALLIED_MY_UNIT_CAPTURED:
+		return "EVA_ALLIED_MY_UNIT_CAPTURED";
+	case EVA_ALLIED_UNIT_CAPTURED:
+		return "EVA_ALLIED_UNIT_CAPTURED";
+	case EVA_ALLIED_UNIT_ATTACKED:
+		return "EVA_ALLIED_UNIT_ATTACKED";
+	case EVA_UNIT_LOST:
+		return "EVA_UNIT_LOST";
+	case EVA_HARV_UNDER_ATTACK:
+		return "EVA_HARV_UNDER_ATTACK";
+	case EVA_HAZARD_SPAWNED:
+		return "EVA_HAZARD_SPAWNED";
+	case EVA_HAZARD_ATTACKED:
+		return "EVA_HAZARD_ATTACKED";
+	default:
+		return "Invalid EVA " + std::to_string(snd);
+	}
+}
+
 UI::UI(const Faction &faction) :
 	_faction(faction),
 	_evaSound(game->dummySoundBuffer)
@@ -121,7 +215,7 @@ void UI::update()
 			auto &e = this->_evaQueue.front();
 
 			game->logger.verbose("Playing EVA sound " + std::to_string(e.soundId));
-			assert_msg(this->_evaSounds[e.soundId], "Trying to play invalid EVA " + std::to_string(e.soundId));
+			assert_msg(this->_evaSounds[e.soundId], "Trying to play invalid EVA " + EVAToString(e.soundId));
 			this->_evaSound.setBuffer(*this->_evaSounds[e.soundId]);
 			this->_evaSound.play();
 			this->_evaCooldown[e.soundId] = e.cooldown;

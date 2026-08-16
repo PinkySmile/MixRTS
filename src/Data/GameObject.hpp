@@ -195,6 +195,9 @@ protected:
 	std::deque<ResourceLot> _lots;
 	std::optional<Vector2i> _spawnOffset;
 	std::optional<Vector2i> _exitOffset;
+	Player *_originalOwner;
+	unsigned _takeControlTime = 0;
+	unsigned _timeDecOnAtk;
 	unsigned _resourceStorage = 0;
 	unsigned _currentDir = 0;
 	unsigned _turnSpeed = 0;
@@ -312,7 +315,9 @@ public:
 	void toggleRepair();
 	void sell();
 	void nextDirection();
+	void setOwner(Player *player, unsigned time, unsigned timeDecOnAtk);
 
+	[[nodiscard]] Vector2f getHitboxCenter(Vector2f pos) const;
 	[[nodiscard]] bool canAttack(const GameObject *obj) const;
 	[[nodiscard]] const std::vector<std::string> &getTags() const;
 	[[nodiscard]] const std::optional<UnitDeployParams> &getOnDeploy() const;
@@ -403,6 +408,7 @@ protected:
 	bool _updateDeploy();
 	bool _updateAttack(GameObject *obj);
 	bool _updateFinishMovement();
+	void _reduceTimeControlTimer(unsigned dec);
 
 	void _harvestClosestResource();
 	void _dumpInClosestResourceDump();

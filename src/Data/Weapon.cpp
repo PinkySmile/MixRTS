@@ -31,6 +31,7 @@ Weapon::Weapon(
 	for (auto &j : data["can_hit_tags"])
 		assert_exp(j.is_string());
 	assert_exp(!data.contains("projectile") || data["projectile"].is_object());
+	assert_exp(!data.contains("take_control") || data["take_control"].is_object());
 	assert_exp(!data.contains("send_forward") || data["send_forward"].is_boolean());
 	assert_exp(!data.contains("inaccuracy_dist") || data["inaccuracy_dist"].is_number());
 	assert_exp(!data.contains("inaccuracy_base") || data["inaccuracy_base"].is_number());
@@ -57,6 +58,8 @@ Weapon::Weapon(
 	assert_msg(warheads.contains(warhead), warhead);
 	this->_warhead = &warheads.at(warhead);
 
+	if (data.contains("take_control"))
+		this->_takeControl.emplace(data["take_control"]);
 	if (data.contains("send_forward"))
 		this->_sendForward = data["send_forward"];
 	if (data.contains("inaccuracy_base"))
@@ -132,6 +135,11 @@ double Weapon::getInaccuracy(double dist) const
 	return this->_inaccuracyBase + this->_inaccuracyDist * dist;
 }
 
+const std::optional<WeaponTakeControl> & Weapon::getTakeControl() const
+{
+	return this->_takeControl;
+}
+
 const std::optional<WeaponProjectile> &Weapon::getProjectileData() const
 {
 	return this->_projectile;
@@ -140,6 +148,21 @@ const std::optional<WeaponProjectile> &Weapon::getProjectileData() const
 bool Weapon::sendForward() const
 {
 	return this->_sendForward;
+}
+
+WeaponTakeControl::WeaponTakeControl(const nlohmann::json &json)
+{
+	assert_exp(json.contains("targets") && json["targets"].is_array());
+	for (size_t i = 0; i < json["targets"].size(); i++)
+		assert_msg(json["targets"][i].is_string(), "json[\"targets\"][" + std::to_string(i) + "]");
+	assert_exp(!json.contains("base_time") || json["base_time"].is_number_unsigned());
+	assert_exp(!json.contains("time_loss_hit") || json["time_loss_hit"].is_number_unsigned());
+
+	this->targets = json["targets"];
+	if (json.contains("base_time"))
+		this->baseTime = json["base_time"];
+	if (json.contains("time_loss_hit"))
+		this->timeLossHit = json["time_loss_hit"];
 }
 
 WeaponProjectile::WeaponProjectile(

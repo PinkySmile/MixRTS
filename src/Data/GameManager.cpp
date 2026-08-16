@@ -1314,7 +1314,7 @@ void GameManager::weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f p
 		if (b.isDisposable() || b.isDead())
 			continue;
 
-		double d = (b.getPosition() + b.getSize() / 2).distance2(position);
+		double d = b.getHitboxCenter(position).distance2(position);
 
 		if (d < dist) {
 			double result = damage;
@@ -1323,7 +1323,23 @@ void GameManager::weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f p
 			result *= (radius - sqrt(d)) / radius;
 			result *= mult;
 			b.damage(std::ceil(result), warhead->getDmgType());
-			// TODO: Extra effects
+
+			if (auto &takeControl = weapon->getTakeControl()) {
+				bool canTakeControl = false;
+
+				for (auto &tag : takeControl->targets) {
+					auto &tags = b.getTags();
+
+					if (std::ranges::find(tags, tag) != tags.end()) {
+						canTakeControl = true;
+						break;
+					}
+				}
+				if (canTakeControl) {
+					assert_exp(owner <= this->_players.size());
+					b.setOwner(&this->_players[owner], takeControl->baseTime, takeControl->timeLossHit);
+				}
+			}
 		}
 	}
 }

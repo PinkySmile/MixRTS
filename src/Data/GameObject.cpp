@@ -1373,7 +1373,7 @@ bool GameObject::_updateDeploy()
 
 			GameObject *result = this->manager->spawnObject(this->owner->state.index, this->_position + s.offset, s.queue, s.building);
 
-			result->damage((this->_maxHp - this->_hp) * result->getHealth() / this->_maxHp);
+			result->setHealth(this->_hp * result->getHealth() / this->_maxHp);
 		} else
 			this->owner->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300);
 	}
@@ -1382,7 +1382,7 @@ bool GameObject::_updateDeploy()
 
 bool GameObject::_updateAttack(GameObject *obj)
 {
-	if (obj == nullptr || obj->isDead())
+	if (obj == nullptr || obj->isDead() || obj->owner->state.team == this->owner->state.team)
 		return true;
 
 	Vector2f myCenter;
@@ -1393,35 +1393,7 @@ bool GameObject::_updateAttack(GameObject *obj)
 	} else
 		myCenter = this->_position + this->_size / 2;
 
-	Vector2f opCenter;
-	if (obj->_tiles) {
-		double dist = std::numeric_limits<double>::infinity();
-
-		opCenter = {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity()};
-		for (size_t gy = 0; gy < obj->_tiles->size(); gy++) {
-			auto &line = (*obj->_tiles)[gy];
-
-			for (size_t gx = 0; gx < line.size(); gx++) {
-				if (!line[gx].solid)
-					continue;
-
-				MapState::Quad abs = obj->map->tileCoordToAbs(obj->_gridPos + Vector2{gx, gy});
-				Vector2f center = (abs.pt1 + abs.pt2 + abs.pt3 + abs.pt4) / 4;
-				double d = this->_position.distance2(center);
-
-				if (d >= dist)
-					continue;
-				dist = d;
-				opCenter = center;
-			}
-		}
-	} else if (obj->_boundToGrid) {
-		MapState::Quad abs = obj->map->tileCoordToAbs(obj->_gridPos);
-
-		opCenter = (abs.pt1 + abs.pt2 + abs.pt3 + abs.pt4) / 4;
-	} else
-		opCenter = obj->_position + obj->_size / 2;
-
+	Vector2f opCenter = obj->getHitboxCenter(myCenter);
 	Vector2f diff = opCenter - myCenter;
 	Vector2f diffAbs = diff.abs();
 	const ObjectWeapon *weapon = this->_getBestWeaponFor(obj, UINT32_MAX, true);
@@ -1520,6 +1492,22 @@ bool GameObject::_updateFinishMovement()
 	return this->_updateMove(this->_cachedDest, false, nullptr);
 }
 
+void GameObject::_reduceTimeControlTimer(unsigned dec)
+{
+	if (this->_takeControlTime == 0)
+		return;
+	if (this->_takeControlTime > dec) {
+		this->_takeControlTime -= dec;
+		return;
+	}
+	this->_takeControlTime = 0;
+	this->deinitGlobalGrid();
+	this->owner = this->_originalOwner;
+	this->_originalOwner = nullptr;
+	this->initGlobalGrid();
+	this->setColor(this->owner->getColor());
+}
+
 bool GameObject::_handleOrder(const Order &o)
 {
 	if (auto turn = std::get_if<TurnOrder>(&o))
@@ -1577,6 +1565,7 @@ void GameObject::update()
 		if (this->_repairTimer >= this->_repairDelay)
 			this->_repairTimer = 0;
 	}
+	this->_reduceTimeControlTimer(1);
 	this->_moving = false;
 	for (auto &barrel : this->_barrels)
 		if (barrel.shootTimer)
@@ -1886,6 +1875,11 @@ void GameObject::damage(unsigned amount, DamageType type)
 	this->setHealth(std::max<int>(this->_hp - amount, 0));
 	if (this->_resourceStorage != 0)
 		this->owner->playEVA(UI::EVA_HARV_UNDER_ATTACK, 300, 3, 600, this->_id);
+	else if (this->_tiles)
+		this->owner->playEVA(UI::EVA_BUILDING_ATTACKED, 300, 3, 600, this->_id);
+	else
+		this->owner->playEVA(UI::EVA_UNIT_ATTACKED, 300, 1, 600, this->_id);
+	this->_reduceTimeControlTimer(this->_timeDecOnAtk);
 	if (!this->isDead())
 		return;
 	if (this->_deathAnims.empty() || type == DMGTYPE_VOID) {
@@ -1910,7 +1904,11 @@ void GameObject::setHealth(unsigned health)
 	if (health == 0) {
 		if (this->_deathSound)
 			this->_deathSound->play();
-		this->owner->playEVA(UI::EVA_UNIT_LOST, 300, 3, 0, this->_id);
+		// TODO: Also fire for all allies
+		if (this->_tiles)
+			this->owner->playEVA(UI::EVA_BUILDING_LOST, 300, 3, 600, this->_id);
+		else
+			this->owner->playEVA(UI::EVA_UNIT_LOST, 300, 1, 600, this->_id);
 	}
 	this->_hp = std::min(health, this->_maxHp);
 	if (this->_lowerPowerWhenDamaged)
@@ -2584,6 +2582,62 @@ void GameObject::sell()
 void GameObject::nextDirection()
 {
 	this->_currentDir = (this->_currentDir + 1) % this->_anims.size();
+}
+
+void GameObject::setOwner(Player *player, unsigned time, unsigned timeDecOnAtk)
+{
+	if (this->owner == player)
+		return;
+	if (this->_originalOwner == nullptr)
+		this->_originalOwner = this->owner;
+	if (this->_tiles) {
+		// TODO: Also fire for all allies
+		this->owner->playEVA(UI::EVA_MY_BUILDING_CAPTURED, 300, 3, 300);
+		player->playEVA(UI::EVA_BUILDING_CAPTURED, 300, 3, 300);
+	} else {
+		// TODO: Also fire for all allies
+		this->owner->playEVA(UI::EVA_MY_UNIT_CAPTURED, 300, 3, 300);
+		player->playEVA(UI::EVA_UNIT_CAPTURED, 300, 3, 300);
+	}
+	this->deinitGlobalGrid();
+	this->owner = player;
+	this->initGlobalGrid();
+	this->setColor(player->getColor());
+	if (this->_originalOwner != this->owner) {
+		this->_takeControlTime = time;
+		this->_timeDecOnAtk = timeDecOnAtk;
+	} else
+		this->_takeControlTime = 0;
+}
+
+Vector2f GameObject::getHitboxCenter(Vector2f pos) const
+{
+	Vector2f ocenter;
+
+	if (this->_tiles) {
+		double dist = std::numeric_limits<double>::infinity();
+
+		ocenter = {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity()};
+		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
+			auto &line = (*this->_tiles)[gy];
+
+			for (size_t gx = 0; gx < line.size(); gx++) {
+				if (!line[gx].solid)
+					continue;
+
+				MapState::Quad abs = this->map->tileCoordToAbs(this->_gridPos + Vector2{gx, gy});
+				Vector2f center = (abs.pt1 + abs.pt2 + abs.pt3 + abs.pt4) / 4;
+				double d = pos.distance2(center);
+
+				if (d >= dist)
+					continue;
+				dist = d;
+				ocenter = center;
+			}
+		}
+	} else
+		ocenter = this->_position + this->_size / 2;
+	return ocenter;
 }
 
 const ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel, bool isFree) const

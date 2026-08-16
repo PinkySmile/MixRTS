@@ -16,6 +16,14 @@ enum WeaponType {
 	WEAPONTYPE_PROJECTILE
 };
 
+struct WeaponTakeControl {
+	std::vector<std::string> targets;
+	unsigned baseTime = 0;
+	unsigned timeLossHit = 0;
+
+	WeaponTakeControl(const nlohmann::json &json);
+};
+
 struct WeaponProjectile {
 	std::vector<ConditionalAnim> anims;
 	const Effect *trail = nullptr;
@@ -49,6 +57,7 @@ private:
 	const Warhead *_warhead = nullptr;
 	std::vector<std::string> _canHitTags;
 	std::optional<WeaponProjectile> _projectile;
+	std::optional<WeaponTakeControl> _takeControl;
 	bool _sendForward = false;
 
 public:
@@ -69,6 +78,7 @@ public:
 	[[nodiscard]] const Warhead *getWarhead() const;
 	[[nodiscard]] const std::vector<std::string> &canHitTags() const;
 	[[nodiscard]] double getInaccuracy(double dist) const;
+	[[nodiscard]] const std::optional<WeaponTakeControl> &getTakeControl() const;
 	[[nodiscard]] const std::optional<WeaponProjectile> &getProjectileData() const;
 	[[nodiscard]] bool sendForward() const;
 };
