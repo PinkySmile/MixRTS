@@ -16,6 +16,7 @@ private:
 	const GameObject *_target;
 	const Weapon *_weapon;
 	const Effect *_trail;
+	const Player *_owner;
 	Vector2f _position;
 	Vector2f _startPos;
 	Vector2f _targetPos;

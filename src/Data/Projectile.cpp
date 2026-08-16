@@ -28,8 +28,10 @@ Projectile::Projectile(const GameObject *parent, const Weapon *weapon, Vector2f 
 		if (parent)
 			this->_anims.back().setColor(parent->owner->getColor());
 	}
-	if (parent)
+	if (parent) {
 		this->_ownerIndex = parent->owner->state.index;
+		this->_owner = parent->owner;
+	}
 	this->_homing = data.homing;
 	this->_trail = data.trail;
 	this->_trailInterval = data.trailInterval;
@@ -48,7 +50,7 @@ void Projectile::update()
 	this->_trailTimer++;
 	if (this->_trail && this->_trailTimer > this->_trailInterval) {
 		this->_trailTimer = 0;
-		this->manager->spawnEffect(*this->_trail, this->_position);
+		this->manager->spawnEffect(*this->_trail, this->_position, this->_owner);
 	}
 	if (this->_homing && this->_target) {
 		this->_targetPos = this->_target->getPosition() + this->_target->getSize() / 2;
@@ -79,7 +81,7 @@ void Projectile::update()
 
 		this->_disposable = false;
 		if (hitEffect)
-			this->manager->spawnEffect(*hitEffect, this->_targetPos);
+			this->manager->spawnEffect(*hitEffect, this->_targetPos, this->_owner);
 		this->manager->weaponUsedAt(this->_damage, this->_weapon, this->_targetPos, this->_ownerIndex);
 		this->_disposable = true;
 	} else if (this->_hitTravel)

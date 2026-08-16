@@ -82,6 +82,12 @@ void Effect::setPosition(Vector2f pos)
 	this->_position = pos;
 }
 
+void Effect::setColor(HSLColor color)
+{
+	for (auto &anim : this->_anim)
+		anim.setColor(color);
+}
+
 int Effect::getLayer() const
 {
 	return this->_layer;

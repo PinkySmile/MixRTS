@@ -1478,12 +1478,12 @@ bool GameObject::_updateAttack(GameObject *obj)
 	if (sound)
 		sound->play();
 	if (effect)
-		this->manager->spawnEffect(*effect, spawnPos);
+		this->manager->spawnEffect(*effect, spawnPos, this->owner);
 	this->_shooting = true;
 	switch (weapon->weapon->getType()) {
 	case WEAPONTYPE_HITSCAN:
 		if (hitEffect)
-			this->manager->spawnEffect(*hitEffect, targetPos);
+			this->manager->spawnEffect(*hitEffect, targetPos, this->owner);
 		this->manager->weaponUsedAt(weapon->weapon->getDamage(), weapon->weapon, targetPos, this->owner->state.index);
 		break;
 	case WEAPONTYPE_PROJECTILE:
@@ -1900,7 +1900,7 @@ void GameObject::damage(unsigned amount, DamageType type)
 	this->_gpTimer[2] = 0;
 	this->_gpTimer[3] = 0;
 	if (this->_deathAnim->effect)
-		this->manager->spawnEffect(*this->_deathAnim->effect, this->_position + this->_size / 2);
+		this->manager->spawnEffect(*this->_deathAnim->effect, this->_position + this->_size / 2, this->owner);
 }
 
 void GameObject::setHealth(unsigned health)

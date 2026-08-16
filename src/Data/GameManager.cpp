@@ -1282,15 +1282,17 @@ std::pair<std::string, unsigned> GameManager::convertResource(const std::string 
 	assert_not_reached();
 }
 
-Effect &GameManager::spawnEffect(const Effect &effect, Vector2f pos)
+Effect &GameManager::spawnEffect(const Effect &effect, Vector2f pos, const Player *owner)
 {
 	assert_exp(effect.getLayer() >= -2 && effect.getLayer() <= 2);
 	auto &arr = this->_effects[effect.getLayer() + 2];
 
 	arr.emplace_back(effect);
 	arr.back().setPosition(pos);
-	auto sound = arr.back().getSound();
-	if (sound) sound->play();
+	if (owner)
+		arr.back().setColor(owner->getColor());
+	if (auto sound = arr.back().getSound())
+		sound->play();
 	return arr.back();
 }
 

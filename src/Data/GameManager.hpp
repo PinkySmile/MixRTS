@@ -88,7 +88,7 @@ public:
 	float initUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map);
 	void deinitUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map);
 	std::pair<std::string, unsigned> convertResource(const std::string &source, const std::vector<std::string> &expected, unsigned value);
-	Effect &spawnEffect(const Effect &effect, Vector2f pos);
+	Effect &spawnEffect(const Effect &effect, Vector2f pos, const Player *owner);
 	Projectile &spawnProjectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, const GameObject *target, Vector2f targetPos);
 	void weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f position, size_t owner);
 

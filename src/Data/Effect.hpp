@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <nlohmann/json_fwd.hpp>
 #include "forward.hpp"
+#include "Utils.hpp"
 #include "Vector.hpp"
 
 class Effect {
@@ -35,6 +36,7 @@ public:
 	void render();
 	void playSound() const;
 	void setPosition(Vector2f pos);
+	void setColor(HSLColor color);
 	[[nodiscard]] int getLayer() const;
 	[[nodiscard]] const MultiSound *getSound() const;
 };
