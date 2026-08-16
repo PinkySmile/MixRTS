@@ -89,7 +89,7 @@ public:
 	void deinitUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map);
 	std::pair<std::string, unsigned> convertResource(const std::string &source, const std::vector<std::string> &expected, unsigned value);
 	Effect &spawnEffect(const Effect &effect, Vector2f pos);
-	Projectile &spawnProjectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, Vector2f target);
+	Projectile &spawnProjectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, const GameObject *target, Vector2f targetPos);
 	void weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f position, size_t owner);
 
 	inline void centerCameraOn(const GameObject &object)

@@ -11,10 +11,13 @@
 #include "Player.hpp"
 #include "Resources/Game.hpp"
 
-Projectile::Projectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, Vector2f target) :
+Projectile::Projectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, const GameObject *target, Vector2f targetPos) :
+	_parent(parent),
+	_target(target),
 	_weapon(weapon),
 	_position(pos),
-	_target(target)
+	_startPos(pos),
+	_targetPos(targetPos)
 {
 	assert_exp(weapon->getProjectileData());
 	const WeaponProjectile &data = *weapon->getProjectileData();
@@ -27,36 +30,60 @@ Projectile::Projectile(const GameObject *parent, const Weapon *weapon, Vector2f 
 	}
 	if (parent)
 		this->_ownerIndex = parent->owner->state.index;
+	this->_homing = data.homing;
 	this->_trail = data.trail;
 	this->_trailInterval = data.trailInterval;
 	this->_speed = data.speed;
+	this->_range = data.range;
+	this->_damageRamp = data.damageRamp;
+	this->_rampDelay = data.rampDelay;
+	this->_hitTravel = data.hitTravel;
+	this->_damage = weapon->getDamage();
+	if (data.range && !this->_homing)
+		this->_targetPos = pos + (this->_targetPos - pos).normalized() * data.range;
 }
 
 void Projectile::update()
 {
 	this->_trailTimer++;
-	if (this->_trailTimer > this->_trailInterval) {
+	if (this->_trail && this->_trailTimer > this->_trailInterval) {
 		this->_trailTimer = 0;
 		this->manager->spawnEffect(*this->_trail, this->_position);
 	}
+	if (this->_homing && this->_target) {
+		this->_targetPos = this->_target->getPosition() + this->_target->getSize() / 2;
+		if (this->_target->isDisposable())
+			this->_target = nullptr;
+	}
+	if (this->_rampDelay <= this->_rampTimer) {
+		this->_damage += this->_damageRamp;
+		this->_rampTimer = 0;
+	} else
+		this->_rampTimer++;
 
-	auto diff = this->_target - this->_position;
+	auto diff = this->_targetPos - this->_position;
 
 	diff.normalize();
 	diff *= this->_speed;
 	this->_position += diff;
 
-	auto diff2 = this->_target - this->_position;
+	auto diff2 = this->_targetPos - this->_position;
 
-	if (this->_position == this->_target || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
+	if (
+		this->_position == this->_targetPos ||
+		(diff.x > 0) != (diff2.x > 0) ||
+		(diff.y > 0) != (diff2.y > 0) ||
+		(this->_range && this->_position.distance(this->_startPos) >= this->_range)
+	) {
 		const Effect *hitEffect = this->_weapon->getHitEffect();
 
 		this->_disposable = false;
 		if (hitEffect)
-			this->manager->spawnEffect(*hitEffect, this->_target);
-		this->manager->weaponUsedAt(this->_weapon->getDamage(), this->_weapon, this->_target, this->_ownerIndex);
+			this->manager->spawnEffect(*hitEffect, this->_targetPos);
+		this->manager->weaponUsedAt(this->_damage, this->_weapon, this->_targetPos, this->_ownerIndex);
 		this->_disposable = true;
-	}
+	} else if (this->_hitTravel)
+		this->manager->weaponUsedAt(this->_damage, this->_weapon, this->_position, this->_ownerIndex);
 }
 
 void Projectile::_displayAnim(Animation &anim, Vector2f offset) const
@@ -79,7 +106,7 @@ void Projectile::_displayAnim(Animation &anim, Vector2f offset) const
 
 void Projectile::render(int layer)
 {
-	float angle = this->_position.angle(this->_target);
+	float angle = this->_position.angle(this->_targetPos);
 	unsigned direction = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
 	direction %= this->_anims.size();
 	auto &anim = this->_anims[direction];

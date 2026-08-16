@@ -18,9 +18,15 @@ enum WeaponType {
 
 struct WeaponProjectile {
 	std::vector<ConditionalAnim> anims;
-	const Effect *trail;
-	unsigned trailInterval = 0;
+	const Effect *trail = nullptr;
+	unsigned trailInterval;
 	unsigned speed;
+	unsigned range = 0;
+	unsigned damageRamp = 0;
+	unsigned rampDelay = 0;
+	bool rampingDamage = false;
+	bool hitTravel = false;
+	bool homing = false;
 
 	WeaponProjectile(
 		const Mod &base,
@@ -43,6 +49,7 @@ private:
 	const Warhead *_warhead = nullptr;
 	std::vector<std::string> _canHitTags;
 	std::optional<WeaponProjectile> _projectile;
+	bool _sendForward = false;
 
 public:
 	Weapon(
@@ -63,6 +70,7 @@ public:
 	[[nodiscard]] const std::vector<std::string> &canHitTags() const;
 	[[nodiscard]] double getInaccuracy(double dist) const;
 	[[nodiscard]] const std::optional<WeaponProjectile> &getProjectileData() const;
+	[[nodiscard]] bool sendForward() const;
 };
 
 

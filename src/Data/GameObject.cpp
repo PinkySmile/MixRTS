@@ -1425,15 +1425,8 @@ bool GameObject::_updateAttack(GameObject *obj)
 	Vector2f diff = opCenter - myCenter;
 	Vector2f diffAbs = diff.abs();
 	const ObjectWeapon *weapon = this->_getBestWeaponFor(obj, UINT32_MAX, true);
-	if (weapon == nullptr) {
-		double realAngle = diff.angle();
-		unsigned angle = round((realAngle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
-
-		angle %= this->_anims.size();
-		if (angle != this->_currentDir)
-			this->_updateTurn(angle);
-		return false;
-	}
+	if (weapon == nullptr)
+		weapon = this->_getBestWeaponFor(obj, UINT32_MAX, false);
 
 	ObjectBarrel &barrel = this->_barrels[weapon->barrel];
 	unsigned range = weapon->weapon->getRange();
@@ -1450,29 +1443,42 @@ bool GameObject::_updateAttack(GameObject *obj)
 	if (!this->_updateFinishMovement())
 		return false;
 
-	double realAngle = diff.angle();
-	unsigned angle = round((realAngle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+	double angle = diff.angle();
+	unsigned direction = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
 
-	angle %= this->_anims.size();
-	if (angle != this->_currentDir && !this->_updateTurn(angle))
+	direction %= this->_anims.size();
+	if (direction != this->_currentDir && !this->_updateTurn(direction))
+		return false;
+	if (this->_barrels[weapon->barrel].shootTimer != 0)
 		return false;
 
 	double inaccuracy = weapon->weapon->getInaccuracy(diff.magnitude());
 	std::uniform_real_distribution<> dist(0, inaccuracy);
-	double offset = dist(game->gameRandom);
-	uint64_t dangle = random_distrib(game->gameRandom, 0, 360);
 	const MultiSound *sound = weapon->weapon->getSound();
 	const Effect *effect = weapon->weapon->getEffect();
 	const Effect *hitEffect = weapon->weapon->getHitEffect();
 	Vector2f targetPos = opCenter;
+	Vector2f spawnPos = myCenter;
 
 	barrel.shootTimer = weapon->cooldown;
-	targetPos.x += std::cos(dangle * M_PI / 180) * offset;
-	targetPos.y += std::sin(dangle * M_PI / 180) * offset;
+	if (weapon->weapon->sendForward()) {
+		double dist = (targetPos - spawnPos).magnitude();
+		float myAngle = M_PI * 2 * this->_currentDir / this->_anims.size() - M_PI_2 - M_PI * 2;
+
+		targetPos = spawnPos;
+		targetPos.x += std::cos(myAngle) * dist;
+		targetPos.y += std::sin(myAngle) * dist;
+	} else {
+		double offset = dist(game->gameRandom);
+		uint64_t dangle = random_distrib(game->gameRandom, 0, 360);
+
+		targetPos.x += std::cos(dangle * M_PI / 180) * offset;
+		targetPos.y += std::sin(dangle * M_PI / 180) * offset;
+	}
 	if (sound)
 		sound->play();
 	if (effect)
-		this->manager->spawnEffect(*effect, this->_position + this->_size / 2);
+		this->manager->spawnEffect(*effect, spawnPos);
 	this->_shooting = true;
 	switch (weapon->weapon->getType()) {
 	case WEAPONTYPE_HITSCAN:
@@ -1481,7 +1487,7 @@ bool GameObject::_updateAttack(GameObject *obj)
 		this->manager->weaponUsedAt(weapon->weapon->getDamage(), weapon->weapon, targetPos, this->owner->state.index);
 		break;
 	case WEAPONTYPE_PROJECTILE:
-		this->manager->spawnProjectile(this, weapon->weapon, this->_position + this->_size / 2, targetPos);
+		this->manager->spawnProjectile(this, weapon->weapon, spawnPos, obj, targetPos);
 		break;
 	default:
 		assert_not_reached();

@@ -31,6 +31,7 @@ Weapon::Weapon(
 	for (auto &j : data["can_hit_tags"])
 		assert_exp(j.is_string());
 	assert_exp(!data.contains("projectile") || data["projectile"].is_object());
+	assert_exp(!data.contains("send_forward") || data["send_forward"].is_boolean());
 	assert_exp(!data.contains("inaccuracy_dist") || data["inaccuracy_dist"].is_number());
 	assert_exp(!data.contains("inaccuracy_base") || data["inaccuracy_base"].is_number());
 	assert_exp(!data.contains("effect") || data["effect"].is_null() || data["effect"].is_string());
@@ -56,14 +57,16 @@ Weapon::Weapon(
 	assert_msg(warheads.contains(warhead), warhead);
 	this->_warhead = &warheads.at(warhead);
 
-	if (data.contains("projectile"))
-		TRY {
-			this->_projectile.emplace(base, animList, effects, data["projectile"]);
-		} CATCH_AND_RETHROW("In key \"projectile\"\n")
+	if (data.contains("send_forward"))
+		this->_sendForward = data["send_forward"];
 	if (data.contains("inaccuracy_base"))
 		this->_inaccuracyBase = data["inaccuracy_base"];
 	if (data.contains("inaccuracy_dist"))
 		this->_inaccuracyDist = data["inaccuracy_dist"];
+	if (data.contains("projectile"))
+		TRY {
+			this->_projectile.emplace(base, animList, effects, data["projectile"]);
+		} CATCH_AND_RETHROW("In key \"projectile\"\n")
 	if (data.contains("effect") && !data["effect"].is_null()) {
 		std::string effect = RESOURCE(base.getName(), data["effect"].get<std::string>());
 
@@ -129,9 +132,14 @@ double Weapon::getInaccuracy(double dist) const
 	return this->_inaccuracyBase + this->_inaccuracyDist * dist;
 }
 
-const std::optional<WeaponProjectile> & Weapon::getProjectileData() const
+const std::optional<WeaponProjectile> &Weapon::getProjectileData() const
 {
 	return this->_projectile;
+}
+
+bool Weapon::sendForward() const
+{
+	return this->_sendForward;
 }
 
 WeaponProjectile::WeaponProjectile(
@@ -143,13 +151,28 @@ WeaponProjectile::WeaponProjectile(
 {
 	assert_exp(data.contains("anim") && data["anim"].is_object());
 	assert_exp(data.contains("speed") && data["speed"].is_number());
-	assert_exp(!data.contains("trail") || !data["trail"].is_object());
-	assert_exp(!data.contains("trail_interval") || !data["trail_interval"].is_number());
+	assert_exp(!data.contains("trail") || data["trail"].is_string());
+	assert_exp(!data.contains("range") || data["range"].is_number());
+	assert_exp(!data.contains("ramp_delay") || data["ramp_delay"].is_number());
+	assert_exp(!data.contains("damage_ramp") || data["damage_ramp"].is_number());
+	assert_exp(!data.contains("homing") || data["homing"].is_boolean());
+	assert_exp(!data.contains("hit_travel") || data["hit_travel"].is_boolean());
+	assert_exp(!data.contains("trail_interval") || data["trail_interval"].is_number());
 	assert_exp(!data.contains("directions") || data["directions"].is_number());
 
 	std::optional<unsigned> directions;
 
 	this->speed = data["speed"];
+	if (data.contains("ramp_delay"))
+		this->rampDelay = data["ramp_delay"];
+	if (data.contains("damage_ramp"))
+		this->damageRamp = data["damage_ramp"];
+	if (data.contains("range"))
+		this->range = data["range"];
+	if (data.contains("hit_travel"))
+		this->hitTravel = data["hit_travel"];
+	if (data.contains("homing"))
+		this->homing = data["homing"];
 	if (data.contains("trail_interval"))
 		this->trailInterval = data["trail_interval"];
 	if (data.contains("trail")) {

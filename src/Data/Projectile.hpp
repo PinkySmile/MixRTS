@@ -12,14 +12,24 @@
 class Projectile {
 private:
 	std::vector<ConditionalAnim> _anims;
+	const GameObject *_parent;
+	const GameObject *_target;
 	const Weapon *_weapon;
 	const Effect *_trail;
 	Vector2f _position;
-	Vector2f _target;
+	Vector2f _startPos;
+	Vector2f _targetPos;
 	unsigned _trailInterval;
 	unsigned _speed;
 	unsigned _trailTimer = 0;
 	unsigned _ownerIndex = UINT32_MAX;
+	unsigned _damageRamp;
+	unsigned _rampDelay;
+	unsigned _rampTimer = 0;
+	unsigned _damage;
+	unsigned _range;
+	bool _hitTravel;
+	bool _homing;
 	bool _disposable = false;
 
 	void _displayAnim(Animation &anim, Vector2f offset = {}) const;
@@ -27,7 +37,7 @@ private:
 public:
 	GameManager *manager = nullptr;
 
-	Projectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, Vector2f target);
+	Projectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, const GameObject *target, Vector2f targetPos);
 	void update();
 	void render(int layer);
 	[[nodiscard]] bool isDisposable() const;

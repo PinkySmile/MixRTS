@@ -405,6 +405,8 @@ void GameManager::render()
 				b->render(layer);
 		for (auto &e : this->_effects[layer + 2])
 			e.render();
+		for (auto &p : this->_liveProjectiles)
+			p.render(layer);
 	}
 	if (this->_debugGrid == 0) {
 		this->_renderPathFindingGrid(this->_map.pathFindingGrid);
@@ -429,6 +431,8 @@ void GameManager::render()
 				b->render(layer);
 		for (auto &e : this->_effects[layer + 2])
 			e.render();
+		for (auto &p : this->_liveProjectiles)
+			p.render(layer);
 	}
 
 	if (dPFGrid) {
@@ -1290,9 +1294,9 @@ Effect &GameManager::spawnEffect(const Effect &effect, Vector2f pos)
 	return arr.back();
 }
 
-Projectile &GameManager::spawnProjectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, Vector2f target)
+Projectile &GameManager::spawnProjectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, const GameObject *target, Vector2f targetPos)
 {
-	this->_liveProjectiles.emplace_back(parent, weapon, pos, target);
+	this->_liveProjectiles.emplace_back(parent, weapon, pos, target, targetPos);
 	this->_liveProjectiles.back().manager = this;
 	return this->_liveProjectiles.back();
 }
