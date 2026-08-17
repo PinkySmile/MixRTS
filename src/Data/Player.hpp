@@ -77,6 +77,7 @@ private:
 public:
 	PlayerState state;
 	UIState uiState;
+	bool debugUnlock = false;
 
 	enum CreditStrategy {
 		CREDIT_SYSTEM,

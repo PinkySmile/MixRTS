@@ -549,7 +549,7 @@ void Player::onObjectLost(GameObject *obj)
 
 		assert_exp(it != q.end());
 		q.erase(it);
-		if (!empty && q.empty())
+		if (!empty && q.empty() && !DEBUG_MODE)
 			this->lockQueue(*queue);
 		if (this->state.primaryBuildings[*queue] == obj)
 			this->state.primaryBuildings[*queue] = nullptr;
@@ -558,8 +558,8 @@ void Player::onObjectLost(GameObject *obj)
 	--this->state.elementsOwned[group];
 	if (group != id)
 		--this->state.elementsOwned[id];
-	// TODO: Bugs out in debug unlocked
-	this->recomputeLocked();
+	if (!DEBUG_MODE)
+		this->recomputeLocked();
 }
 
 void Player::onObjectGained(GameObject *obj)
