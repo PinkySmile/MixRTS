@@ -54,37 +54,11 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 void Player::_clean()
 {
 	auto it = this->state.myObjects.begin();
-
 	while (it != this->state.myObjects.end()) {
-		if ((*it)->isDisposable()) {
-			auto power = (*it)->getPower();
-
-			if (power > 0)
-				this->state.consumedPower -= power;
-			else
-				this->state.producedPower += power;
-			it = this->state.myObjects.erase(it);
-		} else
-			++it;
-	}
-
-	it = this->state.radars.begin();
-	while (it != this->state.radars.end())
 		if ((*it)->isDisposable())
-			it = this->state.radars.erase(it);
+			this->onObjectLost(*it++);
 		else
 			++it;
-
-	for (auto &[name, list] : this->state.queueBuildings) {
-		auto it_ = list.begin();
-		bool empty = list.empty();
-		while (it_ != list.end())
-			if ((*it_)->isDisposable())
-				it_ = list.erase(it_);
-			else
-				++it_;
-		if (!empty && list.empty())
-			this->lockQueue(name);
 	}
 
 	auto mit = this->state.buildQueues.begin();
@@ -93,9 +67,19 @@ void Player::_clean()
 			mit->second = nullptr;
 		++mit;
 	}
+
+	it = this->state.radars.begin();
+	while (it != this->state.radars.end())
+		assert_exp(!(*it++)->isDisposable());
+
+	for (auto &[name, list] : this->state.queueBuildings) {
+		auto it_ = list.begin();
+		while (it_ != list.end())
+			assert_exp(!(*it_++)->isDisposable());
+	}
+
 	for (auto &[name, b] : this->state.primaryBuildings)
-		if (b && b->isDisposable())
-			b = nullptr;
+		assert_exp(!b || !b->isDisposable());
 }
 
 void Player::update()
@@ -533,6 +517,78 @@ GameObject *Player::getSpawnBuilding(const std::string &queue)
 			if (!p->isObstructed())
 				return p;
 	return nullptr;
+}
+
+void Player::onObjectLost(GameObject *obj)
+{
+	auto it1 = std::ranges::find(this->state.myObjects, obj);
+	auto power = obj->getPower();
+	auto queue = obj->getGivenQueue();
+	auto &group = obj->getGroup();
+	auto &id = obj->getId();
+	auto &storage = obj->getStorage();
+
+	assert_exp(it1 != this->state.myObjects.end());
+	this->state.myObjects.erase(it1);
+
+	if (power > 0)
+		this->state.consumedPower -= power;
+	else
+		this->state.producedPower += power;
+	for (auto &pair : storage)
+		this->state.totalStorage[pair.first] -= pair.second;
+	if (obj->isRadar()) {
+		it1 = std::ranges::find(this->state.radars, obj);
+		assert_exp(it1 != this->state.radars.end());
+		this->state.radars.erase(it1);
+	}
+	if (queue) {
+		auto &q = this->state.queueBuildings[*queue];
+		bool empty = q.empty();
+		auto it = std::ranges::find(q, obj);
+
+		assert_exp(it != q.end());
+		q.erase(it);
+		if (!empty && q.empty())
+			this->lockQueue(*queue);
+		if (this->state.primaryBuildings[*queue] == obj)
+			this->state.primaryBuildings[*queue] = nullptr;
+	}
+
+	--this->state.elementsOwned[group];
+	if (group != id)
+		--this->state.elementsOwned[id];
+	// TODO: Bugs out in debug unlocked
+	this->recomputeLocked();
+}
+
+void Player::onObjectGained(GameObject *obj)
+{
+	assert_exp(std::ranges::find(this->state.myObjects, obj) == this->state.myObjects.end());
+
+	auto power = obj->getPower();
+	auto queue = obj->getGivenQueue();
+	auto &group = obj->getGroup();
+	auto &id = obj->getId();
+	auto &storage = obj->getStorage();
+
+	this->state.myObjects.push_back(obj);
+	if (power > 0)
+		this->state.consumedPower += power;
+	else
+		this->state.producedPower -= power;
+	for (auto &pair : storage)
+		this->state.totalStorage[pair.first] += pair.second;
+	if (obj->isRadar())
+		this->state.radars.push_back(obj);
+	if (queue)
+		this->state.queueBuildings[*queue].push_back(obj);
+
+	++this->state.elementsOwned[group];
+	if (group != id)
+		++this->state.elementsOwned[id];
+
+	this->checkUnlocked(obj->getFaction());
 }
 
 template<typename T>

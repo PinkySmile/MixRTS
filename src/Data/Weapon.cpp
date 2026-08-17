@@ -45,6 +45,8 @@ Weapon::Weapon(
 		this->_type = WEAPONTYPE_HITSCAN;
 	else if (type == "projectile")
 		this->_type = WEAPONTYPE_PROJECTILE;
+	else if (type == "enter")
+		this->_type = WEAPONTYPE_ENTER;
 	else
 		assert_not_reached_msg("Invalid weapon type \"" + type + "\"");
 	assert_exp(this->_type != WEAPONTYPE_PROJECTILE || data.contains("projectile"));
@@ -148,6 +150,11 @@ const std::optional<WeaponProjectile> &Weapon::getProjectileData() const
 bool Weapon::sendForward() const
 {
 	return this->_sendForward;
+}
+
+WeaponNeeds Weapon::getNeeds() const
+{
+	return this->_needs;
 }
 
 WeaponTakeControl::WeaponTakeControl(const nlohmann::json &json)

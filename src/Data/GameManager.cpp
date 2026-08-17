@@ -220,17 +220,9 @@ void GameManager::update()
 		// TODO: Objects above expect the pointers to stay valid until they can check isDisposable
 		//       which isn't the case here. We should hold on to disposable objects for a full tick
 		//       to allow all objects to properly dispose of the pointers to dead objects.
-		if (itb->isDisposable()) {
-			auto &group = itb->getGroup();
-			auto &id = itb->getId();
-
-			--itb->owner->state.elementsOwned[group];
-			if (!this->_isDebugUnlocked)
-				toRecompute.emplace(itb->owner);
-			if (group != id)
-				--itb->owner->state.elementsOwned[id];
+		if (itb->isDisposable())
 			itb = this->_liveObjects.erase(itb);
-		} else
+		else
 			++itb;
 	for (auto p : toRecompute)
 		p->recomputeLocked();
@@ -690,7 +682,7 @@ void GameManager::_pushOrder(GameObject &obj, const std::string &order)
 		assert_not_reached_msg("Unknown order '" + order + "'");
 }
 
-void GameManager::_initObject(MapState &map, Player &owner, GameObject &obj, const std::string &id)
+void GameManager::_initObject(MapState &map, Player &owner, GameObject &obj)
 {
 	auto group = obj.getGroup();
 
@@ -700,14 +692,6 @@ void GameManager::_initObject(MapState &map, Player &owner, GameObject &obj, con
 	obj.pfGrid = &this->_map.pathFindingGrid;
 	obj.index = this->_lastObjectId;
 	obj.setColor(owner.getColor());
-
-	++owner.state.elementsOwned[group];
-	if (group != id)
-		++owner.state.elementsOwned[id];
-	owner.state.myObjects.emplace_back(&obj);
-	if (obj.isRadar())
-		owner.state.radars.emplace_back(&obj);
-
 	this->_objectMap[this->_lastObjectId++] = &obj;
 }
 
@@ -721,12 +705,7 @@ void GameManager::_onObjectSpawned(Vector2i pos, GameObject &obj)
 
 	if (extra)
 		this->spawnObject(obj.owner->state.index, obj.getPosition() + extra->pos, "", extra->unit);
-
-	auto &gqueue = obj.getGivenQueue();
-
-	if (gqueue)
-		obj.owner->state.queueBuildings[*gqueue].push_back(&obj);
-	obj.owner->checkUnlocked(obj.getFaction());
+	obj.owner->onObjectGained(&obj);
 	obj.built();
 }
 
@@ -830,7 +809,7 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 				for (auto &m : this->_mapStates)
 					m.setGridBits(fullPosAbs, GRIDMASK_HAS_CONCRETE);
 				this->_liveObjects.emplace_back(concBase);
-				this->_initObject(map, player, this->_liveObjects.back(), concrete);
+				this->_initObject(map, player, this->_liveObjects.back());
 				this->_onObjectSpawned(fullPos, this->_liveObjects.back());
 			}
 		}
@@ -851,7 +830,7 @@ noGrid:
 		auto &obj = out.back();
 		auto parent = player.getSpawnBuilding(buildQueue);
 
-		this->_initObject(map, player, obj, id);
+		this->_initObject(map, player, obj);
 		if (parent) {
 			auto exit = parent->getExitOffset();
 			auto spawn = parent->getSpawnOffset();
@@ -875,16 +854,6 @@ noGrid:
 			parent->produced();
 		else if (gqueue && bqueue && !parent && *gqueue == *bqueue)
 			obj.produced();
-
-		auto power = obj.getPower();
-		auto &storage = obj.getStorage();
-
-		if (power < 0)
-			player.state.producedPower += -power;
-		else
-			player.state.consumedPower += power;
-		for (auto &pair : storage)
-			player.state.totalStorage[pair.first] += pair.second;
 		return &obj;
 	}
 	return nullptr;
@@ -1316,30 +1285,38 @@ void GameManager::weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f p
 
 		double d = b.getHitboxCenter(position).distance2(position);
 
-		if (d < dist) {
-			double result = damage;
-			float mult = warhead->getMultiplier(b.getArmor());
+		if (d < dist)
+			this->weaponUsedOn(damage, weapon, sqrt(d), owner, b);
+	}
+}
 
-			result *= (radius - sqrt(d)) / radius;
-			result *= mult;
-			b.damage(std::ceil(result), warhead->getDmgType());
+void GameManager::weaponUsedOn(unsigned damage, const Weapon *weapon, double dist, size_t owner, GameObject &obj)
+{
+	const Warhead *warhead = weapon->getWarhead();
+	unsigned radius = warhead->getRadius();
+	double result = damage;
+	float mult = warhead->getMultiplier(obj.getArmor());
 
-			if (auto &takeControl = weapon->getTakeControl()) {
-				bool canTakeControl = false;
+	result *= (radius - dist) / radius;
+	result *= mult;
+	if (result < 0)
+		result = 0;
+	obj.damage(std::ceil(result), warhead->getDmgType());
 
-				for (auto &tag : takeControl->targets) {
-					auto &tags = b.getTags();
+	if (auto &takeControl = weapon->getTakeControl()) {
+		bool canTakeControl = false;
 
-					if (std::ranges::find(tags, tag) != tags.end()) {
-						canTakeControl = true;
-						break;
-					}
-				}
-				if (canTakeControl) {
-					assert_exp(owner <= this->_players.size());
-					b.setOwner(&this->_players[owner], takeControl->baseTime, takeControl->timeLossHit);
-				}
+		for (auto &tag : takeControl->targets) {
+			auto &tags = obj.getTags();
+
+			if (std::ranges::find(tags, tag) != tags.end()) {
+				canTakeControl = true;
+				break;
 			}
+		}
+		if (canTakeControl) {
+			assert_exp(owner <= this->_players.size());
+			obj.setOwner(&this->_players[owner], takeControl->baseTime, takeControl->timeLossHit);
 		}
 	}
 }

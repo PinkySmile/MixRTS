@@ -73,6 +73,7 @@ void D2KUI::_loadEvaSounds(const std::filesystem::path &base, const std::string 
 {
 	this->_evaSounds[EVA_BUILDING]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "build.ogg");
 	this->_evaSounds[EVA_BUILDING_DONE]    = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "building_done.ogg");
+	this->_evaSounds[EVA_BUILDING_LOST]    = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "building_lost.ogg");
 	this->_evaSounds[EVA_CANCEL]           = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "cancel.ogg");
 	this->_evaSounds[EVA_CANNOT_DEPLOY]    = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "cannot_deploy.ogg");
 	this->_evaSounds[EVA_CANNOT_BUILD]     = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "cannot_place.ogg");
@@ -747,7 +748,6 @@ void D2KUI::playEVA(EVASound sound, unsigned int expireIn, unsigned int priority
 	EVASound ignore[] = {
 		EVA_MY_BUILDING_CAPTURED,
 		EVA_MY_UNIT_CAPTURED,
-		EVA_BUILDING_LOST,
 		EVA_UNIT_CAPTURED,
 		EVA_UNIT_ATTACKED,
 		EVA_ALLIED_MY_BUILDING_CAPTURED,

@@ -50,7 +50,7 @@ private:
 	bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size) const;
 	void _checkScroll();
 	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1}, bool drawGrid = false);
-	void _initObject(MapState &map, Player &owner, GameObject &obj, const std::string &id);
+	void _initObject(MapState &map, Player &owner, GameObject &obj);
 	void _onObjectSpawned(Vector2i pos, GameObject &obj);
 	void _modUnitInArea(const MapState::Quad &quad, LoadedMap &state, Vector2u tileSize, size_t player, char mod);
 	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, size_t team, char mod, bool isStatic, bool crushable);
@@ -91,6 +91,7 @@ public:
 	Effect &spawnEffect(const Effect &effect, Vector2f pos, const Player *owner);
 	Projectile &spawnProjectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, const GameObject *target, Vector2f targetPos);
 	void weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f position, size_t owner);
+	void weaponUsedOn(unsigned damage, const Weapon *weapon, double dist, size_t owner, GameObject &obj);
 
 	inline void centerCameraOn(const GameObject &object)
 	{

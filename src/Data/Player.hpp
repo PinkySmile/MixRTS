@@ -109,6 +109,8 @@ public:
 	bool consume(const std::string &type, unsigned amount);
 	GameObject *getPrimaryBuilding(const std::string &queue);
 	GameObject *getSpawnBuilding(const std::string &queue);
+	void onObjectLost(GameObject *obj);
+	void onObjectGained(GameObject *obj);
 
 	[[nodiscard]] bool isEnabled() const;
 

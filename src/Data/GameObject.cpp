@@ -945,14 +945,14 @@ bool GameObject::_tileAvailableFor(Vector2i tile) const
 	return PFGRIDMASK_STACK_COUNT(attrs) == 0;
 }
 
-GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size) const
+GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size, const GameObject *ignoreObject) const
 {
 	std::vector<GameObject *> objects;
 	GameObject *fallback = nullptr;
 
 	this->manager->getObjectsInArea(absPos, size, objects);
 	for (auto *o : objects) {
-		if (o == this)
+		if (o == this || o == ignoreObject)
 			continue;
 		if (o->canMove())
 			return o;
@@ -991,7 +991,7 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 	std::vector<Vector2i> saved;
 
 	if (ignoreSolid) {
-		GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize);
+		GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize, ignoreObject);
 
 		if (!blocker || !blocker->canMove())
 			return COLLISION_PROCEED;
@@ -1027,9 +1027,11 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 		}
 		this->_pathCache = saved;
 
-		GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize);
+		GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize, ignoreObject);
 
-		if (blocker == nullptr || !blocker->canMove())
+		if (blocker == nullptr)
+			return COLLISION_PROCEED;
+		if (!blocker->canMove())
 			return COLLISION_ABORT;
 		if (blocker->owner->state.team == this->owner->state.team) {
 			if (!blocker->moveAside(this))
@@ -1087,7 +1089,7 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid, const Ga
 	}
 	this->_pathCache = saved;
 
-	GameObject *blocker = this->_findBlockingUnit(nextPos, this->_size);
+	GameObject *blocker = this->_findBlockingUnit(nextPos, this->_size, ignoreObject);
 
 	if (blocker == nullptr || !blocker->canMove() || !blocker->moveAside(this))
 		return COLLISION_ABORT;
@@ -1475,6 +1477,16 @@ bool GameObject::_updateAttack(GameObject *obj)
 		break;
 	case WEAPONTYPE_PROJECTILE:
 		this->manager->spawnProjectile(this, weapon->weapon, spawnPos, obj, targetPos);
+		break;
+	case WEAPONTYPE_ENTER:
+		this->manager->weaponUsedOn(
+			weapon->weapon->getDamage(),
+			weapon->weapon,
+			targetPos.distance(obj->getHitboxCenter(targetPos)),
+			this->owner->state.index,
+			*obj
+		);
+		this->_disposable = true;
 		break;
 	default:
 		assert_not_reached();
@@ -2601,6 +2613,8 @@ void GameObject::nextDirection()
 
 void GameObject::setOwner(Player *player, unsigned time, unsigned timeDecOnAtk)
 {
+	Player *old = this->owner;
+
 	if (this->owner == player)
 		return;
 	if (this->_originalOwner == nullptr)
@@ -2623,6 +2637,8 @@ void GameObject::setOwner(Player *player, unsigned time, unsigned timeDecOnAtk)
 		this->_timeDecOnAtk = timeDecOnAtk;
 	} else
 		this->_takeControlTime = 0;
+	old->onObjectLost(this);
+	player->onObjectGained(this);
 }
 
 bool GameObject::isInObject(Vector2f pos, Vector2f size, bool fullTile) const

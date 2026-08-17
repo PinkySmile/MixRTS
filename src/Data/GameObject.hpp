@@ -397,7 +397,7 @@ protected:
 	[[nodiscard]] Vector2f _getTileOffsetFromCenter() const;
 	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);
 	bool _tileAvailableFor(Vector2i tile) const;
-	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size) const;
+	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size, const GameObject *ignoreObject) const;
 	CollisionResolution _resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject);
 	CollisionResolution _resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject);
 	// Order update functions

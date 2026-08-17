@@ -11,9 +11,15 @@
 #include <nlohmann/json_fwd.hpp>
 #include "forward.hpp"
 
+enum WeaponNeeds {
+	WEAPONNEED_NONE = 0,
+	WEAPONNEED_CAPTURE = 1 << 0
+};
+
 enum WeaponType {
 	WEAPONTYPE_HITSCAN,
-	WEAPONTYPE_PROJECTILE
+	WEAPONTYPE_PROJECTILE,
+	WEAPONTYPE_ENTER
 };
 
 struct WeaponTakeControl {
@@ -47,6 +53,7 @@ struct WeaponProjectile {
 class Weapon {
 private:
 	WeaponType _type;
+	WeaponNeeds _needs = WEAPONNEED_NONE;
 	const Effect *_effect = nullptr;
 	const MultiSound *_sound = nullptr;
 	const Effect *_hitEffect = nullptr;
@@ -81,6 +88,7 @@ public:
 	[[nodiscard]] const std::optional<WeaponTakeControl> &getTakeControl() const;
 	[[nodiscard]] const std::optional<WeaponProjectile> &getProjectileData() const;
 	[[nodiscard]] bool sendForward() const;
+	[[nodiscard]] WeaponNeeds getNeeds() const;
 };
 
 
