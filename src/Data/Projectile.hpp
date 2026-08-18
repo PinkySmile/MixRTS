@@ -31,6 +31,8 @@ private:
 	unsigned _range;
 	bool _hitTravel;
 	bool _homing;
+	bool _arc;
+	bool _shadow;
 	bool _disposable = false;
 
 	void _displayAnim(Animation &anim, Vector2f offset = {}) const;

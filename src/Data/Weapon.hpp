@@ -41,6 +41,8 @@ struct WeaponProjectile {
 	bool rampingDamage = false;
 	bool hitTravel = false;
 	bool homing = false;
+	bool arc = false;
+	bool shadow = false;
 
 	WeaponProjectile(
 		const Mod &base,

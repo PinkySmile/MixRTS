@@ -189,6 +189,8 @@ WeaponProjectile::WeaponProjectile(
 	assert_exp(!data.contains("hit_travel") || data["hit_travel"].is_boolean());
 	assert_exp(!data.contains("trail_interval") || data["trail_interval"].is_number());
 	assert_exp(!data.contains("directions") || data["directions"].is_number());
+	assert_exp(!data.contains("arc") || data["arc"].is_boolean());
+	assert_exp(!data.contains("shadow") || data["shadow"].is_boolean());
 
 	std::optional<unsigned> directions;
 
@@ -205,6 +207,10 @@ WeaponProjectile::WeaponProjectile(
 		this->homing = data["homing"];
 	if (data.contains("trail_interval"))
 		this->trailInterval = data["trail_interval"];
+	if (data.contains("arc"))
+		this->arc = data["arc"];
+	if (data.contains("shadow"))
+		this->shadow = data["shadow"];
 	if (data.contains("trail")) {
 		std::string trail = RESOURCE(base.getName(), data["trail"].get<std::string>());
 

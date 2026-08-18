@@ -40,6 +40,9 @@ Projectile::Projectile(const GameObject *parent, const Weapon *weapon, Vector2f 
 	this->_damageRamp = data.damageRamp;
 	this->_rampDelay = data.rampDelay;
 	this->_hitTravel = data.hitTravel;
+	this->_arc = data.arc;
+	this->_shadow = data.shadow;
+
 	this->_damage = weapon->getDamage();
 	if (data.range && !this->_homing)
 		this->_targetPos = pos + (this->_targetPos - pos).normalized() * data.range;
@@ -91,11 +94,36 @@ void Projectile::update()
 void Projectile::_displayAnim(Animation &anim, Vector2f offset) const
 {
 	Sprite &sprite = anim.getSprite();
+	auto pos = sprite.getPosition();
 
-	sprite.setPosition({
-		sprite.getPosition().x + this->_position.x + offset.x,
-		sprite.getPosition().y + this->_position.y + offset.y
-	});
+	if (this->_shadow) {
+		sprite.setPosition({
+			pos.x + this->_position.x + offset.x,
+			pos.y + this->_position.y + offset.y
+		});
+		sprite.setColor(sf::Color{0, 0, 0, 0x80});
+		game->screen->draw(sprite);
+	}
+	sprite.setColor(sf::Color::White);
+	if (this->_arc) {
+		const double a = 16;
+		auto fullDist = this->_targetPos.distance(this->_startPos);
+		auto dist = this->_targetPos.distance(this->_position);
+
+		double x = dist;
+		double b = fullDist;
+		double xmb2 = x - b / 2;
+		float height = a - a * ((xmb2 * xmb2) / (b / 4) / b);
+
+		sprite.setPosition({
+			pos.x + this->_position.x + offset.x,
+			pos.y + this->_position.y + offset.y - height
+		});
+	} else
+		sprite.setPosition({
+			pos.x + this->_position.x + offset.x,
+			pos.y + this->_position.y + offset.y
+		});
 	switch (anim.getBlending()) {
 	case Animation::BLEND_ADD:
 		game->screen->draw(sprite, sf::BlendAdd);

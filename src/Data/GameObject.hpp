@@ -108,7 +108,6 @@ struct UnitDeployParams {
 	std::optional<SpawnBuilding> spawnBuilding;
 };
 
-
 struct ObjectWeapon {
 	const Weapon *weapon;
 	unsigned priority;
@@ -120,11 +119,27 @@ struct ObjectWeapon {
 
 struct ObjectBarrel {
 	std::vector<ObjectWeapon> weapons;
+	struct ObjectTurret *turret = nullptr;
 	unsigned shootTimer = 0;
 	unsigned short priority;
 
 	ObjectBarrel(unsigned index, const Mod &base, const std::unordered_map<std::string, Weapon> &wList, const nlohmann::json &j);
 	void update();
+};
+
+struct ObjectTurret {
+	std::vector<ConditionalAnim> anims;
+	GameObject *parent;
+	bool fixed = false;
+	Vector2f offset;
+	unsigned barrel;
+	unsigned direction = 0;
+	unsigned recoilTimer = 0;
+
+	ObjectTurret(GameObject *parent, const Mod &base, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j);
+	ObjectTurret(GameObject *parent, const ObjectTurret &other);
+	void update();
+	void render();
 };
 
 struct ObjectDeathParams {
@@ -317,6 +332,9 @@ public:
 	void nextDirection();
 	void setOwner(Player *player, unsigned time, unsigned timeDecOnAtk);
 
+	[[nodiscard]] size_t getDirections() const;
+	[[nodiscard]] double getFacingAngle() const;
+	[[nodiscard]] unsigned getDirection() const;
 	[[nodiscard]] bool isInObject(Vector2f pos, Vector2f size, bool fullTile) const;
 	[[nodiscard]] Vector2f getHitboxCenter(Vector2f pos) const;
 	[[nodiscard]] bool canAttack(const GameObject *obj) const;
@@ -389,6 +407,7 @@ protected:
 	std::vector<ConditionalAnim> _idleAnims;
 	std::vector<ConditionalAnim> _harvestAnims;
 	std::vector<ObjectDeathParams> _deathAnims;
+	std::vector<ObjectTurret> _turrets;
 	std::unordered_map<std::string, std::vector<ObjectBarrel *>> _barrelByTag;
 	std::unordered_map<std::string, std::vector<ObjectWeapon *>> _weaponByTag;
 
@@ -418,6 +437,8 @@ protected:
 	bool _shortenOrder(Order &o);
 	void _displayAnim(Animation &anim, Vector2f offset = {}) const;
 	virtual bool _handleOrder(const Order &o);
+
+	friend ObjectTurret;
 };
 
 

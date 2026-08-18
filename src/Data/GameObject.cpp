@@ -82,6 +82,9 @@ GameObject::GameObject(const GameObject &g) :
 	if (g._producedAnim)
 		this->_producedAnim.emplace(this, *g._producedAnim);
 
+	for (auto &turret : g._turrets)
+		this->_turrets.emplace_back(this, turret);
+
 	this->_idleAnims.reserve(g._idleAnims.size());
 	for (auto &anim : g._idleAnims)
 		this->_idleAnims.emplace_back(this, anim);
@@ -164,6 +167,11 @@ GameObject::GameObject(
 	assert_exp(json.contains("cost") && json["cost"].is_object());
 	for (auto &[key, value] : json["cost"].items())
 		assert_msg(value.is_number(), "json[\"cost\"][\"" + key + "\"]");
+	assert_exp(!json.contains("turrets") || json["turrets"].is_array());
+	if (json.contains("turrets")) {
+		for (size_t i = 0; i < json["turrets"].size(); i++)
+			assert_msg(json["turrets"][i].is_object(), "json[\"turrets\"][\"" + std::to_string(i) + "\"]");
+	}
 	assert_exp(!json.contains("select") || json["select"].is_object());
 	assert_exp(json.contains("size") && json["size"].is_object());
 	assert_exp(json["size"].contains("x") && json["size"]["x"].is_number());
@@ -541,6 +549,10 @@ GameObject::GameObject(
 			this->_crawlAnim.emplace_back(base, this, animList, json["anim_crawl"]);
 		if (json.contains("anim_crawl_fire"))
 			this->_crawlFireAnim.emplace_back(base, this, animList, json["anim_crawl_fire"]);
+	}
+	if (json.contains("turrets")) {
+		for (auto &turret : json["turrets"])
+			this->_turrets.emplace_back(this, base, animList, turret);
 	}
 	if (json.contains("harvest_anim")) {
 		assert_exp(!json["harvest_anim"].contains("dirs") || json["harvest_anim"]["dirs"].is_number_unsigned());
@@ -1452,7 +1464,7 @@ bool GameObject::_updateAttack(GameObject *obj)
 	barrel.shootTimer = weapon->cooldown;
 	if (weapon->weapon->sendForward()) {
 		double dist = (targetPos - spawnPos).magnitude();
-		float myAngle = M_PI * 2 * this->_currentDir / this->_anims.size() - M_PI_2 - M_PI * 2;
+		double myAngle = this->getFacingAngle();
 
 		targetPos = spawnPos;
 		targetPos.x += std::cos(myAngle) * dist;
@@ -1592,6 +1604,8 @@ void GameObject::update()
 		if (this->_repairTimer >= this->_repairDelay)
 			this->_repairTimer = 0;
 	}
+	for (auto &turret : this->_turrets)
+		turret.update();
 	this->_reduceTimeControlTimer(1);
 	this->_moving = false;
 	for (auto &barrel : this->_barrels)
@@ -1810,6 +1824,8 @@ void GameObject::render(int layer)
 			if (anim() && anim.getLayer() == layer)
 				this->_displayAnim(anim.getAnim());
 		}
+		for (auto &turret : this->_turrets)
+			turret.render();
 	}
 
 	if (this->_built) {
@@ -1847,7 +1863,13 @@ void GameObject::setColor(const HSLColor &color)
 	for (auto &block : this->_anims)
 		for (auto &anim : block)
 			anim.setColor(color);
+	for (auto &turret : this->_turrets)
+		for (auto &anim : turret.anims)
+			anim.setColor(color);
 
+	for (auto &d : this->_deathAnims)
+		if (d.anim)
+			d.anim->setColor(color);
 	for (auto &anim : this->_idleAnims)
 		anim.setColor(color);
 	for (auto &anim : this->_harvestAnims)
@@ -2641,6 +2663,21 @@ void GameObject::setOwner(Player *player, unsigned time, unsigned timeDecOnAtk)
 	player->onObjectGained(this);
 }
 
+size_t GameObject::getDirections() const
+{
+	return this->_anims.size();
+}
+
+double GameObject::getFacingAngle() const
+{
+	return M_PI * 2 * this->_currentDir / this->_anims.size() - M_PI_2 - M_PI * 2;
+}
+
+unsigned GameObject::getDirection() const
+{
+	return this->_currentDir;
+}
+
 bool GameObject::isInObject(Vector2f pos, Vector2f size, bool fullTile) const
 {
 	if (this->_tiles) {
@@ -2784,6 +2821,54 @@ void ObjectBarrel::update()
 	}
 }
 
+ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &json) :
+	parent(parent)
+{
+	assert_exp(json.contains("anim") && json["anim"].is_object());
+	assert_exp(!json.contains("barrel") || json["barrel"].is_number());
+	assert_exp(!json.contains("fixed") || json["fixed"].is_boolean());
+	assert_exp(!json.contains("offset") || json["offset"].is_object());
+
+	size_t directions = parent->getDirections();
+
+	if (directions != 1) {
+		for (size_t i = 0; i < directions; i++)
+			this->anims.emplace_back(base, parent, animList, json["anim"], i);
+	} else
+		this->anims.emplace_back(base, parent, animList, json["anim"]);
+	this->barrel = json["barrel"];
+	if (json.contains("fixed"))
+		this->fixed = json["fixed"];
+	if (json.contains("offset")) {
+		assert_exp(!json["offset"].contains("x") || json["offset"]["x"].is_number());
+		assert_exp(!json["offset"].contains("y") || json["offset"]["y"].is_number());
+		this->offset = { json["offset"]["x"], json["offset"]["y"] };
+	}
+}
+
+ObjectTurret::ObjectTurret(GameObject *parent, const ObjectTurret &other) :
+	parent(parent)
+{
+	for (auto &anim : other.anims)
+		this->anims.emplace_back(parent, anim);
+	this->fixed = other.fixed;
+	this->offset = other.offset;
+	this->barrel = other.barrel;
+	this->direction = other.direction;
+	this->recoilTimer = other.recoilTimer;
+}
+
+void ObjectTurret::update()
+{
+	if (this->fixed)
+		this->direction = this->parent->getDirection();
+}
+
+void ObjectTurret::render()
+{
+	this->parent->_displayAnim(this->anims[this->direction].getAnim(), this->offset);
+}
+
 ObjectDeathParams::ObjectDeathParams(const Mod &base, const GameObject *obj, const std::unordered_map<std::string, std::vector<Animation>> &animMap, const std::unordered_map<std::string, Effect> &effectMap, const nlohmann::json &json)
 {
 	assert_exp(!json.contains("anim") || json["anim"].is_object());
@@ -2822,7 +2907,7 @@ ObjectWeapon::ObjectWeapon(unsigned short extraPrio, unsigned barrel, const Mod 
 
 	std::string weaponName = RESOURCE(base.getName(), j["name"].get<std::string>());
 
-	assert_exp(weapons.contains(weaponName));
+	assert_msg(weapons.contains(weaponName), weaponName);
 	this->weapon = &weapons.at(weaponName);
 	this->priority = (j.contains("priority") ? j["priority"].get<unsigned short>() : 0) + extraPrio;
 	this->barrel = barrel;
