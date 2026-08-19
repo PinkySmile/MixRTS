@@ -224,6 +224,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("anim_crouch") || json["anim_crouch"].is_object());
 	assert_exp(!json.contains("anim_crawl") || json["anim_crawl"].is_object());
 	assert_exp(!json.contains("anim_crawl_fire") || json["anim_crawl_fire"].is_object());
+	assert_exp(!json.contains("muzzle") || json["muzzle"].is_string());
 	assert_exp(!json.contains("idle_time") || json["idle_time"].is_array());
 	if (json.contains("idle_time")) {
 		assert_exp(json["idle_time"].size() == 2);
@@ -534,6 +535,16 @@ GameObject::GameObject(
 		if (json.contains("anim_crawl_fire"))
 			for (size_t i = 0; i < *directions; i++)
 				this->_crawlFireAnim.emplace_back(base, this, animList, json["anim_crawl_fire"], i);
+		if (json.contains("muzzle")) {
+			std::string muzzle = RESOURCE(base.getName(), json["muzzle"]);
+
+			for (size_t i = 0; i < *directions; i++) {
+				std::string muzzleEffect = muzzle + "_" + std::to_string(i);
+
+				assert_msg(effects.contains(muzzleEffect), muzzleEffect);
+				this->_muzzleAnim.push_back(&effects.at(muzzleEffect));
+			}
+		}
 	} else {
 		this->_anims.emplace_back();
 		for (auto &anim: json["anims"])
@@ -548,6 +559,12 @@ GameObject::GameObject(
 			this->_crawlAnim.emplace_back(base, this, animList, json["anim_crawl"]);
 		if (json.contains("anim_crawl_fire"))
 			this->_crawlFireAnim.emplace_back(base, this, animList, json["anim_crawl_fire"]);
+		if (json.contains("muzzle")) {
+			std::string muzzleEffect = RESOURCE(base.getName(), json["muzzle"]);
+
+			assert_msg(effects.contains(muzzleEffect), muzzleEffect);
+			this->_muzzleAnim.push_back(&effects.at(muzzleEffect));
+		}
 	}
 	if (json.contains("harvest_anim")) {
 		assert_exp(!json["harvest_anim"].contains("dirs") || json["harvest_anim"]["dirs"].is_number_unsigned());
@@ -1483,6 +1500,8 @@ bool GameObject::_updateAttack(GameObject *obj)
 	this->_shooting = true;
 	if (turret)
 		turret->attack();
+	if (!this->_muzzleAnim.empty())
+		this->manager->spawnEffect(*this->_muzzleAnim[this->_currentDir], this->_position + this->_size / 2, this->owner);
 	switch (weapon->weapon->getType()) {
 	case WEAPONTYPE_HITSCAN:
 		if (hitEffect)

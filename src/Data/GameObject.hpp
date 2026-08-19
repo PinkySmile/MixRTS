@@ -181,6 +181,7 @@ protected:
 	std::optional<UnitDeployParams> _onDeploy;
 	std::unordered_map<std::string, unsigned> _storage;
 	std::set<Vector2i> _checkTiles;
+	std::vector<const Effect *> _muzzleAnim;
 	std::optional<std::vector<std::vector<BuildingMask>>> _tiles;
 	std::unordered_map<std::string, unsigned> _sellUnits;
 	std::unordered_map<std::string, unsigned> _sellRefund;
