@@ -140,6 +140,7 @@ struct ObjectTurret {
 	ObjectTurret(GameObject *parent, const ObjectTurret &other);
 	void update();
 	void render();
+	void attack();
 };
 
 struct ObjectDeathParams {

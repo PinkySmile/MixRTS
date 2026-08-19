@@ -1254,15 +1254,16 @@ std::pair<std::string, unsigned> GameManager::convertResource(const std::string 
 Effect &GameManager::spawnEffect(const Effect &effect, Vector2f pos, const Player *owner)
 {
 	assert_exp(effect.getLayer() >= -2 && effect.getLayer() <= 2);
-	auto &arr = this->_effects[effect.getLayer() + 2];
-
+	std::vector<Effect> &arr = this->_effects[effect.getLayer() + 2];
 	arr.emplace_back(effect);
-	arr.back().setPosition(pos);
+	Effect &result = arr.back();
+
+	result.setPosition(pos);
 	if (owner)
-		arr.back().setColor(owner->getColor());
-	if (auto sound = arr.back().getSound())
+		result.setColor(owner->getColor());
+	if (auto sound = result.getSound())
 		sound->play();
-	return arr.back();
+	return result;
 }
 
 Projectile &GameManager::spawnProjectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, const GameObject *target, Vector2f targetPos)

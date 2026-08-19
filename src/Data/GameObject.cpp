@@ -82,9 +82,6 @@ GameObject::GameObject(const GameObject &g) :
 	if (g._producedAnim)
 		this->_producedAnim.emplace(this, *g._producedAnim);
 
-	for (auto &turret : g._turrets)
-		this->_turrets.emplace_back(this, turret);
-
 	this->_idleAnims.reserve(g._idleAnims.size());
 	for (auto &anim : g._idleAnims)
 		this->_idleAnims.emplace_back(this, anim);
@@ -130,6 +127,8 @@ GameObject::GameObject(const GameObject &g) :
 				this->_weaponByTag[tag].push_back(&weapon);
 				barrelByTag[tag].emplace(&barrel);
 			}
+	for (auto &turret : g._turrets)
+		this->_turrets.emplace_back(this, turret);
 	for (auto &p : barrelByTag) {
 		std::vector<ObjectBarrel *> &b = this->_barrelByTag[p.first];
 
@@ -550,10 +549,6 @@ GameObject::GameObject(
 		if (json.contains("anim_crawl_fire"))
 			this->_crawlFireAnim.emplace_back(base, this, animList, json["anim_crawl_fire"]);
 	}
-	if (json.contains("turrets")) {
-		for (auto &turret : json["turrets"])
-			this->_turrets.emplace_back(this, base, animList, turret);
-	}
 	if (json.contains("harvest_anim")) {
 		assert_exp(!json["harvest_anim"].contains("dirs") || json["harvest_anim"]["dirs"].is_number_unsigned());
 
@@ -594,6 +589,10 @@ GameObject::GameObject(
 
 		for (auto &barrel : json["barrels"])
 			this->_barrels.emplace_back(index++, base, weapons, barrel);
+	}
+	if (json.contains("turrets")) {
+		for (auto &turret : json["turrets"])
+			this->_turrets.emplace_back(this, base, animList, turret);
 	}
 
 	if (json.contains("select")) {
@@ -1453,6 +1452,7 @@ bool GameObject::_updateAttack(GameObject *obj)
 	if (this->_barrels[weapon->barrel].shootTimer != 0)
 		return false;
 
+	ObjectTurret *turret = this->_barrels[weapon->barrel].turret;
 	double inaccuracy = weapon->weapon->getInaccuracy(diff.magnitude());
 	std::uniform_real_distribution<> dist(0, inaccuracy);
 	const MultiSound *sound = weapon->weapon->getSound();
@@ -1481,6 +1481,8 @@ bool GameObject::_updateAttack(GameObject *obj)
 	if (effect)
 		this->manager->spawnEffect(*effect, spawnPos, this->owner);
 	this->_shooting = true;
+	if (turret)
+		turret->attack();
 	switch (weapon->weapon->getType()) {
 	case WEAPONTYPE_HITSCAN:
 		if (hitEffect)
@@ -2825,7 +2827,7 @@ ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unord
 	parent(parent)
 {
 	assert_exp(json.contains("anim") && json["anim"].is_object());
-	assert_exp(!json.contains("barrel") || json["barrel"].is_number());
+	assert_exp(json.contains("barrel") && json["barrel"].is_number());
 	assert_exp(!json.contains("fixed") || json["fixed"].is_boolean());
 	assert_exp(!json.contains("offset") || json["offset"].is_object());
 
@@ -2837,6 +2839,9 @@ ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unord
 	} else
 		this->anims.emplace_back(base, parent, animList, json["anim"]);
 	this->barrel = json["barrel"];
+	assert_exp(parent->_barrels.size() > this->barrel);
+	assert_exp(parent->_barrels[this->barrel].turret == nullptr);
+	parent->_barrels[this->barrel].turret = this;
 	if (json.contains("fixed"))
 		this->fixed = json["fixed"];
 	if (json.contains("offset")) {
@@ -2854,19 +2859,30 @@ ObjectTurret::ObjectTurret(GameObject *parent, const ObjectTurret &other) :
 	this->fixed = other.fixed;
 	this->offset = other.offset;
 	this->barrel = other.barrel;
+	parent->_barrels[this->barrel].turret = this;
 	this->direction = other.direction;
 	this->recoilTimer = other.recoilTimer;
+}
+
+void ObjectTurret::attack()
+{
+	this->recoilTimer = 20;
 }
 
 void ObjectTurret::update()
 {
 	if (this->fixed)
 		this->direction = this->parent->getDirection();
+	if (this->recoilTimer)
+		this->recoilTimer--;
 }
 
 void ObjectTurret::render()
 {
-	this->parent->_displayAnim(this->anims[this->direction].getAnim(), this->offset);
+	double angle = M_PI * 2 * this->direction / this->anims.size() - M_PI_2 - M_PI;
+	Vector2d recoilOffset = {(std::log(21) - std::log(21 - this->recoilTimer)) * 2, 0};
+
+	this->parent->_displayAnim(this->anims[this->direction].getAnim(), this->offset + recoilOffset.rotation(angle, {0, 0}));
 }
 
 ObjectDeathParams::ObjectDeathParams(const Mod &base, const GameObject *obj, const std::unordered_map<std::string, std::vector<Animation>> &animMap, const std::unordered_map<std::string, Effect> &effectMap, const nlohmann::json &json)
