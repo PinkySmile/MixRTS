@@ -131,9 +131,14 @@ struct ObjectTurret {
 	std::vector<ConditionalAnim> anims;
 	GameObject *parent;
 	bool fixed = false;
+	bool independent = true;
 	Vector2f offset;
+	unsigned shotTimer = 0;
+	unsigned turnTimer = 0;
+	unsigned turnSpeed = 0;
 	unsigned barrel;
 	unsigned direction = 0;
+	unsigned directionTarget = 0;
 	unsigned recoilTimer = 0;
 
 	ObjectTurret(GameObject *parent, const Mod &base, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j);

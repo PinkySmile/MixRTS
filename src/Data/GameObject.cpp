@@ -1135,6 +1135,8 @@ bool GameObject::_updateMove(Vector2i destination, bool force, const GameObject 
 			return true;
 	}
 
+	for (auto &turret : this->_turrets)
+		turret.shotTimer = 0;
 	if (this->_pathCache.empty())
 		return true;
 
@@ -1444,6 +1446,9 @@ bool GameObject::_updateAttack(GameObject *obj)
 	const ObjectWeapon *weapon = this->_getBestWeaponFor(obj, UINT32_MAX, true);
 	if (weapon == nullptr)
 		weapon = this->_getBestWeaponFor(obj, UINT32_MAX, false);
+	assert_exp(weapon);
+	if (this->_barrels[weapon->barrel].shootTimer != 0)
+		return false;
 
 	ObjectBarrel &barrel = this->_barrels[weapon->barrel];
 	unsigned range = weapon->weapon->getRange();
@@ -1462,14 +1467,16 @@ bool GameObject::_updateAttack(GameObject *obj)
 
 	double angle = diff.angle();
 	unsigned direction = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+	ObjectTurret *turret = this->_barrels[weapon->barrel].turret;
 
 	direction %= this->_anims.size();
-	if (direction != this->_currentDir && !this->_updateTurn(direction))
-		return false;
-	if (this->_barrels[weapon->barrel].shootTimer != 0)
+	if (turret && !turret->fixed) {
+		turret->directionTarget = direction;
+		if (turret->direction != direction)
+			return false;
+	} else if (direction != this->_currentDir && !this->_updateTurn(direction))
 		return false;
 
-	ObjectTurret *turret = this->_barrels[weapon->barrel].turret;
 	double inaccuracy = weapon->weapon->getInaccuracy(diff.magnitude());
 	std::uniform_real_distribution<> dist(0, inaccuracy);
 	const MultiSound *sound = weapon->weapon->getSound();
@@ -2821,6 +2828,7 @@ unsigned GameObject::getSpeed() const
 	return this->_speed;
 }
 
+#undef turnTimer
 ObjectBarrel::ObjectBarrel(unsigned index, const Mod &base, const std::unordered_map<std::string, Weapon> &wList, const nlohmann::json &j)
 {
 	assert_exp(j.contains("weapons") && j["weapons"].is_array());
@@ -2849,6 +2857,7 @@ ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unord
 	assert_exp(json.contains("barrel") && json["barrel"].is_number());
 	assert_exp(!json.contains("fixed") || json["fixed"].is_boolean());
 	assert_exp(!json.contains("offset") || json["offset"].is_object());
+	assert_exp(!json.contains("turn_delay") || json["turn_delay"].is_number());
 
 	size_t directions = parent->getDirections();
 
@@ -2861,6 +2870,8 @@ ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unord
 	assert_exp(parent->_barrels.size() > this->barrel);
 	assert_exp(parent->_barrels[this->barrel].turret == nullptr);
 	parent->_barrels[this->barrel].turret = this;
+	if (json.contains("turn_delay"))
+		this->turnSpeed = json["turn_delay"];
 	if (json.contains("fixed"))
 		this->fixed = json["fixed"];
 	if (json.contains("offset")) {
@@ -2883,9 +2894,11 @@ ObjectTurret::ObjectTurret(GameObject *parent, const ObjectTurret &other) :
 	this->recoilTimer = other.recoilTimer;
 }
 
+#define RECOIL_TIME 30
 void ObjectTurret::attack()
 {
-	this->recoilTimer = 20;
+	this->recoilTimer = RECOIL_TIME;
+	this->shotTimer = 300;
 }
 
 void ObjectTurret::update()
@@ -2894,12 +2907,30 @@ void ObjectTurret::update()
 		this->direction = this->parent->getDirection();
 	if (this->recoilTimer)
 		this->recoilTimer--;
+	if (this->independent) {
+		if (this->shotTimer == 0)
+			this->directionTarget = this->parent->getDirection();
+		else
+			this->shotTimer--;
+	}
+	if (!this->fixed && this->direction != this->directionTarget) {
+		this->turnTimer++;
+		if (this->turnTimer > this->turnSpeed) {
+			size_t diff = (this->direction - this->directionTarget + this->anims.size()) % this->anims.size();
+
+			this->turnTimer = 0;
+			if (diff >= this->anims.size() / 2)
+				this->direction = (this->direction + 1) % this->anims.size();
+			else
+				this->direction = (this->direction - 1 + this->anims.size()) % this->anims.size();
+		}
+	}
 }
 
 void ObjectTurret::render()
 {
 	double angle = M_PI * 2 * this->direction / this->anims.size() - M_PI_2 - M_PI;
-	Vector2d recoilOffset = {(std::log(21) - std::log(21 - this->recoilTimer)) * 2, 0};
+	Vector2d recoilOffset = {(std::log(RECOIL_TIME + 1) - std::log(RECOIL_TIME + 1 - this->recoilTimer)) * 2, 0};
 
 	this->parent->_displayAnim(this->anims[this->direction].getAnim(), this->offset + recoilOffset.rotation(angle, {0, 0}));
 }
