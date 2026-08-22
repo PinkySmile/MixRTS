@@ -135,7 +135,7 @@ struct ObjectTurret {
 	Vector2f offset;
 	unsigned shotTimer = 0;
 	unsigned turnTimer = 0;
-	unsigned turnSpeed = 0;
+	unsigned turnDelay = 0;
 	unsigned barrel;
 	unsigned direction = 0;
 	unsigned directionTarget = 0;
@@ -144,7 +144,7 @@ struct ObjectTurret {
 	ObjectTurret(GameObject *parent, const Mod &base, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j);
 	ObjectTurret(GameObject *parent, const ObjectTurret &other);
 	void update();
-	void render();
+	void render(int layer);
 	void attack();
 };
 
@@ -222,7 +222,7 @@ protected:
 	unsigned _timeDecOnAtk;
 	unsigned _resourceStorage = 0;
 	unsigned _currentDir = 0;
-	unsigned _turnSpeed = 0;
+	unsigned _turnDelay = 0;
 	unsigned _buildSpeed = -1;
 	unsigned _maxHp;
 	unsigned _hp;

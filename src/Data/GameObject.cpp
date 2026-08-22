@@ -186,7 +186,7 @@ GameObject::GameObject(
 	assert_exp(json.contains("anims") && json["anims"].is_array());
 	assert_exp(!json.contains("barrels") || json["barrels"].is_array());
 	assert_exp(!json.contains("sight") || json["sight"].is_number());
-	assert_exp(!json.contains("turn_speed") || json["turn_speed"].is_number());
+	assert_exp(!json.contains("turn_delay") || json["turn_delay"].is_number());
 	assert_exp(!json.contains("do_sound") || json["do_sound"].is_string());
 	assert_exp(!json.contains("select_sound") || json["select_sound"].is_string());
 	assert_exp(!json.contains("pass_flags") || json["pass_flags"].is_string() || json["pass_flags"].is_number_unsigned());
@@ -436,8 +436,8 @@ GameObject::GameObject(
 		this->_producedAnim.emplace(base, this, animList, json["produced_anim"]);
 	if (json.contains("idle_time"))
 		this->_idleTimerRange = {json["idle_time"][0], json["idle_time"][1]};
-	if (json.contains("turn_speed"))
-		this->_turnSpeed = json["turn_speed"];
+	if (json.contains("turn_delay"))
+		this->_turnDelay = json["turn_delay"];
 	if (json.contains("tiles")) {
 		std::vector<std::vector<uint8_t>> b = json["tiles"];
 		std::vector<std::vector<BuildingMask>> r;
@@ -882,7 +882,7 @@ bool GameObject::_updateTurn(unsigned int target)
 	if (this->_currentDir == target)
 		return true;
 	this->turnTimer++;
-	if (this->turnTimer > this->_turnSpeed) {
+	if (this->turnTimer > this->_turnDelay) {
 		size_t diff = (this->_currentDir - target + this->_anims.size()) % this->_anims.size();
 
 		this->turnTimer = 0;
@@ -1472,8 +1472,10 @@ bool GameObject::_updateAttack(GameObject *obj)
 	direction %= this->_anims.size();
 	if (turret && !turret->fixed) {
 		turret->directionTarget = direction;
-		if (turret->direction != direction)
+		if (turret->direction != direction) {
+			turret->shotTimer = 1;
 			return false;
+		}
 	} else if (direction != this->_currentDir && !this->_updateTurn(direction))
 		return false;
 
@@ -1853,7 +1855,7 @@ void GameObject::render(int layer)
 				this->_displayAnim(anim.getAnim());
 		}
 		for (auto &turret : this->_turrets)
-			turret.render();
+			turret.render(layer);
 	}
 
 	if (this->_built) {
@@ -2871,7 +2873,7 @@ ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unord
 	assert_exp(parent->_barrels[this->barrel].turret == nullptr);
 	parent->_barrels[this->barrel].turret = this;
 	if (json.contains("turn_delay"))
-		this->turnSpeed = json["turn_delay"];
+		this->turnDelay = json["turn_delay"];
 	if (json.contains("fixed"))
 		this->fixed = json["fixed"];
 	if (json.contains("offset")) {
@@ -2915,7 +2917,7 @@ void ObjectTurret::update()
 	}
 	if (!this->fixed && this->direction != this->directionTarget) {
 		this->turnTimer++;
-		if (this->turnTimer > this->turnSpeed) {
+		if (this->turnTimer > this->turnDelay) {
 			size_t diff = (this->direction - this->directionTarget + this->anims.size()) % this->anims.size();
 
 			this->turnTimer = 0;
@@ -2927,12 +2929,13 @@ void ObjectTurret::update()
 	}
 }
 
-void ObjectTurret::render()
+void ObjectTurret::render(int layer)
 {
 	double angle = M_PI * 2 * this->direction / this->anims.size() - M_PI_2 - M_PI;
 	Vector2d recoilOffset = {(std::log(RECOIL_TIME + 1) - std::log(RECOIL_TIME + 1 - this->recoilTimer)) * 2, 0};
 
-	this->parent->_displayAnim(this->anims[this->direction].getAnim(), this->offset + recoilOffset.rotation(angle, {0, 0}));
+	if (this->anims[this->direction].getLayer() == layer)
+		this->parent->_displayAnim(this->anims[this->direction].getAnim(), this->offset + recoilOffset.rotation(angle, {0, 0}));
 }
 
 ObjectDeathParams::ObjectDeathParams(const Mod &base, const GameObject *obj, const std::unordered_map<std::string, std::vector<Animation>> &animMap, const std::unordered_map<std::string, Effect> &effectMap, const nlohmann::json &json)
