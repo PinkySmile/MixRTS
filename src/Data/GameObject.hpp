@@ -153,6 +153,10 @@ struct ObjectDeathParams {
 	std::optional<unsigned> fadeTime;
 	std::optional<unsigned> stayTime;
 	const Effect *effect = nullptr;
+	unsigned count = 1;
+	bool perTile = false;
+	Vector2f variance = {0, 0};
+	std::unique_ptr<ShakeParams> shake;
 
 	ObjectDeathParams(const Mod &base, const GameObject *obj, const std::unordered_map<std::string, std::vector<Animation>> &animMap, const std::unordered_map<std::string, Effect> &effectMap, const nlohmann::json &json);
 	ObjectDeathParams(const GameObject *obj, const ObjectDeathParams &other);

@@ -38,6 +38,21 @@ static bool isMouseOverUI()
 	return false;
 }
 
+ShakeParams::ShakeParams(const nlohmann::json &j)
+{
+	assert_exp(j.contains("time") && j["time"].is_number());
+	assert_exp(j.contains("power") && j["power"].is_number());
+	assert_exp(!j.contains("interval") || j["interval"].is_number());
+	assert_exp(!j.contains("freeze_time") || j["freeze_time"].is_boolean());
+
+	this->time = j["time"];
+	this->power = j["power"];
+	if (j.contains("interval"))
+		this->interval = j["interval"];
+	if (j.contains("freeze_time"))
+		this->freezeTime = j["freeze_time"];
+}
+
 GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers) :
 	_factions(factions)
 {
@@ -173,6 +188,15 @@ void GameManager::update()
 		return;
 	this->_forceStep = false;
 	this->_checkScroll();
+	if (this->_shake.time) {
+		this->_shakeTimer++;
+		if (this->_shakeTimer >= this->_shake.interval) {
+			this->_shake.time--;
+			this->_shakeTimer = 0;
+		}
+		if (this->_shake.freezeTime)
+			return;
+	}
 	for (auto &o : this->_liveObjects)
 		o.update();
 	for (auto &p : this->_liveProjectiles)
@@ -379,12 +403,18 @@ void GameManager::render()
 	sf::Sprite sprite{this->_map.renderCache.getTexture()};
 	bool dPFGrid = false;
 	sf::RectangleShape shape;
+	Vector2f extraTranslate = {0, 0};
 
+	if (this->_shake.time != 0) {
+		extraTranslate.y = this->_shake.power;
+		if (this->_shake.time % 2 == 1)
+			extraTranslate.y *= -1;
+	}
 	shape.setFillColor(sf::Color::Transparent);
 	shape.setOutlineColor(sf::Color::Black);
 	shape.setOutlineThickness(2);
 	game->screen->setView(sf::View{sf::FloatRect{
-		this->_cameraTranslate,
+		this->_cameraTranslate + extraTranslate,
 		sf::Vector2f{
 			old.getSize().x * this->_cameraZoom,
 			old.getSize().y * this->_cameraZoom
@@ -1319,6 +1349,14 @@ void GameManager::weaponUsedOn(unsigned damage, const Weapon *weapon, double dis
 			assert_exp(owner <= this->_players.size());
 			obj.setOwner(&this->_players[owner], takeControl->baseTime, takeControl->timeLossHit);
 		}
+	}
+}
+
+void GameManager::shakeScreen(const ShakeParams &params)
+{
+	if (this->_shake.time == 0 || params.freezeTime || params.power > this->_shake.power) {
+		this->_shake = params;
+		this->_shake.time *= 2;
 	}
 }
 

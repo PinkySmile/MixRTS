@@ -20,8 +20,20 @@
 // #define QUADRANT_SIZE_X 128
 // #define QUADRANT_SIZE_Y 128
 
+struct ShakeParams {
+	unsigned time = 0;
+	unsigned power = 0;
+	unsigned interval = 1;
+	bool freezeTime = false;
+
+	ShakeParams() = default;
+	ShakeParams(const nlohmann::json &j);
+};
+
 class GameManager {
 private:
+	ShakeParams _shake;
+	unsigned _shakeTimer = 0;
 	float _cameraZoom = 1;
 	Vector2f _cameraTranslate = {0, 0};
 	LoadedMap _map;
@@ -92,6 +104,7 @@ public:
 	Projectile &spawnProjectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, const GameObject *target, Vector2f targetPos);
 	void weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f position, size_t owner);
 	void weaponUsedOn(unsigned damage, const Weapon *weapon, double dist, size_t owner, GameObject &obj);
+	void shakeScreen(const ShakeParams &params);
 
 	inline void centerCameraOn(const GameObject &object)
 	{

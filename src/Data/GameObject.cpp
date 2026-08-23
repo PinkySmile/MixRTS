@@ -1972,8 +1972,49 @@ void GameObject::damage(unsigned amount, DamageType type)
 	this->_deathAnim = &this->_deathAnims[type - DMGTYPE_START];
 	this->_gpTimer[2] = 0;
 	this->_gpTimer[3] = 0;
-	if (this->_deathAnim->effect)
-		this->manager->spawnEffect(*this->_deathAnim->effect, this->_position + this->_size / 2, this->owner);
+	if (this->_deathAnim->effect) {
+		if (!this->_deathAnim->perTile || !this->_tiles) {
+			for (unsigned i = 0; i < this->_deathAnim->count; i++) {
+				Vector2f pos = this->_position + this->_size / 2;
+
+				if (this->_deathAnim->variance.x != 0)
+					pos.x += random_distrib(game->gameRandom, -this->_deathAnim->variance.x, this->_deathAnim->variance.x);
+				if (this->_deathAnim->variance.y != 0)
+					pos.y += random_distrib(game->gameRandom, -this->_deathAnim->variance.y, this->_deathAnim->variance.y);
+				this->manager->spawnEffect(*this->_deathAnim->effect, pos, this->owner);
+			}
+		} else for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
+			auto &line = (*this->_tiles)[gy];
+
+			for (size_t gx = 0; gx < line.size(); gx++) {
+				if (!line[gx].solid)
+					continue;
+				for (unsigned i = 0; i < this->_deathAnim->count; i++) {
+					MapState::Quad abs = this->map->tileCoordToAbs({
+						static_cast<int>(this->_gridPos.x + gx),
+						static_cast<int>(this->_gridPos.y + gy)
+					});
+					Vector2f tlPos = Vector2f{
+						std::min(std::min(abs.pt1.x, abs.pt2.x), std::min(abs.pt3.x, abs.pt4.x)),
+						std::min(std::min(abs.pt1.y, abs.pt2.y), std::min(abs.pt3.y, abs.pt4.y))
+					};
+					Vector2f brPos = Vector2f{
+						std::max(std::max(abs.pt1.x, abs.pt2.x), std::max(abs.pt3.x, abs.pt4.x)),
+						std::max(std::max(abs.pt1.y, abs.pt2.y), std::max(abs.pt3.y, abs.pt4.y))
+					};
+					Vector2f pos = (tlPos + brPos) / 2;
+
+					if (this->_deathAnim->variance.x != 0)
+						pos.x += random_distrib(game->gameRandom, -this->_deathAnim->variance.x, this->_deathAnim->variance.x);
+					if (this->_deathAnim->variance.y != 0)
+						pos.y += random_distrib(game->gameRandom, -this->_deathAnim->variance.y, this->_deathAnim->variance.y);
+					this->manager->spawnEffect(*this->_deathAnim->effect, pos, this->owner);
+				}
+			}
+		}
+		if (this->_deathAnim->shake)
+			this->manager->shakeScreen(*this->_deathAnim->shake);
+	}
 }
 
 void GameObject::setHealth(unsigned health)
@@ -2944,6 +2985,10 @@ ObjectDeathParams::ObjectDeathParams(const Mod &base, const GameObject *obj, con
 	assert_exp(!json.contains("fade") || json["fade"].is_number_unsigned());
 	assert_exp(!json.contains("stay") || json["stay"].is_number_unsigned());
 	assert_exp(!json.contains("effect") || json["effect"].is_string());
+	assert_exp(!json.contains("count") || json["count"].is_number());
+	assert_exp(!json.contains("variance") || json["variance"].is_object());
+	assert_exp(!json.contains("shake") || json["shake"].is_object());
+	assert_exp(!json.contains("per_tile") || json["per_tile"].is_boolean());
 
 	if (json.contains("anim"))
 		this->anim.emplace(base, obj, animMap, json["anim"]);
@@ -2951,21 +2996,38 @@ ObjectDeathParams::ObjectDeathParams(const Mod &base, const GameObject *obj, con
 		this->fadeTime.emplace(json["fade"]);
 	if (json.contains("stay"))
 		this->stayTime.emplace(json["stay"]);
+	if (json.contains("count"))
+		this->count = json["count"];
+	if (json.contains("per_tile"))
+		this->perTile = json["per_tile"];
 	if (json.contains("effect")) {
 		std::string effect = RESOURCE(base.getName(), json["effect"]);
 
 		assert_msg(effectMap.contains(effect), effect);
 		this->effect = &effectMap.at(effect);
 	}
+	if (json.contains("variance")) {
+		assert_exp(json["variance"].contains("x") && json["variance"]["x"].is_number());
+		assert_exp(json["variance"].contains("y") && json["variance"]["y"].is_number());
+		this->variance.x = json["variance"]["x"];
+		this->variance.y = json["variance"]["y"];
+	}
+	if (json.contains("shake"))
+		TRY {
+			this->shake = std::make_unique<ShakeParams>(json["shake"]);
+		} CATCH_AND_RETHROW("In key \"shake\"");
 }
 
 ObjectDeathParams::ObjectDeathParams(const GameObject *obj, const ObjectDeathParams &other)
 {
-	if (other.anim)
-		this->anim.emplace(obj, *other.anim);
+	if (other.anim) this->anim.emplace(obj, *other.anim);
 	this->fadeTime = other.fadeTime;
 	this->stayTime = other.stayTime;
 	this->effect = other.effect;
+	this->count = other.count;
+	this->variance = other.variance;
+	this->perTile = other.perTile;
+	if (other.shake) this->shake = std::make_unique<ShakeParams>(*other.shake);
 }
 
 ObjectWeapon::ObjectWeapon(unsigned short extraPrio, unsigned barrel, const Mod &base, const std::unordered_map<std::string, Weapon> &weapons, const nlohmann::json &j)

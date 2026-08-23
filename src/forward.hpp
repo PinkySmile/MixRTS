@@ -32,6 +32,7 @@ struct UIState;
 struct PlayerQueue;
 struct Game;
 struct WeaponProjectile;
+struct ShakeParams;
 
 extern MYDLL_API Game *game;
 
