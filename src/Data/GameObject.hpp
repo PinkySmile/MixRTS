@@ -157,8 +157,18 @@ struct ObjectDeathParams {
 	bool perTile = false;
 	Vector2f variance = {0, 0};
 	std::unique_ptr<ShakeParams> shake;
+	std::vector<const Weapon *> projectilesPool;
+	std::pair<Vector2i, Vector2i> projectilesTarget;
+	std::pair<unsigned, unsigned> projectilesCount;
 
-	ObjectDeathParams(const Mod &base, const GameObject *obj, const std::unordered_map<std::string, std::vector<Animation>> &animMap, const std::unordered_map<std::string, Effect> &effectMap, const nlohmann::json &json);
+	ObjectDeathParams(
+		const Mod &base,
+		const GameObject *obj,
+		const std::unordered_map<std::string, std::vector<Animation>> &animMap,
+		const std::unordered_map<std::string, Effect> &effectMap,
+		const std::unordered_map<std::string, Weapon> &weapons,
+		const nlohmann::json &json
+	);
 	ObjectDeathParams(const GameObject *obj, const ObjectDeathParams &other);
 };
 

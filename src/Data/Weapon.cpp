@@ -191,10 +191,19 @@ WeaponProjectile::WeaponProjectile(
 	assert_exp(!data.contains("directions") || data["directions"].is_number());
 	assert_exp(!data.contains("arc") || data["arc"].is_boolean());
 	assert_exp(!data.contains("shadow") || data["shadow"].is_boolean());
+	assert_exp(!data.contains("falling") || data["falling"].is_boolean());
+	assert_exp(!data.contains("bounce") || (data["bounce"].is_array() && data["bounce"].size() == 2));
+	assert_exp(!data.contains("v") || data["v"].is_number());
+	assert_exp(!data.contains("y") || data["y"].is_number());
+	assert_exp(!data.contains("g") || data["g"].is_number());
 
 	std::optional<unsigned> directions;
 
 	this->speed = data["speed"];
+	if (data.contains("bounce"))
+		this->bounce = { data["bounce"][0], data["bounce"][1] };
+	if (data.contains("falling"))
+		this->falling = data["falling"];
 	if (data.contains("ramp_delay"))
 		this->rampDelay = data["ramp_delay"];
 	if (data.contains("damage_ramp"))
@@ -211,6 +220,12 @@ WeaponProjectile::WeaponProjectile(
 		this->arc = data["arc"];
 	if (data.contains("shadow"))
 		this->shadow = data["shadow"];
+	if (data.contains("y"))
+		this->startY = data["y"];
+	if (data.contains("v"))
+		this->velocity = data["v"];
+	if (data.contains("g"))
+		this->gravity = data["g"];
 	if (data.contains("trail")) {
 		std::string trail = RESOURCE(base.getName(), data["trail"].get<std::string>());
 

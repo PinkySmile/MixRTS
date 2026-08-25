@@ -24,6 +24,7 @@ Effect::Effect(
 	assert_exp(!data["anim"].contains("delay") || data["anim"]["delay"].is_number());
 	assert_exp(!data.contains("opacity") || data["opacity"].is_number());
 	assert_exp(!data.contains("sound") || data["sound"].is_string());
+	assert_exp(!data.contains("speed") || data["speed"].is_object());
 
 	std::string animName = RESOURCE(base.getName(), data["anim"]["anim"].get<std::string>());
 
@@ -34,6 +35,11 @@ Effect::Effect(
 		this->_delay = data["anim"]["delay"];
 	if (data.contains("opacity"))
 		this->_opacity = data["opacity"];
+	if (data.contains("speed")) {
+		assert_exp(!data["speed"].contains("x") || data["speed"]["x"].is_number());
+		assert_exp(!data["speed"].contains("y") || data["speed"]["y"].is_number());
+		this->_speed = { data["speed"]["x"], data["speed"]["y"] };
+	}
 	if (data.contains("sound")) {
 		std::string soundName = RESOURCE(base.getName(), data["sound"].get<std::string>());
 
@@ -44,6 +50,7 @@ Effect::Effect(
 
 bool Effect::update()
 {
+	this->_position += this->_speed;
 	if (this->_totalDelay < this->_delay) {
 		this->_totalDelay++;
 		return false;
@@ -67,12 +74,21 @@ void Effect::render()
 		sprite.getPosition().x + this->_position.x,
 		sprite.getPosition().y + this->_position.y
 	});
+
+	using Factor = sf::BlendMode::Factor;
+	using Equation = sf::BlendMode::Equation;
 	switch (anim.getBlending()) {
 	case Animation::BLEND_ADD:
 		game->screen->draw(sprite, sf::BlendAdd);
 		break;
+	case Animation::BLEND_SUB:
+		game->screen->draw(sprite, sf::BlendMode{
+			Factor::SrcAlpha, Factor::One, Equation::ReverseSubtract,
+			Factor::One, Factor::One, Equation::ReverseSubtract
+		});
+		break;
 	case Animation::BLEND_ALPHA:
-		game->screen->draw(sprite);
+		game->screen->draw(sprite, sf::BlendAlpha);
 		break;
 	}
 }

@@ -31,6 +31,8 @@ Animation::Animation(const std::filesystem::path &base, const nlohmann::json &js
 			this->_blending = BLEND_ALPHA;
 		else if (json["blending"] == "add")
 			this->_blending = BLEND_ADD;
+		else if (json["blending"] == "sub")
+			this->_blending = BLEND_SUB;
 		else
 			assert_not_reached_msg("Invalid json[\"blending\"]");
 	}
@@ -49,7 +51,9 @@ Animation::Animation(const std::filesystem::path &base, const nlohmann::json &js
 		} else if (coloring == "hue") {
 			// TODO:
 			assert_not_reached_msg("Coloring \"hue\": Not implemented");
-		} else
+		} else if (coloring == "none")
+			this->_pal = PAL_NONE;
+		else
 			assert_not_reached_msg("Invalid coloring");
 	}
 	if (this->_pal == PAL_NONE) {

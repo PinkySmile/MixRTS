@@ -18,9 +18,6 @@ nlohmann::json &mergeObjects(nlohmann::json &dst, const nlohmann::json &t)
 			assert_exp(value.is_array());
 			for (auto &item : value)
 				dst[key].push_back(item);
-		} else if (dst[key].is_object()) {
-			assert_exp(value.is_object());
-			mergeObjects(dst[key], value);
 		}
 	}
 	return dst;

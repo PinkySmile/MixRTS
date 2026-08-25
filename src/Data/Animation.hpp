@@ -17,7 +17,8 @@ class Animation {
 public:
 	enum Blending {
 		BLEND_ALPHA,
-		BLEND_ADD
+		BLEND_ADD,
+		BLEND_SUB
 	};
 
 	Animation(const std::filesystem::path &base, const nlohmann::json &json);
@@ -45,7 +46,6 @@ private:
 	HSLColor _color = {0, 0, 0};
 	std::optional<std::filesystem::path> _file;
 	std::vector<unsigned> _palIndices;
-	unsigned _palHue;
 	std::string _palMask;
 	bool _requiresPaletteReload;
 

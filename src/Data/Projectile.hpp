@@ -21,7 +21,6 @@ private:
 	Vector2f _startPos;
 	Vector2f _targetPos;
 	unsigned _trailInterval;
-	unsigned _speed;
 	unsigned _trailTimer = 0;
 	unsigned _ownerIndex = UINT32_MAX;
 	unsigned _damageRamp;
@@ -29,10 +28,16 @@ private:
 	unsigned _rampTimer = 0;
 	unsigned _damage;
 	unsigned _range;
+	unsigned _bounce;
+	float _velocity;
+	float _gravity;
+	float _height;
+	float _speed;
 	bool _hitTravel;
 	bool _homing;
 	bool _arc;
 	bool _shadow;
+	bool _falling;
 	bool _disposable = false;
 
 	void _displayAnim(Animation &anim, Vector2f offset = {}) const;

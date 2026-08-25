@@ -19,6 +19,7 @@ private:
 	std::vector<Animation> _anim;
 	const MultiSound *_sound = nullptr;
 	Vector2f _position;
+	Vector2f _speed = {0, 0};
 	unsigned _delay = 0;
 	unsigned _totalDelay = 0;
 	unsigned _index = 0;

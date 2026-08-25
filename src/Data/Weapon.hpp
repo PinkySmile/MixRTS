@@ -32,17 +32,22 @@ struct WeaponTakeControl {
 
 struct WeaponProjectile {
 	std::vector<ConditionalAnim> anims;
+	std::pair<unsigned, unsigned> bounce;
 	const Effect *trail = nullptr;
 	unsigned trailInterval;
-	unsigned speed;
 	unsigned range = 0;
 	unsigned damageRamp = 0;
 	unsigned rampDelay = 0;
+	float speed;
+	float velocity = 0;
+	float gravity = 0;
+	float startY = 0;
 	bool rampingDamage = false;
 	bool hitTravel = false;
 	bool homing = false;
 	bool arc = false;
 	bool shadow = false;
+	bool falling = false;
 
 	WeaponProjectile(
 		const Mod &base,

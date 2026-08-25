@@ -19,7 +19,7 @@
 #include "Data/ModManager.hpp"
 
 //! Random from r, between mi and ma (included)
-#define random_distrib(r, mi, ma) ((((int64_t)(r)() - (int64_t)(r).min()) * (int64_t)((ma) - (mi))) / ((int64_t)(r).max() - (int64_t)(r).min()) + (int64_t)(mi))
+#define random_distrib(r, mi, ma) ((((int64_t)(r)() - (int64_t)(r).min()) * (int64_t)((ma) + 1 - (mi))) / ((int64_t)(r).max() - (int64_t)(r).min() + 1) + (int64_t)(mi))
 
 struct Game {
 	bool hosting = false;

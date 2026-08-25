@@ -46,12 +46,21 @@ void GameObject::_displayAnim(Animation &anim, Vector2f offset) const
 		sprite.getPosition().x + this->_position.x + offset.x,
 		sprite.getPosition().y + this->_position.y + offset.y
 	});
+
+	using Factor = sf::BlendMode::Factor;
+	using Equation = sf::BlendMode::Equation;
 	switch (anim.getBlending()) {
 	case Animation::BLEND_ADD:
 		game->screen->draw(sprite, sf::BlendAdd);
 		break;
+	case Animation::BLEND_SUB:
+		game->screen->draw(sprite, sf::BlendMode{
+			Factor::SrcAlpha, Factor::One, Equation::ReverseSubtract,
+			Factor::One, Factor::One, Equation::ReverseSubtract
+		});
+		break;
 	case Animation::BLEND_ALPHA:
-		game->screen->draw(sprite);
+		game->screen->draw(sprite, sf::BlendAlpha);
 		break;
 	}
 }
@@ -428,7 +437,7 @@ GameObject::GameObject(
 		this->_buildAnim.emplace(base, this, animList, json["build_anim"]);
 	if (json.contains("crush_anim") && !json["crush_anim"].is_null())
 		TRY {
-			this->_crushAnim.emplace(base, this, animList, effects, json["crush_anim"]);
+			this->_crushAnim.emplace(base, this, animList, effects, weapons, json["crush_anim"]);
 		} CATCH_AND_RETHROW("In key \"crush_anim\"\n")
 	if (json.contains("producing_anim") && !json["producing_anim"].is_null())
 		this->_producingAnim.emplace(base, this, animList, json["producing_anim"]);
@@ -589,7 +598,7 @@ GameObject::GameObject(
 
 		for (const char *s : anims)
 			TRY {
-				this->_deathAnims.emplace_back(base, this, animList, effects, json["death"].contains(s) ? json["death"][s] : json["death"]["generic"]);
+				this->_deathAnims.emplace_back(base, this, animList, effects, weapons, json["death"].contains(s) ? json["death"][s] : json["death"]["generic"]);
 			} CATCH_AND_RETHROW("In key \"death\".\"" + std::string(s) + "\"\n")
 	}
 	if (json.contains("dump"))
@@ -2015,6 +2024,26 @@ void GameObject::damage(unsigned amount, DamageType type)
 		if (this->_deathAnim->shake)
 			this->manager->shakeScreen(*this->_deathAnim->shake);
 	}
+	if (!this->_deathAnim->projectilesPool.empty()) {
+		unsigned count = this->_deathAnim->projectilesCount.first;
+
+		if (count != this->_deathAnim->projectilesCount.second)
+			count = random_distrib(game->gameRandom, this->_deathAnim->projectilesCount.first, this->_deathAnim->projectilesCount.second);
+
+		while (count--) {
+			unsigned pool = 0;
+			Vector2i target = this->_deathAnim->projectilesTarget.first;
+
+			if (this->_deathAnim->projectilesPool.size() != 1)
+				pool = random_distrib(game->gameRandom, 0, this->_deathAnim->projectilesPool.size() - 1);
+			if (target != this->_deathAnim->projectilesTarget.second) {
+				target.x = random_distrib(game->gameRandom, this->_deathAnim->projectilesTarget.first.x, this->_deathAnim->projectilesTarget.second.x);
+				target.y = random_distrib(game->gameRandom, this->_deathAnim->projectilesTarget.first.y, this->_deathAnim->projectilesTarget.second.y);
+			}
+			target += this->_position + this->_size / 2;
+			this->manager->spawnProjectile(this, this->_deathAnim->projectilesPool[pool], this->_position + this->_size / 2, nullptr, target);
+		}
+	}
 }
 
 void GameObject::setHealth(unsigned health)
@@ -2979,7 +3008,14 @@ void ObjectTurret::render(int layer)
 		this->parent->_displayAnim(this->anims[this->direction].getAnim(), this->offset + recoilOffset.rotation(angle, {0, 0}));
 }
 
-ObjectDeathParams::ObjectDeathParams(const Mod &base, const GameObject *obj, const std::unordered_map<std::string, std::vector<Animation>> &animMap, const std::unordered_map<std::string, Effect> &effectMap, const nlohmann::json &json)
+ObjectDeathParams::ObjectDeathParams(
+	const Mod &base,
+	const GameObject *obj,
+	const std::unordered_map<std::string, std::vector<Animation>> &animMap,
+	const std::unordered_map<std::string, Effect> &effectMap,
+	const std::unordered_map<std::string, Weapon> &weapons,
+	const nlohmann::json &json
+)
 {
 	assert_exp(!json.contains("anim") || json["anim"].is_object());
 	assert_exp(!json.contains("fade") || json["fade"].is_number_unsigned());
@@ -2989,6 +3025,7 @@ ObjectDeathParams::ObjectDeathParams(const Mod &base, const GameObject *obj, con
 	assert_exp(!json.contains("variance") || json["variance"].is_object());
 	assert_exp(!json.contains("shake") || json["shake"].is_object());
 	assert_exp(!json.contains("per_tile") || json["per_tile"].is_boolean());
+	assert_exp(!json.contains("projectiles") || json["projectiles"].is_object());
 
 	if (json.contains("anim"))
 		this->anim.emplace(base, obj, animMap, json["anim"]);
@@ -3012,6 +3049,58 @@ ObjectDeathParams::ObjectDeathParams(const Mod &base, const GameObject *obj, con
 		this->variance.x = json["variance"]["x"];
 		this->variance.y = json["variance"]["y"];
 	}
+	if (json.contains("projectiles")) {
+		assert_exp(json["projectiles"].contains("pool") && json["projectiles"]["pool"].is_array());
+		for (size_t i = 0; i < json["projectiles"]["pool"].size(); i++)
+			assert_msg(json["projectiles"]["pool"][i].is_string(), std::to_string(i));
+		assert_exp(json["projectiles"].contains("count") && (
+			(json["projectiles"]["count"].is_array() && json["projectiles"]["count"].size() == 2) ||
+			json["projectiles"]["count"].is_number()
+		));
+		assert_exp(json["projectiles"].contains("target") && json["projectiles"]["target"].is_object());
+		assert_exp(json["projectiles"]["target"].contains("x") && (
+			(json["projectiles"]["target"]["x"].is_array() && json["projectiles"]["target"]["x"].size() == 2) ||
+			json["projectiles"]["target"]["x"].is_number()
+		));
+		assert_exp(json["projectiles"]["target"].contains("y") && (
+			(json["projectiles"]["target"]["y"].is_array() && json["projectiles"]["target"]["y"].size() == 2) ||
+			json["projectiles"]["target"]["y"].is_number()
+		));
+
+		std::vector<std::string> pool = json["projectiles"]["pool"];
+
+		for (size_t i = 0; i < pool.size(); i++) {
+			std::string weapon = RESOURCE(base.getName(), pool[i]);
+
+			assert_msg(weapons.contains(weapon), "json[\"projectiles\"][\"pool\"][" + std::to_string(i) + "]: " + weapon);
+			this->projectilesPool.push_back(&weapons.at(weapon));
+		}
+		if (json["projectiles"]["count"].is_number())
+			this->projectilesCount = {
+				json["projectiles"]["count"],
+				json["projectiles"]["count"]
+			};
+		else
+			this->projectilesCount = {
+				json["projectiles"]["count"][0],
+				json["projectiles"]["count"][1]
+			};
+
+		if (json["projectiles"]["target"]["x"].is_number()) {
+			this->projectilesTarget.first.x  = json["projectiles"]["target"]["x"];
+			this->projectilesTarget.second.x = json["projectiles"]["target"]["x"];
+		} else {
+			this->projectilesTarget.first.x  = json["projectiles"]["target"]["x"][0];
+			this->projectilesTarget.second.x = json["projectiles"]["target"]["x"][1];
+		}
+		if (json["projectiles"]["target"]["y"].is_number()) {
+			this->projectilesTarget.first.y  = json["projectiles"]["target"]["y"];
+			this->projectilesTarget.second.y = json["projectiles"]["target"]["y"];
+		} else {
+			this->projectilesTarget.first.y  = json["projectiles"]["target"]["y"][0];
+			this->projectilesTarget.second.y = json["projectiles"]["target"]["y"][1];
+		}
+	}
 	if (json.contains("shake"))
 		TRY {
 			this->shake = std::make_unique<ShakeParams>(json["shake"]);
@@ -3027,6 +3116,9 @@ ObjectDeathParams::ObjectDeathParams(const GameObject *obj, const ObjectDeathPar
 	this->count = other.count;
 	this->variance = other.variance;
 	this->perTile = other.perTile;
+	this->projectilesPool = other.projectilesPool;
+	this->projectilesTarget = other.projectilesTarget;
+	this->projectilesCount = other.projectilesCount;
 	if (other.shake) this->shake = std::make_unique<ShakeParams>(*other.shake);
 }
 
