@@ -157,6 +157,7 @@ struct ObjectDeathParams {
 	bool perTile = false;
 	Vector2f variance = {0, 0};
 	std::unique_ptr<ShakeParams> shake;
+	std::unordered_map<std::string, unsigned> units;
 	std::vector<const Weapon *> projectilesPool;
 	std::pair<Vector2i, Vector2i> projectilesTarget;
 	std::pair<unsigned, unsigned> projectilesCount;
@@ -450,6 +451,7 @@ protected:
 	bool _updateAttack(GameObject *obj);
 	bool _updateFinishMovement();
 	void _reduceTimeControlTimer(unsigned dec);
+	void _spawnUnits(const std::unordered_map<std::string, unsigned> &units);
 
 	void _harvestClosestResource();
 	void _dumpInClosestResourceDump();

@@ -505,8 +505,10 @@ GameObject::GameObject(
 	if (json.contains("sell")) {
 		this->_sellAnim.emplace(base, this, animList, json["sell"]["anim"]);
 		this->_sellRefund = json["sell"]["refund"];
-		for (auto &[key, nb] : json["sell"]["units"].items())
+		for (auto &[key, nb] : json["sell"]["units"].items()) {
+			assert_msg(nb.is_number_unsigned(), "json[\"sell\"][\"units\"][\"" + key + "\"]");
 			this->_sellUnits[RESOURCE(base.getName(), key)] = nb;
+		}
 		this->_showBeforeSell = this->_buildAnim->size() - this->_showAfterBuild;
 	}
 	if (json.contains("select_sound")) {
@@ -1586,6 +1588,34 @@ void GameObject::_reduceTimeControlTimer(unsigned dec)
 	this->setColor(this->owner->getColor());
 }
 
+void GameObject::_spawnUnits(const std::unordered_map<std::string, unsigned> &units)
+{
+	std::pair<Vector2f, std::vector<Vector2f>> offsets[] = {
+		{{1, 1}, { {-1,  1}, { 0,  1}, { 1,  1} }},
+		{{0, 0}, { {-1,  0}, {-1, -1}, { 0, -1} }},
+		{{2, 0}, { { 0, -1}, { 1, -1}, { 1,  0} }},
+		{{1, 0}, { {-1, -1}, { 0, -1}, { 1, -1} }},
+		{{0, 1}, { {-1, -1}, {-1,  0}, {-1,  1} }},
+		{{2, 1}, { { 1, -1}, { 1,  0}, { 1,  1} }},
+		{{1, 2}, { {-1,  1}, { 0,  1}, { 1,  1} }},
+		{{0, 2}, { {-1,  0}, {-1,  1}, { 0,  1} }},
+		{{2, 2}, { { 1,  0}, { 1,  1}, { 0,  1} }},
+	};
+	size_t i = 0;
+
+	for (auto [name, nb] : units) {
+		while (nb--) {
+			assert_exp(i < std::size(offsets));
+			auto pos = this->_gridPos + offsets[i].first;
+			auto obj = this->manager->spawnObject(this->owner->state.index, this->map->topLeftCoordToAbs(pos), "", name);
+			auto out = pos + offsets[i].second[game->gameRandom() % offsets[i].second.size()];
+
+			obj->moveTo(this->map->topLeftCoordToAbs(out), true);
+			i++;
+		}
+	}
+}
+
 bool GameObject::_handleOrder(const Order &o)
 {
 	if (auto turn = std::get_if<TurnOrder>(&o))
@@ -1689,31 +1719,8 @@ void GameObject::update()
 	} else if (this->_sold) {
 		assert_exp(this->_sellAnim);
 		if (this->_sellAnim->current() == this->_showBeforeSell && this->_sellTimer == 0) {
-			std::pair<Vector2f, std::vector<Vector2f>> offsets[] = {
-				{{1, 1}, { {-1,  1}, { 0,  1}, { 1,  1} }},
-				{{0, 0}, { {-1,  0}, {-1, -1}, { 0, -1} }},
-				{{2, 0}, { { 0, -1}, { 1, -1}, { 1,  0} }},
-				{{1, 0}, { {-1, -1}, { 0, -1}, { 1, -1} }},
-				{{0, 1}, { {-1, -1}, {-1,  0}, {-1,  1} }},
-				{{2, 1}, { { 1, -1}, { 1,  0}, { 1,  1} }},
-				{{1, 2}, { {-1,  1}, { 0,  1}, { 1,  1} }},
-				{{0, 2}, { {-1,  0}, {-1,  1}, { 0,  1} }},
-				{{2, 2}, { { 1,  0}, { 1,  1}, { 0,  1} }},
-			};
-			size_t i = 0;
-
 			this->_sellTimer++;
-			for (auto &[name, nb] : this->_sellUnits) {
-				while (nb--) {
-					assert_exp(i < std::size(offsets));
-					auto pos = this->_gridPos + offsets[i].first;
-					auto obj = this->manager->spawnObject(this->owner->state.index, this->map->topLeftCoordToAbs(pos), "", name);
-					auto out = pos + offsets[i].second[game->gameRandom() % offsets[i].second.size()];
-
-					obj->moveTo(this->map->topLeftCoordToAbs(out), true);
-					i++;
-				}
-			}
+			this->_spawnUnits(this->_sellUnits);
 		}
 		if ((*this->_sellAnim)() && this->_sellAnim->update()) {
 			for (auto &[fundType, value] : this->_sellRefund)
@@ -2044,6 +2051,7 @@ void GameObject::damage(unsigned amount, DamageType type)
 			this->manager->spawnProjectile(this, this->_deathAnim->projectilesPool[pool], this->_position + this->_size / 2, nullptr, target);
 		}
 	}
+	this->_spawnUnits(this->_deathAnim->units);
 }
 
 void GameObject::setHealth(unsigned health)
@@ -3026,6 +3034,7 @@ ObjectDeathParams::ObjectDeathParams(
 	assert_exp(!json.contains("shake") || json["shake"].is_object());
 	assert_exp(!json.contains("per_tile") || json["per_tile"].is_boolean());
 	assert_exp(!json.contains("projectiles") || json["projectiles"].is_object());
+	assert_exp(!json.contains("units") || json["units"].is_object());
 
 	if (json.contains("anim"))
 		this->anim.emplace(base, obj, animMap, json["anim"]);
@@ -3048,6 +3057,12 @@ ObjectDeathParams::ObjectDeathParams(
 		assert_exp(json["variance"].contains("y") && json["variance"]["y"].is_number());
 		this->variance.x = json["variance"]["x"];
 		this->variance.y = json["variance"]["y"];
+	}
+	if (json.contains("units")) {
+		for (auto &[key, nb] : json["units"].items()) {
+			assert_msg(nb.is_number_unsigned(), "json[\"units\"][\"" + key + "\"]");
+			this->units[RESOURCE(base.getName(), key)] = nb;
+		}
 	}
 	if (json.contains("projectiles")) {
 		assert_exp(json["projectiles"].contains("pool") && json["projectiles"]["pool"].is_array());
@@ -3116,6 +3131,7 @@ ObjectDeathParams::ObjectDeathParams(const GameObject *obj, const ObjectDeathPar
 	this->count = other.count;
 	this->variance = other.variance;
 	this->perTile = other.perTile;
+	this->units = other.units;
 	this->projectilesPool = other.projectilesPool;
 	this->projectilesTarget = other.projectilesTarget;
 	this->projectilesCount = other.projectilesCount;
