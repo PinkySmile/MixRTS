@@ -364,6 +364,8 @@ GameObject::GameObject(
 		this->_buildMaxDistance = json["build_max_distance"];
 	if (json.contains("selectable"))
 		this->_selectable = json["selectable"];
+	if (json.contains("ignore_terrain"))
+		this->_ignoreTerrain = json["ignore_terrain"];
 	if (json.contains("sellable"))
 		this->_sellable = json["sellable"];
 	if (json.contains("repairable"))

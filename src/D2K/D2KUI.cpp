@@ -663,6 +663,7 @@ void D2KUI::update()
 	auto &bQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":building"];
 	auto &pQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":upgrade"];
 	auto &iQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":infantry"];
+	auto &aQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":aircraft"];
 	auto &lvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":light_vehicle"];
 	auto &hvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":heavy_vehicle"];
 
@@ -719,12 +720,12 @@ void D2KUI::update()
 	);
 	updateList3(
 		this->_faction.getBase().getBase(),
-		{&iQueue, &lvQueue, &hvQueue}, this->_unitsOrder,
+		{&iQueue, &aQueue, &lvQueue, &hvQueue}, this->_unitsOrder,
 		this->_unitsQueue, this->_unitsQueueAdded,
 		this->_cameos,
-		[&iQueue, &lvQueue, &hvQueue, this](const std::string &id, size_t i, bool rightClick){
-			auto queue = i == 0 ? iQueue : i == 1 ? lvQueue : hvQueue;
-			auto queueId = this->_faction.getBase().getName() + (i == 0 ? ":infantry" : i == 1 ? ":light_vehicle" : ":heavy_vehicle");
+		[&iQueue, &aQueue, &lvQueue, &hvQueue, this](const std::string &id, size_t i, bool rightClick){
+			auto queue = i == 0 ? iQueue : i == 1 ? aQueue : i == 2 ? lvQueue : hvQueue;
+			auto queueId = this->_faction.getBase().getName() + (i == 0 ? ":infantry" : i == 1 ? ":aircraft" : i == 2 ? ":light_vehicle" : ":heavy_vehicle");
 
 			if (rightClick)
 				this->_eventQueue.emplace_back(CancelBuildEvent{id, queueId});

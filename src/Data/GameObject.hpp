@@ -281,6 +281,7 @@ protected:
 	bool _isRadar = false;
 	bool _repairing = false;
 	bool _animFinished = false;
+	bool _ignoreTerrain = false;
 	// TODO: Find a better way to do this
 	bool _shooting = false;
 	bool _dumpStop = false;
