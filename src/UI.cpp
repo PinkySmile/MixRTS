@@ -299,8 +299,9 @@ void UI::_updateCursorNormal()
 		// TODO: Handle non snap-to-grid units/buildings
 		if (this->state->selectedObjects.size() == 1) {
 			auto obj = *this->state->selectedObjects.begin();
+			auto ownObj = this->ownerState->index == obj->owner->state.index;
 
-			if (this->ownerState->index == obj->owner->state.index) {
+			if (ownObj) {
 				if (std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()) {
 					if (obj->isDeployable()) {
 						if (obj->canDeploy())
@@ -315,25 +316,16 @@ void UI::_updateCursorNormal()
 						}
 					}
 				}
-			} else if (this->ownerState->team == obj->owner->state.team) {
-
-			} else {
-				if (obj->canAttack(this->_objectBuffer.front())) {
-					this->_cursor = CURSOR_ATTACK;
-					return;
-				}
 			}
 		}
 
 		if (!this->state->selectedObjects.empty()) {
 			auto obj = *this->state->selectedObjects.begin();
 			auto &other = this->_objectBuffer.front();
+			auto ownObj = this->ownerState->index == obj->owner->state.index;
+			auto otherAllied = this->ownerState->team == other->owner->state.team;
 
-			if (this->ownerState->index == other->owner->state.index) {
-
-			} else if (this->ownerState->team == other->owner->state.team) {
-
-			} else {
+			if (ownObj && !otherAllied) {
 				if (obj->canAttack(other)) {
 					this->_cursor = CURSOR_ATTACK;
 					return;
@@ -354,7 +346,10 @@ void UI::_updateCursorNormal()
 
 		if (canDeposit && canHarvest)
 			this->_cursor = CURSOR_DUMP;
-		else if (std::ranges::find(this->state->selectedObjects, this->_objectBuffer.back()) == this->state->selectedObjects.end())
+		else if (
+			this->_objectBuffer.back()->isSelectable() &&
+			std::ranges::find(this->state->selectedObjects, this->_objectBuffer.back()) == this->state->selectedObjects.end()
+		)
 			this->_cursor = CURSOR_SELECT;
 		else
 			this->_cursor = CURSOR_NORMAL;
@@ -388,7 +383,9 @@ void UI::_updateCursorNormal()
 			this->_cursor = CURSOR_HARVEST;
 			return;
 		}
-		if (
+		if (obj->ignoresTerrain())
+			this->_cursor = CURSOR_MOVE;
+		else if (
 			!this->manager->isAreaFree(tl, obj->map->tileSize) ||
 			!obj->map->hasAnyGridBits(relPos, passFlags)
 		)
@@ -663,7 +660,7 @@ void UI::_tileClickedNormal()
 		for (auto &a : attack | std::ranges::views::values)
 			this->_eventQueue.emplace_back(a);
 
-		if (!this->_objectBuffer.empty() && (!hasHarvester || !canDeposit) && usedUnits.empty()) {
+		if (!this->_objectBuffer.empty() && (!hasHarvester || !canDeposit) && usedUnits.empty() && this->_objectBuffer.back()->isSelectable()) {
 			this->state->selectedObjects.clear();
 			this->state->selectedObjects.emplace(this->_objectBuffer.back());
 			// TODO: Wrong check. Should have a different index per controlling player.
@@ -713,7 +710,7 @@ void UI::_tileClickedNormal()
 			if (!devent.indices.empty())
 				this->_eventQueue.emplace_back(devent);
 		}
-	} else if (!this->_objectBuffer.empty()) {
+	} else if (!this->_objectBuffer.empty() && this->_objectBuffer.back()->isSelectable()) {
 		auto b = this->_objectBuffer.back();
 		auto it = this->state->selectedObjects.find(b);
 

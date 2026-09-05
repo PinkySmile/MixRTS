@@ -448,7 +448,7 @@ void GameManager::render()
 			displayGrid(this->_mapStates[(this->_debugGrid - 3) / 2]);
 	}
 	for (int layer = 1; layer <= 2; layer++) {
-		for (auto &list : this->_renderObjects | std::ranges::views::values)
+		for (auto &[top, list] : this->_renderObjects)
 			for (auto b : list)
 				b->render(layer);
 		for (auto &e : this->_effects[layer + 2])
@@ -460,8 +460,15 @@ void GameManager::render()
 	if (dPFGrid) {
 		for (auto &list : this->_renderObjects | std::ranges::views::values)
 			for (auto b : list) {
+				shape.setFillColor(sf::Color::Transparent);
+				shape.setOutlineColor(sf::Color::Black);
 				shape.setPosition(b->getPosition());
 				shape.setSize(b->getSize());
+				game->screen->draw(shape);
+				shape.setFillColor(sf::Color::Black);
+				shape.setOutlineColor(sf::Color::White);
+				shape.setPosition(b->getMiddle());
+				shape.setSize({3, 3});
 				game->screen->draw(shape);
 			}
 	}
@@ -727,7 +734,7 @@ void GameManager::_initObject(MapState &map, Player &owner, GameObject &obj)
 
 void GameManager::_onObjectSpawned(Vector2i pos, GameObject &obj)
 {
-	obj.setPosition(obj.map->topLeftCoordToAbs(pos));
+	obj.spawn(obj.map->topLeftCoordToAbs(pos));
 	for (auto &order : obj.getSpawnOrders())
 		this->_pushOrder(obj, order);
 
@@ -870,7 +877,7 @@ noGrid:
 				if (exit) {
 					auto next = *exit + parent->getPosition();
 
-					obj.moveTo(next, true);
+					obj.moveTo(next, MOVEREASON_MOVE_SPAWN, true);
 					obj.setDirection(obj.getPosition().angle(next));
 				}
 			}
@@ -899,9 +906,9 @@ const LoadedMap &GameManager::getLoadedMap() const
 	return this->_map;
 }
 
-bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const Vector2u &size) const
+bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const Vector2u &size, bool onlySolid)
 {
-	if (!obj.isSolid())
+	if (onlySolid && !obj.isSolid())
 		return false;
 
 	auto objPos = obj.getPosition();
@@ -955,7 +962,7 @@ bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const
 	return false;
 }
 
-bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const std::vector<unsigned> &exclusion, bool stackable) const
+bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const std::vector<unsigned> &exclusion, bool stackable, bool notSolid) const
 {
 	// OPTIMIZE: Split the map into quadrants
 	unsigned stackCount = 0;
@@ -963,7 +970,7 @@ bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const
 	for (auto &o : this->_liveObjects) {
 		if (std::ranges::find(exclusion, o.index) != exclusion.end())
 			continue;
-		if (!this->_isInArea(o, absPos, size))
+		if (!GameManager::_isInArea(o, absPos, size, notSolid))
 			continue;
 		// A stackable mover can share the area with other stackable units,
 		// up to PATHFINDING_STACK_LIMIT of them; anything else blocks it.
@@ -979,7 +986,7 @@ void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size,
 {
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)
-		if (this->_isInArea(b, absPos, size))
+		if (GameManager::_isInArea(b, absPos, size, false))
 			objects.push_back(&b);
 }
 
@@ -987,25 +994,28 @@ void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size,
 {
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)
-		if (this->_isInArea(b, absPos, size))
+		if (GameManager::_isInArea(b, absPos, size, false))
 			objects.push_back(&b);
 }
 
 void GameManager::registerObject(GameObject *o)
 {
-	auto &l = this->_renderObjects[o->getBottom()];
+	auto &l = this->_renderObjects[o->getBottom() + o->getAltitude() * this->_map.pathFindingGrid.gridSize.y];
+	auto it = std::ranges::find_if(this->_renderObjects, [o](const std::pair<unsigned, std::list<GameObject *>> &l){
+		return std::ranges::find(l.second, o) != l.second.end();
+	});
 
-	assert_exp(std::find(l.begin(), l.end(), o) == l.end());
+	assert_msg(it == this->_renderObjects.end(), std::to_string(it->first));
 	l.push_back(o);
 }
 
 void GameManager::deregisterObject(GameObject *o)
 {
-	auto &l = this->_renderObjects[o->getBottom()];
+	auto &l = this->_renderObjects[o->getBottom() + o->getAltitude() * this->_map.pathFindingGrid.gridSize.y];
 	auto it = std::find(l.begin(), l.end(), o);
 
-	if (it != l.end())
-		l.erase(it);
+	assert_exp(it != l.end());
+	l.erase(it);
 }
 
 
@@ -1107,6 +1117,16 @@ GameObject *GameManager::getObjectById(unsigned int index)
 {
 	assert_exp(this->_objectMap.contains(index));
 	return this->_objectMap[index];
+}
+
+GameObject *GameManager::findPickup(size_t owner, MoveReason reason, double dist, GameObject *ignore)
+{
+	auto &l = this->_players[owner].state.myObjects;
+
+	for (auto &o : l)
+		if (o != ignore && o->canPickup(reason, dist))
+			return o;
+	return nullptr;
 }
 
 std::optional<Vector2i> GameManager::getFirstHarvestableTile(MapState &state, Vector2i pos) const

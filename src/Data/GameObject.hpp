@@ -21,6 +21,25 @@
 #include "ConditionalAnim.hpp"
 #include "Warhead.hpp"
 
+enum MoveReason {
+	MOVEREASON_MOVE_COMMAND,
+	MOVEREASON_FORCE_MOVE_COMMAND,
+	MOVEREASON_ATTACK_COMMAND,
+	MOVEREASON_FORCE_ATTACK_COMMAND,
+	MOVEREASON_HARVEST_COMMAND,
+	MOVEREASON_HARVEST,
+	MOVEREASON_DUMP_COMMAND,
+	MOVEREASON_DUMP,
+	MOVEREASON_AUTO_AGRO,
+	MOVEREASON_REPAIR,
+	MOVEREASON_MOVE_ASIDE,
+	MOVEREASON_MOVE_SPAWN,
+	MOVEREASON_FINISH_MOVE,
+	MOVEREASON_DELIVERY,
+};
+MoveReason moveReasonFromString(const std::string &);
+
+struct SpinOrder;
 struct TurnOrder;
 struct MoveOrder;
 struct HarvestOrder;
@@ -29,7 +48,10 @@ struct DumpOrder;
 struct MoveCheckOrder;
 struct AttackUnitOrder;
 struct FinishMovementOrder;
+struct WaitPickupOrder;
+struct PickupOrder;
 typedef std::variant<
+	SpinOrder,
 	TurnOrder,
 	MoveOrder,
 	DeployOrder,
@@ -37,14 +59,29 @@ typedef std::variant<
 	DumpOrder,
 	MoveCheckOrder,
 	AttackUnitOrder,
-	FinishMovementOrder
+	FinishMovementOrder,
+	PickupOrder,
+	WaitPickupOrder
 > Order;
 
+struct PickupOrder {
+	GameObject *target;
+	Vector2f destination;
+};
+struct WaitPickupOrder {
+	std::vector<MoveReason> targets;
+	double dist;
+	std::shared_ptr<Order> other;
+};
+struct SpinOrder {
+	float angle;
+};
 struct TurnOrder {
 	unsigned resultDir;
 };
 struct MoveOrder {
 	Vector2i destination;
+	MoveReason reason;
 	bool force;
 };
 struct FinishMovementOrder {};
@@ -59,6 +96,8 @@ struct MoveCheckOrder {
 };
 struct AttackUnitOrder {
 	GameObject *target;
+	bool automatic;
+	bool force;
 };
 
 // Result of resolving a dynamic collision while a grid-bound unit moves.
@@ -173,6 +212,35 @@ struct ObjectDeathParams {
 	ObjectDeathParams(const GameObject *obj, const ObjectDeathParams &other);
 };
 
+struct ObjectSpawnParams {
+	enum Type {
+		TYPE_APPEAR
+	};
+	enum Pos {
+		POS_CLOSE_BORDER,
+		POS_FAR_BORDER,
+		POS_MIN_BORDER,
+		POS_MAX_BORDER
+	};
+
+	Type type = TYPE_APPEAR;
+	Vector2f pos = {0, 0};
+
+	ObjectSpawnParams() = default;
+	ObjectSpawnParams(const nlohmann::json &json);
+	[[nodiscard]] Vector2f getPosition(const Vector2f &target, const MapState &map) const;
+
+private:
+	[[nodiscard]] float _getPos(const nlohmann::json &json) const;
+	[[nodiscard]] float _getPos(float base, float target, float border) const;
+};
+
+struct ObjectDecel {
+	float dist2 = 0;
+	float min;
+	float step;
+};
+
 class GameObjectData {
 public:
 	struct AnimationState {
@@ -195,6 +263,11 @@ protected:
 	const MultiSound *_selectSound = nullptr;
 	const MultiSound *_deathSound = nullptr;
 	ObjectDeathParams *_deathAnim = nullptr;
+	const std::vector<MoveReason> *_pickupTargets = nullptr;
+	double _pickupDistMin = 0;
+	GameObject *_pickup = nullptr;
+	ObjectSpawnParams _spawnParams;
+	ObjectDecel _decel;
 	std::vector<ObjectBarrel> _barrels;
 	std::vector<std::string> _tags;
 	std::optional<std::string> _giveQueue;
@@ -215,6 +288,7 @@ protected:
 	sf::Image _cachedDebug;
 	mutable sf::Texture _cachedDebugTex;
 	std::deque<Order> _orderQueue;
+	std::optional<Order> _idleOrder;
 	std::string _group;
 	std::string _armor;
 	std::string _id;
@@ -244,7 +318,8 @@ protected:
 	unsigned _decayTarget;
 	unsigned _sight = 0;
 	unsigned _limit = UINT32_MAX;
-	std::array<unsigned, 4> _gpTimer = {};
+	std::array<unsigned, 8> _gpTimerU = {};
+	std::array<float, 8> _gpTimerF = {};
 	unsigned _asideCooldown = 0;
 	unsigned _passFlags = 0;
 	unsigned _harvestTime = 0;
@@ -258,6 +333,7 @@ protected:
 	unsigned _repairTimer = 0;
 	unsigned _sellTimer = 0;
 	std::pair<unsigned, unsigned> _idleTimerRange;
+	int _altitude = 0;
 	int _power = 0;
 	float _speed = 0;
 	float _alpha = 1;
@@ -271,7 +347,10 @@ protected:
 	bool _disposable = false;
 	bool _pathCached = false;
 	bool _firstEvent = true;
+	bool _firstREvent = true;
+	bool _firstIEvent = true;
 	bool _initGrid = false;
+	bool _registered = false;
 	bool _stackable = false;
 	bool _solid = true;
 	bool _harvesting = false;
@@ -332,15 +411,17 @@ public:
 	void drawSkirt() const;
 	void setDirection(float angle);
 	void setPosition(const Vector2f &pos);
+	void setAltitude(int altitude);
 	void heal(unsigned amount);
 	void damage(unsigned amount, DamageType type = DMGTYPE_GENERIC);
 	void setHealth(unsigned health);
-	void harvest(const Vector2i &pos, bool automatic = false);
+	void harvest(const Vector2i &pos, bool automatic, bool straight = false);
 	void harvest();
-	void attack(GameObject *obj);
-	void moveTo(const Vector2i &pos, bool automatic = false);
+	void attack(GameObject *obj, bool automatic, bool force);
+	void moveTo(const Vector2i &pos, MoveReason reason, bool straight = false);
 	bool moveAside(GameObject *asker);
-	void dumpResourcesTo(GameObject *dump, bool automatic = false);
+	void dumpResourcesTo(GameObject *dump, bool automatic, bool straight = false);
+	void pickup(GameObject *target, Vector2f destination);
 	void select() const;
 	void playBuiltSound() const;
 	void clearOrders();
@@ -354,7 +435,13 @@ public:
 	void sell();
 	void nextDirection();
 	void setOwner(Player *player, unsigned time, unsigned timeDecOnAtk);
+	void spawn(const Vector2f &spawnPoint);
 
+	[[nodiscard]] Vector2f getMiddle() const;
+	[[nodiscard]] bool isBeingPickedUp() const;
+	[[nodiscard]] bool canPickup(MoveReason r, double dist) const;
+	[[nodiscard]] int getAltitude() const;
+	[[nodiscard]] bool ignoresTerrain() const;
 	[[nodiscard]] size_t getDirections() const;
 	[[nodiscard]] double getFacingAngle() const;
 	[[nodiscard]] unsigned getDirection() const;
@@ -444,12 +531,15 @@ protected:
 	CollisionResolution _resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject);
 	// Order update functions
 	bool _updateTurn(unsigned target);
-	bool _updateMove(Vector2i pos, bool force, const GameObject *ignoreObject);
+	bool _updateMove(Vector2i pos, MoveReason reason, bool force, const GameObject *ignoreObject);
 	bool _updateCheckMove(Vector2i pos, void (GameObject::*fail)());
 	bool _updateHarvest();
 	bool _updateDump(GameObject *place);
 	bool _updateDeploy();
-	bool _updateAttack(GameObject *obj);
+	bool _updateAttack(GameObject *obj, bool automatic, bool force);
+	bool _updateSpin(float amount);
+	bool _updatePickup(GameObject *target, Vector2f destination);
+	bool _updateWaitPickup(const std::vector<MoveReason> &targets, double dist, const Order *other);
 	bool _updateFinishMovement();
 	void _reduceTimeControlTimer(unsigned dec);
 	void _spawnUnits(const std::unordered_map<std::string, unsigned> &units);

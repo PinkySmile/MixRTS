@@ -47,7 +47,7 @@ private:
 	std::optional<std::filesystem::path> _file;
 	std::vector<unsigned> _palIndices;
 	std::string _palMask;
-	bool _requiresPaletteReload;
+	bool _requiresPaletteReload = false;
 
 
 	std::optional<std::array<Color, 256>> _cache;

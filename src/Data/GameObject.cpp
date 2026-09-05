@@ -2,6 +2,7 @@
 // Created by PinkySmile on 20/04/2026.
 //
 
+#include <cmath>
 #include <cpptrace/from_current.hpp>
 #include "Faction.hpp"
 #include "Effect.hpp"
@@ -14,15 +15,84 @@
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
 
-#define turnTimer _gpTimer[0]
-#define harvestTimer _gpTimer[0]
-#define cancel _gpTimer[1]
-#define harvestDelaying _gpTimer[2]
-#define dumpTimer _gpTimer[0]
-#define blockTimer _gpTimer[3]
+#define currentSpeed _gpTimerF[0]
+#define turnTimer _gpTimerU[0]
+#define harvestTimer _gpTimerU[0]
+#define cancel _gpTimerU[1]
+#define harvestDelaying _gpTimerU[2]
+#define dumpTimer _gpTimerU[0]
+#define blockTimer _gpTimerU[3]
+#define currentAngle _gpTimerF[0]
+#define pickupState _gpTimerU[7]
+#define pickupOldAltitude _gpTimerF[7]
 #define waitRetracePath 300
 #define waitBlocked 60
 #define PATH_UNIT_PENALTY 1000
+
+MoveReason moveReasonFromString(const std::string &cmd)
+{
+	if (cmd == "move_command")
+		return MOVEREASON_MOVE_COMMAND;
+	if (cmd == "force_move_command")
+		return MOVEREASON_FORCE_MOVE_COMMAND;
+	if (cmd == "attack_command")
+		return MOVEREASON_ATTACK_COMMAND;
+	if (cmd == "force_attack_command")
+		return MOVEREASON_FORCE_ATTACK_COMMAND;
+	if (cmd == "harvest_command")
+		return MOVEREASON_HARVEST_COMMAND;
+	if (cmd == "harvest")
+		return MOVEREASON_HARVEST;
+	if (cmd == "dump_command")
+		return MOVEREASON_DUMP_COMMAND;
+	if (cmd == "dump")
+		return MOVEREASON_DUMP;
+	if (cmd == "auto_agro")
+		return MOVEREASON_AUTO_AGRO;
+	if (cmd == "repair")
+		return MOVEREASON_REPAIR;
+	if (cmd == "move_aside")
+		return MOVEREASON_MOVE_ASIDE;
+	if (cmd == "move_spawn")
+		return MOVEREASON_MOVE_SPAWN;
+	if (cmd == "finish_move")
+		return MOVEREASON_FINISH_MOVE;
+	assert_not_reached_msg("Invalid MoveReason \"" + cmd + "\"");
+}
+
+static Order parseBehavior(const nlohmann::json &json)
+{
+	assert_exp(json.contains("type") && json["type"].is_string());
+	if (json["type"] == "spin") {
+		assert_exp(json.contains("angle") && json["angle"].is_number());
+		return SpinOrder{json["angle"]};
+	}
+	if (json["type"] == "pickup") {
+		assert_exp(json.contains("for") && json["for"].is_array());
+		assert_exp(!json.contains("dist") || json["dist"].is_number());
+		assert_exp(!json.contains("extra") || json["extra"].is_object());
+
+		WaitPickupOrder order;
+
+		order.targets.reserve(json["for"].size());
+		for (size_t i = 0; i < json["for"].size(); i++) {
+			assert_msg(json["for"][i].is_string(), std::to_string(i));
+			TRY {
+				order.targets.push_back(moveReasonFromString(json["for"][i]));
+			} CATCH_AND_RETHROW("In key \"for\"." + std::to_string(i));
+		}
+		if (json.contains("dist"))
+			order.dist = json["dist"];
+		else
+			order.dist = 0;
+		if (json.contains("extra"))
+			TRY {
+				order.other = std::make_unique<Order>(parseBehavior(json["extra"]));
+			} CATCH_AND_RETHROW("In key \"extra\"");
+		return order;
+	}
+	assert_not_reached_msg("Invalid \"type\": \"" + json["type"].get<std::string>() + "\"");
+}
 
 bool GameObject::_shortenOrder(Order &o)
 {
@@ -41,12 +111,37 @@ bool GameObject::_shortenOrder(Order &o)
 void GameObject::_displayAnim(Animation &anim, Vector2f offset) const
 {
 	Sprite &sprite = anim.getSprite();
+	auto pos = sprite.getPosition();
 
 	sprite.setPosition({
-		sprite.getPosition().x + this->_position.x + offset.x,
-		sprite.getPosition().y + this->_position.y + offset.y
+		pos.x + this->_position.x + offset.x,
+		pos.y + this->_position.y + offset.y
 	});
+	if (this->_altitude != 0) {
+		sprite.setColor(sf::Color{0, 0, 0, 0x80});
+		using Factor = sf::BlendMode::Factor;
+		using Equation = sf::BlendMode::Equation;
+		switch (anim.getBlending()) {
+		case Animation::BLEND_ADD:
+			game->screen->draw(sprite, sf::BlendAdd);
+			break;
+		case Animation::BLEND_SUB:
+			game->screen->draw(sprite, sf::BlendMode{
+				Factor::SrcAlpha, Factor::One, Equation::ReverseSubtract,
+				Factor::One, Factor::One, Equation::ReverseSubtract
+			});
+			break;
+		case Animation::BLEND_ALPHA:
+			game->screen->draw(sprite, sf::BlendAlpha);
+			break;
+		}
+		sprite.setPosition({
+			pos.x + this->_position.x + offset.x,
+			pos.y + this->_position.y + offset.y - this->_altitude
+		});
+	}
 
+	sprite.setColor(sf::Color::White);
 	using Factor = sf::BlendMode::Factor;
 	using Equation = sf::BlendMode::Equation;
 	switch (anim.getBlending()) {
@@ -170,6 +265,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("queue") || json["queue"].is_string());
 	assert_exp(!json.contains("build") || json["build"].is_string());
 	assert_exp(!json.contains("speed") || json["speed"].is_number());
+	assert_exp(!json.contains("behavior") || json["behavior"].is_object());
 	assert_exp(!json.contains("limit") || json["limit"].is_number_unsigned());
 	assert_exp(json.contains("hp") && json["hp"].is_number());
 	assert_exp(json.contains("cost") && json["cost"].is_object());
@@ -180,7 +276,9 @@ GameObject::GameObject(
 		for (size_t i = 0; i < json["turrets"].size(); i++)
 			assert_msg(json["turrets"][i].is_object(), "json[\"turrets\"][\"" + std::to_string(i) + "\"]");
 	}
+	assert_exp(!json.contains("spawn_params") || json["spawn_params"].is_object());
 	assert_exp(!json.contains("select") || json["select"].is_object());
+	assert_exp(!json.contains("decel") || json["decel"].is_object());
 	assert_exp(json.contains("size") && json["size"].is_object());
 	assert_exp(json["size"].contains("x") && json["size"]["x"].is_number());
 	assert_exp(json["size"].contains("y") && json["size"]["y"].is_number());
@@ -218,6 +316,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("stackable") || json["stackable"].is_boolean());
 	assert_exp(!json.contains("crush_sound") || json["crush_sound"].is_string());
 	assert_exp(!json.contains("death_sound") || json["death_sound"].is_string());
+	assert_exp(!json.contains("altitude") || json["altitude"].is_number());
 	assert_exp(!json.contains("can_crush") || json["can_crush"].is_boolean());
 	assert_exp(!json.contains("radar") || json["radar"].is_boolean());
 	assert_exp(!json.contains("repair_delay") || json["repair_delay"].is_number());
@@ -358,6 +457,10 @@ GameObject::GameObject(
 		directions = json["directions"].get<unsigned>();
 		assert_msg(*directions % 8 == 0, "Number of directions must be divisible by 8");
 	}
+	if (json.contains("spawn_params"))
+		this->_spawnParams = { json["spawn_params"] };
+	if (json.contains("altitude"))
+		this->_altitude = json["altitude"];
 	if (json.contains("lower_power_when_damaged"))
 		this->_lowerPowerWhenDamaged = json["lower_power_when_damaged"];
 	if (json.contains("build_max_distance"))
@@ -483,6 +586,10 @@ GameObject::GameObject(
 		assert_msg(sounds.contains(deathSound), deathSound);
 		this->_deathSound = &sounds.at(deathSound);
 	}
+	if (json.contains("behavior"))
+		TRY {
+			this->_idleOrder.emplace(parseBehavior(json["behavior"]));
+		} CATCH_AND_RETHROW("In key \"behavior\"");
 	if (json.contains("pass_flags")) {
 		if (json["pass_flags"].is_string()) {
 			std::string str = json["pass_flags"];
@@ -494,6 +601,15 @@ GameObject::GameObject(
 			}
 		} else
 			this->_passFlags = json["pass_flags"];
+	}
+	if (json.contains("decel")) {
+		assert_exp(json["decel"].contains("dist") && json["decel"]["dist"].is_number());
+		assert_exp(json["decel"].contains("step") && json["decel"]["step"].is_number());
+		assert_exp(json["decel"].contains("min") && json["decel"]["min"].is_number());
+		this->_decel.dist2 = json["decel"]["dist"];
+		this->_decel.dist2 *= this->_decel.dist2;
+		this->_decel.step = json["decel"]["step"];
+		this->_decel.min = json["decel"]["min"];
 	}
 	if (json.contains("group"))
 		this->_group = RESOURCE(base.getName(), "group." + json["group"].get<std::string>());
@@ -719,6 +835,11 @@ struct ObstructionContext {
 	bool canCrush;
 };
 
+static bool PathNotObstructed(Vector2i, void *)
+{
+	return false;
+}
+
 static bool IsPathObstructedTerrain(Vector2i p, void *ctx)
 {
 	auto octx = static_cast<ObstructionContext *>(ctx);
@@ -802,6 +923,11 @@ static bool IsPathObstructedStatic(Vector2i p, void *ctx)
 	return false;
 }
 
+static float GetTileCostFree(Vector2i, void *)
+{
+	return 0;
+}
+
 static float GetTileCostMovableUnits(Vector2i p, void *ctx)
 {
 	auto octx = static_cast<ObstructionContext *>(ctx);
@@ -858,6 +984,8 @@ static float GetTileCostMovableUnits(Vector2i p, void *ctx)
 
 Vector2f GameObject::_getTileOffsetFromCenter() const
 {
+	if (this->_tiles)
+		return {0, 0};
 	switch (this->_currentTilePosition) {
 	case PFFREEMASK_TOP_LEFT:
 		return {
@@ -909,8 +1037,8 @@ bool GameObject::_updateTurn(unsigned int target)
 
 bool GameObject::_updateCheckMove(Vector2i pos, void (GameObject::*fail)())
 {
-	if (this->_position == this->_oldPos && this->_gpTimer[0] < waitRetracePath) {
-		this->_gpTimer[0]++;
+	if (this->_position == this->_oldPos && this->_gpTimerU[0] < waitRetracePath) {
+		this->_gpTimerU[0]++;
 		return false;
 	}
 	this->_oldPos = this->_position;
@@ -931,6 +1059,8 @@ void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid, const 
 	Vector2i target;
 	Vector2i pos;
 	Vector2u step = {1, 1};
+	IsObstructedCb isObstructed;
+	GetTileCostCb getTileCost;
 
 	ctx.ignoreObject = ignoreObject;
 	ctx.dest = destination;
@@ -948,24 +1078,39 @@ void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid, const 
 		ctx.hitBoxSize = this->_size;
 		ctx.grid = this->pfGrid;
 		ctx.ggrid = nullptr;
-		target = destination;
+		target = destination - this->_size / 2;
 		pos = this->_position;
 	}
-	AStar::computePath(
-		*ctx.grid,
-		pos, target, step,
-		ignoreSolid ? &IsPathObstructedTerrain : &IsPathObstructedStatic,
-		&GetTileCostMovableUnits,
-		&ctx,
-		this->_pathCache
-	);
+	if (!this->_boundToGrid && this->_ignoreTerrain) {
+		this->_pathCache.clear();
+		this->_pathCache.push_back(target);
+	} else {
+		if (this->_ignoreTerrain) {
+			getTileCost = &GetTileCostFree;
+			isObstructed = &PathNotObstructed;
+		} else {
+			getTileCost = &GetTileCostMovableUnits;
+			if (ignoreSolid)
+				isObstructed = &IsPathObstructedTerrain;
+			else
+				isObstructed = &IsPathObstructedStatic;
+		}
+		AStar::computePath(
+			*ctx.grid,
+			pos, target, step,
+			isObstructed,
+			getTileCost,
+			&ctx,
+			this->_pathCache
+		);
+		this->_cachedDebug = AStar::getDebugImage();
+		this->_cachedDebugTexLoaded = false;
+	}
 	if (this->_boundToGrid)
 		for (auto &p : this->_pathCache)
 			p = this->map->topLeftCoordToAbs(p) + this->map->tileSize / 2;
 	while (!this->_pathCache.empty() && this->_pathCache.back() == this->_position)
 		this->_pathCache.pop_back();
-	this->_cachedDebug = AStar::getDebugImage();
-	this->_cachedDebugTexLoaded = false;
 }
 
 bool GameObject::_tileAvailableFor(Vector2i tile) const
@@ -1006,6 +1151,8 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 {
 	Vector2i nextTile = this->map->absToTileCoord(this->_pathCache.back());
 
+	if (this->_altitude)
+		return COLLISION_PROCEED;
 	if (nextTile == this->_gridPos) {
 		this->blockTimer = 0;
 		return COLLISION_PROCEED;
@@ -1089,6 +1236,9 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 
 CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject)
 {
+	if (this->_altitude)
+		return COLLISION_PROCEED;
+
 	auto stepPos = [this](Vector2f dest) -> Vector2i {
 		Vector2f pos = this->_position;
 		Vector2f diff = dest - pos;
@@ -1138,14 +1288,30 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid, const Ga
 	return COLLISION_WAIT;
 }
 
-bool GameObject::_updateMove(Vector2i destination, bool force, const GameObject *ignoreObject)
+bool GameObject::_updateMove(Vector2i destination, MoveReason reason, bool force, const GameObject *ignoreObject)
 {
+	if (this->_pickup) {
+		this->_pathCached = false;
+		return false;
+	}
+	if (this->_firstEvent)
+		this->currentSpeed = this->_speed;
 	if (!this->_pathCached) {
 		this->_cachedDest = destination;
 		this->_computeMovePath(destination, force, ignoreObject);
 		this->_pathCached = true;
 		if (this->_pathCache.empty())
 			return true;
+
+		double dist = this->_position.distance(this->_pathCache.back() + this->_getTileOffsetFromCenter());
+
+		for (size_t i = 0; i < this->_pathCache.size() - 1; i++)
+			dist += this->_pathCache[i].distance(this->_pathCache[i + 1]);
+		this->_pickup = this->manager->findPickup(this->owner->state.index, reason, dist, this);
+		if (this->_pickup) {
+			this->_pickup->pickup(this, destination);
+			return false;
+		}
 	}
 
 	for (auto &turret : this->_turrets)
@@ -1190,17 +1356,22 @@ bool GameObject::_updateMove(Vector2i destination, bool force, const GameObject 
 	auto pos = this->_position;
 	auto diff = dest - pos;
 
+	if (diff.magnitude2() < this->_decel.dist2) {
+		this->currentSpeed -= this->_decel.step;
+		if (this->currentSpeed < this->_decel.min)
+			this->currentSpeed = this->_decel.min;
+	}
 	//if (this->_stackable) {
 	//	//if (std::abs(diff.x))
 	//	//qddqzzqddzq
 	//}
 	this->_moving = true;
 	//if (this->_boundToGrid) {
-	//	diff.x = std::copysign(this->_speed, diff.x);
-	//	diff.y = std::copysign(this->_speed, diff.y);
+	//	diff.x = std::copysign(this->currentSpeed, diff.x);
+	//	diff.y = std::copysign(this->currentSpeed, diff.y);
 	//} else {
 		diff.normalize();
-		diff *= this->_speed;
+		diff *= this->currentSpeed;
 	//}
 	pos += diff;
 
@@ -1240,9 +1411,9 @@ void GameObject::_harvestClosestResource()
 		pos.x--;
 
 	auto tile = this->manager->getFirstHarvestableTile(*this->map, pos);
-	if (tile) return this->harvest(this->map->topLeftCoordToAbs(pos));
+	if (tile) return this->harvest(this->map->topLeftCoordToAbs(pos), true);
 	tile = this->manager->getClosestHarvestableTile(*this->map, this->_gridPos);
-	if (tile) return this->harvest(this->manager->getLoadedMap().grid.topLeftCoordToAbs(*tile));
+	if (tile) return this->harvest(this->manager->getLoadedMap().grid.topLeftCoordToAbs(*tile), true);
 }
 
 void GameObject::_goToClosestResource()
@@ -1280,14 +1451,14 @@ void GameObject::_goToClosestResource()
 	} else
 		pos = this->map->topLeftCoordToAbs(pos);
 	this->_orderQueue.emplace_front(MoveCheckOrder{&GameObject::_goToClosestResource, pos});
-	this->_orderQueue.emplace_front(MoveOrder{pos, false});
+	this->_orderQueue.emplace_front(MoveOrder{pos, MOVEREASON_HARVEST, false});
 }
 
 void GameObject::_dumpInClosestResourceDump()
 {
 	if (!this->_lastResourceDump)
 		this->_lastResourceDump = this->manager->getClosestResourceDump(this->_acceptResources, this->owner->state.team, this->_position + this->_size / 2);
-	this->dumpResourcesTo(nullptr);
+	this->dumpResourcesTo(nullptr, true);
 }
 
 void GameObject::_goToClosestResourceDump()
@@ -1300,7 +1471,7 @@ void GameObject::_goToClosestResourceDump()
 	auto pos = this->_lastResourceDump->getPosition() + this->_lastResourceDump->getPoint();
 
 	this->_orderQueue.emplace_front(MoveCheckOrder{&GameObject::_goToClosestResourceDump, pos});
-	this->_orderQueue.emplace_front(MoveOrder{pos, false});
+	this->_orderQueue.emplace_front(MoveOrder{pos, MOVEREASON_DUMP, false});
 }
 
 bool GameObject::_updateHarvest()
@@ -1440,7 +1611,7 @@ bool GameObject::_updateDeploy()
 	return true;
 }
 
-bool GameObject::_updateAttack(GameObject *obj)
+bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 {
 	if (obj == nullptr || obj->isDead() || obj->owner->state.team == this->owner->state.team)
 		return true;
@@ -1452,6 +1623,7 @@ bool GameObject::_updateAttack(GameObject *obj)
 		myCenter = (abs.pt1 + abs.pt2 + abs.pt3 + abs.pt4) / 4;
 	} else
 		myCenter = this->_position + this->_size / 2;
+	myCenter.y -= this->_altitude;
 
 	Vector2f opCenter = obj->getHitboxCenter(myCenter);
 	Vector2f diff = opCenter - myCenter;
@@ -1468,7 +1640,7 @@ bool GameObject::_updateAttack(GameObject *obj)
 
 	range *= range;
 	if (range < diffAbs.magnitude2()) {
-		if (this->_updateMove(opCenter, false, obj)) {
+		if (this->_updateMove(opCenter, force ? MOVEREASON_FORCE_ATTACK_COMMAND : automatic ? MOVEREASON_AUTO_AGRO : MOVEREASON_ATTACK_COMMAND, false, obj)) {
 			// TODO: Handle when unit is blocked
 			if (opCenter != this->_cachedDest)
 				this->_pathCached = false;
@@ -1523,7 +1695,7 @@ bool GameObject::_updateAttack(GameObject *obj)
 	if (turret)
 		turret->attack();
 	if (!this->_muzzleAnim.empty())
-		this->manager->spawnEffect(*this->_muzzleAnim[this->_currentDir], this->_position + this->_size / 2, this->owner);
+		this->manager->spawnEffect(*this->_muzzleAnim[this->_currentDir], this->_position - Vector2i{0, this->_altitude} + this->_size / 2, this->owner);
 	switch (weapon->weapon->getType()) {
 	case WEAPONTYPE_HITSCAN:
 		if (hitEffect)
@@ -1545,6 +1717,101 @@ bool GameObject::_updateAttack(GameObject *obj)
 		break;
 	default:
 		assert_not_reached();
+	}
+	return false;
+}
+
+bool GameObject::_updateSpin(float amount)
+{
+	if (this->_firstEvent)
+		this->currentAngle = this->getFacingAngle() * 180 / M_PI;
+	this->currentAngle = fmod(this->currentAngle + 360 + amount, 360);
+
+	double angle = this->currentAngle * M_PI / 180;
+	Vector2f speed = {this->_speed, 0};
+
+	this->_currentDir = round((angle + M_PI_2) * this->_anims.size() / (M_PI * 2));
+	this->_currentDir %= this->_anims.size();
+	this->setPosition(speed.rotation(angle, {0, 0}) + this->_position);
+	return false;
+}
+
+bool GameObject::_updatePickup(GameObject *target, Vector2f destination)
+{
+	switch (this->pickupState) {
+	case 0: {
+		Vector2f targetCenter = target->getMiddle();
+		Vector2f myCenter = this->getMiddle();
+
+		if (this->_updateMove(targetCenter - this->_getTileOffsetFromCenter(), MOVEREASON_DELIVERY, false, target))
+			this->pickupState = 1;
+		return false;
+	}
+	case 1: {
+		unsigned converted = round((target->getFacingAngle() + M_PI_2) * this->_anims.size() / (M_PI * 2));
+
+		if (this->_currentDir != converted)
+			this->_updateTurn(converted);
+		else {
+			this->pickupState = 2;
+			this->pickupOldAltitude = this->_altitude;
+		}
+		return false;
+	}
+	case 2:
+		if (this->_altitude > 0)
+			this->setAltitude(this->_altitude - 1);
+		else
+			this->pickupState = 3;
+		return false;
+	case 3:
+		if (this->_altitude < this->pickupOldAltitude) {
+			this->setAltitude(this->_altitude + 1);
+			target->setAltitude(this->_altitude);
+		} else
+			this->pickupState = 4;
+		return false;
+	case 4:
+		this->_pathCached = false;
+		this->_firstEvent = true;
+		this->pickupState = 5;
+		[[fallthrough]];
+	case 5: {
+		auto d = destination - this->_getTileOffsetFromCenter() - target->_getTileOffsetFromCenter();
+
+		if (this->_updateMove(d, MOVEREASON_DELIVERY, false, target))
+			this->pickupState = 6;
+		target->_currentDir = round((this->getFacingAngle() + M_PI_2) * target->_anims.size() / (M_PI * 2));
+		target->setPosition(this->getMiddle() + target->_getTileOffsetFromCenter());
+		return false;
+	}
+	case 6:
+		if (this->_altitude > 0) {
+			this->setAltitude(this->_altitude - 1);
+			target->setAltitude(this->_altitude);
+		} else {
+			this->pickupState = 7;
+			target->_pickup = nullptr;
+		}
+		return false;
+	case 7:
+		if (this->_altitude < this->pickupOldAltitude)
+			this->setAltitude(this->_altitude + 1);
+		else
+			this->pickupState = 100;
+		return false;
+	default:
+		return true;
+	}
+}
+
+bool GameObject::_updateWaitPickup(const std::vector<MoveReason> &targets, double dist, const Order *other)
+{
+	if (other)
+		this->_handleOrder(*other);
+	if (this->_firstEvent) {
+		this->_pickupTargets = &targets;
+		this->_pickupDistMin = dist;
 	}
 	return false;
 }
@@ -1571,7 +1838,7 @@ bool GameObject::_updateFinishMovement()
 	diff.y = std::fmod(diff.y, this->map->tileSize.y);
 	this->_cachedDest = pos + diff;
 	this->_pathCache.front() = this->_cachedDest + this->map->tileSize / 2;
-	return this->_updateMove(this->_cachedDest, false, nullptr);
+	return this->_updateMove(this->_cachedDest, MOVEREASON_FINISH_MOVE, false, nullptr);
 }
 
 void GameObject::_reduceTimeControlTimer(unsigned dec)
@@ -1612,7 +1879,7 @@ void GameObject::_spawnUnits(const std::unordered_map<std::string, unsigned> &un
 			auto obj = this->manager->spawnObject(this->owner->state.index, this->map->topLeftCoordToAbs(pos), "", name);
 			auto out = pos + offsets[i].second[game->gameRandom() % offsets[i].second.size()];
 
-			obj->moveTo(this->map->topLeftCoordToAbs(out), true);
+			obj->moveTo(this->map->topLeftCoordToAbs(out), MOVEREASON_MOVE_SPAWN, true);
 			i++;
 		}
 	}
@@ -1623,19 +1890,25 @@ bool GameObject::_handleOrder(const Order &o)
 	if (auto turn = std::get_if<TurnOrder>(&o))
 		return this->_updateTurn(turn->resultDir);
 	if (auto move = std::get_if<MoveOrder>(&o))
-		return this->_updateMove(move->destination, move->force, nullptr);
+		return this->_updateMove(move->destination, move->reason, move->force, nullptr);
 	if (auto cmove = std::get_if<MoveCheckOrder>(&o))
 		return this->_updateCheckMove(cmove->destination, cmove->fail);
 	if (std::holds_alternative<HarvestOrder>(o))
 		return this->_updateHarvest();
 	if (auto dump = std::get_if<DumpOrder>(&o))
 		return this->_updateDump(dump->target);
-	if (std::holds_alternative<DeployOrder>(this->_orderQueue.front()))
+	if (std::holds_alternative<DeployOrder>(o))
 		return this->_updateDeploy();
 	if (auto attack = std::get_if<AttackUnitOrder>(&o))
-		return this->_updateAttack(attack->target);
+		return this->_updateAttack(attack->target, attack->automatic, attack->force);
 	if (std::holds_alternative<FinishMovementOrder>(o))
 		return this->_updateFinishMovement();
+	if (auto spin = std::get_if<SpinOrder>(&o))
+		return this->_updateSpin(spin->angle);
+	if (auto pickup = std::get_if<PickupOrder>(&o))
+		return this->_updatePickup(pickup->target, pickup->destination);
+	if (auto wpickup = std::get_if<WaitPickupOrder>(&o))
+		return this->_updateWaitPickup(wpickup->targets, wpickup->dist, &*wpickup->other);
 	return true;
 }
 
@@ -1647,14 +1920,16 @@ void GameObject::playBuiltSound() const
 
 void GameObject::update()
 {
+	if (this->_pickup && this->_pickup->isDisposable())
+		this->_pickup = nullptr;
 	if (this->_deathAnim) {
 		if (this->_animFinished || !this->_deathAnim->anim || this->_deathAnim->anim->update())
 			this->_animFinished = true;
-		if (this->_deathAnim->stayTime && this->_gpTimer[3] < *this->_deathAnim->stayTime)
-			this->_gpTimer[3]++;
-		else if (this->_deathAnim->fadeTime && this->_gpTimer[2] < *this->_deathAnim->fadeTime) {
-			this->_gpTimer[2]++;
-			this->_alpha = static_cast<float>(*this->_deathAnim->fadeTime - this->_gpTimer[2]) / *this->_deathAnim->fadeTime;
+		if (this->_deathAnim->stayTime && this->_gpTimerU[3] < *this->_deathAnim->stayTime)
+			this->_gpTimerU[3]++;
+		else if (this->_deathAnim->fadeTime && this->_gpTimerU[2] < *this->_deathAnim->fadeTime) {
+			this->_gpTimerU[2]++;
+			this->_alpha = static_cast<float>(*this->_deathAnim->fadeTime - this->_gpTimerU[2]) / *this->_deathAnim->fadeTime;
 		} else if (this->_animFinished)
 			this->_disposable = true;
 		return;
@@ -1683,19 +1958,32 @@ void GameObject::update()
 		if (barrel.shootTimer)
 			barrel.shootTimer--;
 	if (!this->_orderQueue.empty()) {
-		if (this->_firstEvent) {
+		if (this->_firstREvent) {
+			this->_firstEvent = true;
 			this->_pathCached = false;
 			this->_shooting = false;
-			this->_gpTimer[0] = 0;
-			this->_gpTimer[1] = 0;
-			this->_gpTimer[2] = 0;
-			this->_gpTimer[3] = 0;
-		}
-		if (this->_handleOrder(this->_orderQueue.front())) {
-			this->_orderQueue.pop_front();
-			this->_firstEvent = true;
+			this->_gpTimerU.fill(0);
+			this->_gpTimerF.fill(0);
 		} else
 			this->_firstEvent = false;
+		if (this->_handleOrder(this->_orderQueue.front())) {
+			this->_orderQueue.pop_front();
+			this->_firstREvent = true;
+		} else
+			this->_firstREvent = false;
+	} else if (this->_idleOrder) {
+		if (this->_firstIEvent) {
+			this->_firstEvent = true;
+			this->_pathCached = false;
+			this->_shooting = false;
+			this->_gpTimerU.fill(0);
+			this->_gpTimerF.fill(0);
+		} else
+			this->_firstEvent = false;
+		if (this->_handleOrder(*this->_idleOrder))
+			this->_firstIEvent = true;
+		else
+			this->_firstIEvent = false;
 	}
 	if (!this->_moving && !this->_dumpStop && !this->_dumping && !this->_dumpStart && !this->_idleAnims.empty()) {
 		if (this->_currentIdle) {
@@ -1706,7 +1994,7 @@ void GameObject::update()
 				this->_idleTimer--;
 			if (this->_idleTimer == 0) {
 				this->_idleTimer = random_distrib(game->gameRandom, this->_idleTimerRange.first, this->_idleTimerRange.second);
-				this->_currentIdle = random_distrib(game->gameRandom, 1, this->_idleAnims.size() + 1);
+				this->_currentIdle = random_distrib(game->gameRandom, 1, this->_idleAnims.size());
 			}
 		}
 	} else
@@ -1824,7 +2112,7 @@ void GameObject::render(int layer)
 				this->_displayAnim(this->_deathAnim->anim->getAnim());
 			return;
 		}
-		if (this->_deathAnim->stayTime && this->_gpTimer[3] >= *this->_deathAnim->stayTime)
+		if (this->_deathAnim->stayTime && this->_gpTimerU[3] >= *this->_deathAnim->stayTime)
 			return;
 		if (this->_deathAnim->anim)
 			return;
@@ -1893,7 +2181,8 @@ void GameObject::render(int layer)
 void GameObject::setPosition(const Vector2f &pos)
 {
 	// OPTIMIZE: Diff instead of undoing it and redoing it
-	this->manager->deregisterObject(this);
+	if (this->_registered)
+		this->manager->deregisterObject(this);
 	this->deinitGlobalGrid();
 	this->_position = pos;
 	if (this->_tiles)
@@ -1904,6 +2193,19 @@ void GameObject::setPosition(const Vector2f &pos)
 		this->_gridPos = this->map->absToTileCoord(pos + this->_size / 2);
 	this->initGlobalGrid();
 	this->manager->registerObject(this);
+	this->_registered = true;
+}
+
+void GameObject::setAltitude(int altitude)
+{
+	// OPTIMIZE: Diff instead of undoing it and redoing it
+	if (this->_registered)
+		this->manager->deregisterObject(this);
+	this->deinitGlobalGrid();
+	this->_altitude = altitude;
+	this->initGlobalGrid();
+	this->manager->registerObject(this);
+	this->_registered = true;
 }
 
 void GameObject::setColor(const HSLColor &color)
@@ -1988,12 +2290,12 @@ void GameObject::damage(unsigned amount, DamageType type)
 	if (type == DMGTYPE_GENERIC)
 		type = static_cast<DamageType>(random_distrib(game->gameRandom, DMGTYPE_START, DMGTYPE_COUNT - 1));
 	this->_deathAnim = &this->_deathAnims[type - DMGTYPE_START];
-	this->_gpTimer[2] = 0;
-	this->_gpTimer[3] = 0;
+	this->_gpTimerU[2] = 0;
+	this->_gpTimerU[3] = 0;
 	if (this->_deathAnim->effect) {
 		if (!this->_deathAnim->perTile || !this->_tiles) {
 			for (unsigned i = 0; i < this->_deathAnim->count; i++) {
-				Vector2f pos = this->_position + this->_size / 2;
+				Vector2f pos = this->_position - Vector2i{0, this->_altitude} + this->_size / 2;
 
 				if (this->_deathAnim->variance.x != 0)
 					pos.x += random_distrib(game->gameRandom, -this->_deathAnim->variance.x, this->_deathAnim->variance.x);
@@ -2049,8 +2351,8 @@ void GameObject::damage(unsigned amount, DamageType type)
 				target.x = random_distrib(game->gameRandom, this->_deathAnim->projectilesTarget.first.x, this->_deathAnim->projectilesTarget.second.x);
 				target.y = random_distrib(game->gameRandom, this->_deathAnim->projectilesTarget.first.y, this->_deathAnim->projectilesTarget.second.y);
 			}
-			target += this->_position + this->_size / 2;
-			this->manager->spawnProjectile(this, this->_deathAnim->projectilesPool[pool], this->_position + this->_size / 2, nullptr, target);
+			target += this->_position - Vector2i{0, this->_altitude} + this->_size / 2;
+			this->manager->spawnProjectile(this, this->_deathAnim->projectilesPool[pool], this->_position - Vector2i{0, this->_altitude} + this->_size / 2, nullptr, target);
 		}
 	}
 	this->_spawnUnits(this->_deathAnim->units);
@@ -2097,7 +2399,7 @@ const Vector2u &GameObject::getSize() const
 
 Vector2i GameObject::getPosition() const
 {
-	return Vector2i(round(this->_position.x), round(this->_position.y));
+	return Vector2i(round(this->_position.x), round(this->_position.y - this->_altitude));
 }
 
 const std::optional<Vector2i> &GameObject::getSpawnOffset() const
@@ -2215,9 +2517,9 @@ bool GameObject::canMove() const
 	return this->_speed != 0;
 }
 
-void GameObject::harvest(const Vector2i &pos, bool automatic)
+void GameObject::harvest(const Vector2i &pos, bool automatic, bool straight)
 {
-	this->moveTo(pos, automatic);
+	this->moveTo(pos, automatic ? MOVEREASON_HARVEST : MOVEREASON_HARVEST_COMMAND, straight);
 	this->_orderQueue.emplace_back(MoveCheckOrder{&GameObject::_goToClosestResource, pos});
 	this->_orderQueue.emplace_back(HarvestOrder{});
 }
@@ -2227,18 +2529,26 @@ void GameObject::harvest()
 	this->_harvestClosestResource();
 }
 
-void GameObject::attack(GameObject *obj)
+void GameObject::attack(GameObject *obj, bool automatic, bool force)
 {
-	this->_orderQueue.emplace_back(AttackUnitOrder{obj});
+	this->_orderQueue.emplace_back(AttackUnitOrder{.target = obj, .automatic = automatic, .force = force});
 }
 
-void GameObject::moveTo(const Vector2i &pos, bool automatic)
+void GameObject::moveTo(const Vector2i &pos, MoveReason reason, bool straight)
 {
 	assert_exp(this->canMove());
 	if (this->_boundToGrid)
-		this->_orderQueue.emplace_back(MoveOrder{this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)), automatic});
+		this->_orderQueue.emplace_back(MoveOrder{
+			.destination = this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)),
+			.reason = reason,
+			.force = straight
+		});
 	else
-		this->_orderQueue.emplace_back(MoveOrder{pos + this->_size / 2, automatic});
+		this->_orderQueue.emplace_back(MoveOrder{
+			.destination = pos + this->_size / 2,
+			.reason = reason,
+			.force = straight
+		});
 }
 
 bool GameObject::moveAside(GameObject *asker)
@@ -2325,14 +2635,14 @@ bool GameObject::moveAside(GameObject *asker)
 	if (!found)
 		return false;
 
-	this->_orderQueue.emplace_front(MoveOrder{destination, false});
+	this->_orderQueue.emplace_front(MoveOrder{destination, MOVEREASON_MOVE_ASIDE, false});
 	this->_firstEvent = true;
 	this->_pathCached = false;
 	this->_asideCooldown = waitBlocked;
 	return true;
 }
 
-void GameObject::dumpResourcesTo(GameObject *dump, bool automatic)
+void GameObject::dumpResourcesTo(GameObject *dump, bool automatic, bool straight)
 {
 	if (!dump)
 		dump = this->_lastResourceDump;
@@ -2343,9 +2653,14 @@ void GameObject::dumpResourcesTo(GameObject *dump, bool automatic)
 
 	auto pos = dump->getPosition() + dump->getPoint();
 
-	this->moveTo(pos, automatic);
+	this->moveTo(pos, automatic ? MOVEREASON_DUMP : MOVEREASON_DUMP_COMMAND, straight);
 	this->_orderQueue.emplace_back(MoveCheckOrder{&GameObject::_goToClosestResourceDump, pos});
 	this->_orderQueue.emplace_back(DumpOrder{dump});
+}
+
+void GameObject::pickup(GameObject *target, Vector2f destination)
+{
+	this->_orderQueue.emplace_front(PickupOrder{target, destination});
 }
 
 void GameObject::clearOrders()
@@ -2373,6 +2688,8 @@ void GameObject::clearPrimaryDump()
 void GameObject::initGlobalGrid()
 {
 	if (this->_initGrid)
+		return;
+	if (this->_altitude)
 		return;
 
 	if (this->_tiles) {
@@ -2504,14 +2821,14 @@ void GameObject::crushedBy(GameObject *)
 	this->setHealth(0);
 	this->_crushSound->play();
 	this->_deathAnim = &*this->_crushAnim;
-	this->_gpTimer[2] = 0;
-	this->_gpTimer[3] = 0;
+	this->_gpTimerU[2] = 0;
+	this->_gpTimerU[3] = 0;
 	this->_solid = false;
 }
 
 bool GameObject::isSolid() const
 {
-	return this->_solid;
+	return this->_solid && this->_altitude == 0;
 }
 
 bool GameObject::isStackable() const
@@ -2773,6 +3090,48 @@ void GameObject::setOwner(Player *player, unsigned time, unsigned timeDecOnAtk)
 	player->onObjectGained(this);
 }
 
+void GameObject::spawn(const Vector2f &spawnPoint)
+{
+	Vector2f pos = this->_spawnParams.getPosition(spawnPoint, *this->map);
+	Vector2i gridPos = this->map->absToTileCoord(pos);
+	Vector2f off = this->_tiles ? Vector2f{0, 0} : this->_getTileOffsetFromCenter() + this->map->tileSize / 2;
+
+	this->setPosition(this->map->topLeftCoordToAbs(gridPos) + off);
+	if (pos != spawnPoint)
+		this->moveTo(spawnPoint, MOVEREASON_MOVE_SPAWN);
+}
+
+Vector2f GameObject::getMiddle() const
+{
+	return this->_position - this->_getTileOffsetFromCenter();
+}
+
+bool GameObject::isBeingPickedUp() const
+{
+	return this->_pickup;
+}
+
+bool GameObject::canPickup(MoveReason r, double dist) const
+{
+	if (dist < this->_pickupDistMin)
+		return false;
+	if (!this->_pickupTargets)
+		return false;
+	if (std::ranges::find(*this->_pickupTargets, r) == this->_pickupTargets->end())
+		return false;
+	return true;
+}
+
+int GameObject::getAltitude() const
+{
+	return this->_altitude;
+}
+
+bool GameObject::ignoresTerrain() const
+{
+	return this->_ignoreTerrain;
+}
+
 size_t GameObject::getDirections() const
 {
 	return this->_anims.size();
@@ -2780,7 +3139,7 @@ size_t GameObject::getDirections() const
 
 double GameObject::getFacingAngle() const
 {
-	return M_PI * 2 * this->_currentDir / this->_anims.size() - M_PI_2 - M_PI * 2;
+	return M_PI * 2 * this->_currentDir / this->_anims.size() - M_PI_2;
 }
 
 unsigned GameObject::getDirection() const
@@ -2860,13 +3219,16 @@ Vector2f GameObject::getHitboxCenter(Vector2f pos) const
 			}
 		}
 	} else
-		ocenter = this->_position + this->_size / 2;
+		ocenter = this->_position - Vector2i{0, this->_altitude} + this->_size / 2;
 	return ocenter;
 }
 
 const ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel, bool isFree) const
 {
 	const std::vector<std::string> &tags = obj->getTags();
+	bool air = obj->getAltitude() > 0;
+	bool gnd = obj->getAltitude() == 0;
+	bool und = obj->getAltitude() < 0;
 
 	for (const std::string &tag : tags) {
 		auto it = this->_weaponByTag.find(tag);
@@ -2879,6 +3241,13 @@ const ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigne
 				continue;
 			if (isFree && this->_barrels[weapon->barrel].shootTimer != 0)
 				continue;
+			if (air) {
+				if (!weapon->weapon->hitsAir())
+					continue;
+			} else if (gnd) {
+				if (!weapon->weapon->hitsGround())
+					continue;
+			}
 			return weapon;
 		}
 	}
@@ -3138,6 +3507,78 @@ ObjectDeathParams::ObjectDeathParams(const GameObject *obj, const ObjectDeathPar
 	this->projectilesTarget = other.projectilesTarget;
 	this->projectilesCount = other.projectilesCount;
 	if (other.shake) this->shake = std::make_unique<ShakeParams>(*other.shake);
+}
+
+ObjectSpawnParams::ObjectSpawnParams(const nlohmann::json &json)
+{
+	assert_exp(json.contains("type") && json["type"].is_string());
+	assert_exp(json.contains("x") && (json["x"].is_string() || json["x"].is_number()));
+	assert_exp(json.contains("y") && (json["y"].is_string() || json["y"].is_number()));
+
+	std::string type = json["type"];
+
+	this->pos.x = this->_getPos(json["x"]);
+	this->pos.y = this->_getPos(json["y"]);
+	if (type == "appear")
+		this->type = TYPE_APPEAR;
+	else
+		assert_not_reached_msg(type);
+}
+
+float ObjectSpawnParams::_getPos(const nlohmann::json &json) const
+{
+	if (json.is_number())
+		return json;
+	assert_exp(json.is_string());
+
+	std::string pos = json;
+	unsigned value = 0x7FFF0000;
+
+	if (pos == "close_border")
+		value |= POS_CLOSE_BORDER;
+	else if (pos == "far_border")
+		value |= POS_FAR_BORDER;
+	else if (pos == "min_border")
+		value |= POS_MIN_BORDER;
+	else if (pos == "max_border")
+		value |= POS_MAX_BORDER;
+	else
+		assert_not_reached_msg(pos);
+	return *reinterpret_cast<float *>(&value);
+}
+
+float ObjectSpawnParams::_getPos(float base, float target, float border) const
+{
+	if (!std::isnan(base))
+		return target + base;
+
+	unsigned type = *reinterpret_cast<unsigned *>(&base) & 0xFFFF;
+
+	switch (type) {
+	case POS_CLOSE_BORDER:
+		if (target + 1 < border - target)
+			return -1;
+		return border;
+	case POS_FAR_BORDER:
+		if (target + 1 > border - target)
+			return -1;
+		return border;
+	case POS_MIN_BORDER:
+		return -1;
+	case POS_MAX_BORDER:
+		return border;
+	default:
+		assert_not_reached_msg(std::to_string(type));
+	}
+}
+
+Vector2f ObjectSpawnParams::getPosition(const Vector2f &target, const MapState &map) const
+{
+	Vector2f result = this->pos;
+
+	result.x = this->_getPos(result.x, target.x, map.gridSize.x * map.tileSize.x);
+	result.y = this->_getPos(result.y, target.y, map.gridSize.y * map.tileSize.y);
+	return result;
 }
 
 ObjectWeapon::ObjectWeapon(unsigned short extraPrio, unsigned barrel, const Mod &base, const std::unordered_map<std::string, Weapon> &weapons, const nlohmann::json &j)

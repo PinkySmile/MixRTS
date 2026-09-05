@@ -73,6 +73,8 @@ private:
 	std::optional<WeaponProjectile> _projectile;
 	std::optional<WeaponTakeControl> _takeControl;
 	bool _sendForward = false;
+	bool _ground = true;
+	bool _air = false;
 
 public:
 	Weapon(
@@ -96,6 +98,8 @@ public:
 	[[nodiscard]] const std::optional<WeaponProjectile> &getProjectileData() const;
 	[[nodiscard]] bool sendForward() const;
 	[[nodiscard]] WeaponNeeds getNeeds() const;
+	[[nodiscard]] bool hitsGround() const;
+	[[nodiscard]] bool hitsAir() const;
 };
 
 

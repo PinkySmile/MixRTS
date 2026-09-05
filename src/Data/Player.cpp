@@ -302,7 +302,7 @@ void Player::handleUiEvents()
 					auto obj = this->_parent.getObjectById(i);
 
 					obj->clearOrders();
-					obj->moveTo(move->position);
+					obj->moveTo(move->position, MOVEREASON_MOVE_COMMAND);
 					obj->playDoSound();
 				}
 			} else if (auto harvest = std::get_if<UI::HarvestUnitEvent>(&*event)) {
@@ -311,7 +311,7 @@ void Player::handleUiEvents()
 
 					obj->clearPrimaryDump();
 					obj->clearOrders();
-					obj->harvest(harvest->position);
+					obj->harvest(harvest->position, false);
 					obj->playDoSound();
 				}
 			} else if (auto dump = std::get_if<UI::DumpUnitEvent>(&*event)) {
@@ -321,7 +321,7 @@ void Player::handleUiEvents()
 					auto obj = this->_parent.getObjectById(i);
 
 					obj->clearOrders();
-					obj->dumpResourcesTo(hole);
+					obj->dumpResourcesTo(hole, false);
 					obj->playDoSound();
 				}
 			} else if (auto primary = std::get_if<UI::SetPrimaryEvent>(&*event)) {
@@ -352,7 +352,7 @@ void Player::handleUiEvents()
 					GameObject *obj = this->_parent.getObjectById(o);
 
 					obj->clearOrders();
-					obj->attack(target);
+					obj->attack(target, false, false);
 					obj->playDoSound();
 				}
 			} else if (auto stop = std::get_if<UI::StopEvent>(&*event)) {

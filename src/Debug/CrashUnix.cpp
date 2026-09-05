@@ -149,6 +149,7 @@ bool initCrashHandler()
 	sigaction(SIGSTKFLT,&sa, nullptr);
 	sigaction(SIGSEGV,  &sa, nullptr);
 	sigaction(SIGBUS,   &sa, nullptr);
+	sigaction(SIGILL,   &sa, nullptr);
 	return true;
 }
 

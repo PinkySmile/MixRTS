@@ -45,7 +45,7 @@ private:
 	std::list<GameObject> _liveObjects;
 	unsigned _lastObjectId = 0;
 	std::unordered_map<unsigned, GameObject *> _objectMap;
-	std::map<unsigned, std::list<GameObject *>> _renderObjects;
+	std::map<int64_t, std::list<GameObject *>> _renderObjects;
 
 	// DEBUG
 	unsigned char _debugGrid = 255;
@@ -59,7 +59,7 @@ private:
 	void _validateArmors() const;
 	void _unlockAll();
 	void _recomputeLocked();
-	bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size) const;
+
 	void _checkScroll();
 	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1}, bool drawGrid = false);
 	void _initObject(MapState &map, Player &owner, GameObject &obj);
@@ -67,6 +67,8 @@ private:
 	void _modUnitInArea(const MapState::Quad &quad, LoadedMap &state, Vector2u tileSize, size_t player, char mod);
 	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, size_t team, char mod, bool isStatic, bool crushable);
 	void _pushOrder(GameObject &obj, const std::string &order);
+
+	static bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size, bool onlySolid);
 
 public:
 	GameManager(const std::vector<Faction> &factions, size_t nbPlayers);
@@ -80,11 +82,12 @@ public:
 	std::vector<Player> &getPlayers();
 	const std::vector<Faction> &getFactions() const;
 	GameObject *getObjectById(unsigned index);
+	GameObject *findPickup(size_t owner, MoveReason reason, double dist, GameObject *ignore);
 	GameObject *spawnObject(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id);
 	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePos);
 	const LoadedMap &getLoadedMap() const;
 	void consumeEvent(const sf::Event &event);
-	bool isAreaFree(const Vector2i &pos, const Vector2u &size, const std::vector<unsigned> &exclusion = {}, bool stackable = false) const;
+	bool isAreaFree(const Vector2i &pos, const Vector2u &size, const std::vector<unsigned> &exclusion = {}, bool stackable = false, bool notSolid = false) const;
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<const GameObject *> &objects);
 	void registerObject(GameObject *o);

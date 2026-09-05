@@ -38,6 +38,8 @@ Weapon::Weapon(
 	assert_exp(!data.contains("effect") || data["effect"].is_null() || data["effect"].is_string());
 	assert_exp(!data.contains("hit_effect") || data["hit_effect"].is_null() || data["hit_effect"].is_string());
 	assert_exp(!data.contains("sound") || data["sound"].is_null() || data["sound"].is_string());
+	assert_exp(!data.contains("ground") || data["ground"].is_boolean());
+	assert_exp(!data.contains("air") || data["air"].is_boolean());
 
 	std::string type = data["type"];
 
@@ -60,6 +62,10 @@ Weapon::Weapon(
 	assert_msg(warheads.contains(warhead), warhead);
 	this->_warhead = &warheads.at(warhead);
 
+	if (data.contains("air"))
+		this->_air = data["air"];
+	if (data.contains("ground"))
+		this->_ground = data["ground"];
 	if (data.contains("take_control"))
 		this->_takeControl.emplace(data["take_control"]);
 	if (data.contains("send_forward"))
@@ -155,6 +161,16 @@ bool Weapon::sendForward() const
 WeaponNeeds Weapon::getNeeds() const
 {
 	return this->_needs;
+}
+
+bool Weapon::hitsGround() const
+{
+	return this->_ground;
+}
+
+bool Weapon::hitsAir() const
+{
+	return this->_air;
 }
 
 WeaponTakeControl::WeaponTakeControl(const nlohmann::json &json)
