@@ -1303,21 +1303,22 @@ bool GameObject::_updateMove(Vector2i destination, MoveReason reason, bool force
 		if (this->_pathCache.empty())
 			return true;
 
-		double dist = this->_position.distance(this->_pathCache.back() + this->_getTileOffsetFromCenter());
+		this->_cachedDist = this->_position.distance(this->_pathCache.back() + this->_getTileOffsetFromCenter());
 
 		for (size_t i = 0; i < this->_pathCache.size() - 1; i++)
-			dist += this->_pathCache[i].distance(this->_pathCache[i + 1]);
-		this->_pickup = this->manager->findPickup(this->owner->state.index, reason, dist, this);
-		if (this->_pickup) {
-			this->_pickup->pickup(this, destination);
-			return false;
-		}
+			this->_cachedDist += this->_pathCache[i].distance(this->_pathCache[i + 1]);
 	}
 
 	for (auto &turret : this->_turrets)
 		turret.shotTimer = 0;
 	if (this->_pathCache.empty())
 		return true;
+
+	this->_pickup = this->manager->findPickup(this->owner->state.index, reason, this->_cachedDist, this);
+	if (this->_pickup) {
+		this->_pickup->pickup(this, destination);
+		return false;
+	}
 
 	auto dest = this->_pathCache.back() + this->_getTileOffsetFromCenter();
 	std::optional<float> a;
@@ -1373,6 +1374,7 @@ bool GameObject::_updateMove(Vector2i destination, MoveReason reason, bool force
 		diff.normalize();
 		diff *= this->currentSpeed;
 	//}
+	this->_cachedDist -= diff.magnitude();
 	pos += diff;
 
 	auto diff2 = dest - pos;
@@ -3113,6 +3115,8 @@ bool GameObject::isBeingPickedUp() const
 
 bool GameObject::canPickup(MoveReason r, double dist) const
 {
+	if (!this->_orderQueue.empty())
+		return false;
 	if (dist < this->_pickupDistMin)
 		return false;
 	if (!this->_pickupTargets)

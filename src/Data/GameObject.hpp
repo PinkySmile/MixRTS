@@ -285,6 +285,7 @@ protected:
 	std::optional<std::string> _proxy;
 	std::vector<Vector2i> _pathCache;
 	Vector2i _cachedDest;
+	double _cachedDist;
 	sf::Image _cachedDebug;
 	mutable sf::Texture _cachedDebugTex;
 	std::deque<Order> _orderQueue;
