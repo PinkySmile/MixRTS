@@ -30,6 +30,16 @@ struct IntRect : public sf::IntRect {
 	IntRect(int x, int y, int w, int h);
 };
 
+//! Pure helper shared by Screen and MockedScreen: width in pixels that txt would
+//! take when rendered with text's current font/character size.
+float computeTextWidth(const sf::Text &text, const std::string &txt);
+
+//! Pure helper shared by Screen and MockedScreen: slices sprite (which must be
+//! positioned at the origin and have an odd-sized texture) into 4 overlapping
+//! corner textures, used to later draw a "shrunk" (9-slice-like) rect of any
+//! size via displayShrunkRect.
+std::unique_ptr<PreparedShrunkRect> prepareShrunkRectFromSprite(sf::Sprite &sprite);
+
 class Screen : public sf::RenderWindow {
 private:
 	sf::Font           _font;
@@ -64,6 +74,14 @@ public:
 	void displayElement(const sf::Sprite &sprite);
 	void displayShrunkRect(const PreparedShrunkRect &sprite, sf::IntRect rect);
 	std::unique_ptr<PreparedShrunkRect> prepareShrunkRect(sf::Sprite &sprite);
+
+	//! Mouse position relative to this window. Exists (rather than using
+	//! sf::Mouse::getPosition directly) so that engine code can be written once
+	//! and work the same whether SCREEN_CLASS_IMPLEM is Screen or MockedScreen.
+	[[nodiscard]] Vector2i getMousePosition() const;
+	//! The sf::RenderTarget actually being drawn to (this, for a real Screen).
+	//! Exists for the same reason as getMousePosition, e.g. to build a tgui::Gui.
+	[[nodiscard]] sf::RenderTarget &getRenderTarget();
 };
 
 void libraryInit();

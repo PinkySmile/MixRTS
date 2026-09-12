@@ -19,11 +19,9 @@
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
 
-extern float guiScale;
-
 static bool isMouseOverUI()
 {
-	Vector2i pos = sf::Mouse::getPosition(*game->screen);
+	Vector2i pos = game->screen->getMousePosition();
 
 	pos.x /= guiScale;
 	pos.y /= guiScale;
@@ -141,7 +139,7 @@ void GameManager::_checkScroll()
 		return;
 
 	Vector2u size = game->screen->getSize();
-	auto pos = sf::Mouse::getPosition(*game->screen);
+	auto pos = game->screen->getMousePosition();
 	unsigned cursor = UI::CURSOR_SCROLL_ALL_DIRS;
 	auto old = this->_cameraTranslate;
 

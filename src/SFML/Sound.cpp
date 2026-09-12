@@ -46,6 +46,16 @@ void Sound::play() const
 	game->soundMgr.play(this->_handle, this->_volume);
 }
 
+bool Sound::isPlaying() const
+{
+	return game->soundMgr.isPlaying(this->_handle);
+}
+
+bool Sound::isLoaded() const
+{
+	return this->_handle != 0;
+}
+
 void Sound::setVolume(float volume)
 {
 	this->_volume = volume;

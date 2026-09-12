@@ -22,6 +22,12 @@ public:
 	void load(const std::filesystem::path &file);
 	void setHandle(unsigned handle);
 	void play() const;
+	//! Whether this sound is currently being played (always false if load()
+	//! hasn't been called, or the underlying SoundManager never really loads
+	//! anything, e.g. MockedSoundManager in MODE_NORMAL/MODE_RECORD).
+	[[nodiscard]] bool isPlaying() const;
+	//! Whether load() has ever actually been given a valid, non-zero handle.
+	[[nodiscard]] bool isLoaded() const;
 	void setVolume(float volume);
 };
 

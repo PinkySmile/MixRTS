@@ -12,12 +12,11 @@
 #include <unordered_map>
 #include <TGUI/Widgets/Panel.hpp>
 #include <SFML/Graphics/Texture.hpp>
-#include <SFML/Audio/SoundBuffer.hpp>
-#include <SFML/Audio/Sound.hpp>
 #include <SFML/Window/Keyboard.hpp>
 
 #include "../forward.hpp"
 #include "../Data/Vector.hpp"
+#include "Sound.hpp"
 
 class UI {
 public:
@@ -194,6 +193,7 @@ public:
 	virtual void setEnabled(bool enabled);
 	bool isEnabled() const;
 	tgui::Panel::Ptr getPanel() const;
+	const Faction &getFaction() const;
 	virtual void playEVA(EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
 	virtual std::optional<Event> pollEvent();
 	virtual void renderAbove();
@@ -239,9 +239,14 @@ protected:
 	unsigned _globalEvaCooldown = 0;
 	std::list<EVAQueue> _evaQueue;
 	std::array<unsigned, EVA_COUNT> _evaCooldown{0};
-	std::array<std::unique_ptr<sf::SoundBuffer>, EVA_COUNT> _evaSounds{nullptr};
+	//! Loaded (through the SoundManager, see Sound) once per EVASound value by
+	//! _loadEvaSounds()/the D2KUI constructor.
+	std::array<Sound, EVA_COUNT> _evaSounds;
 	std::vector<const GameObject *> _objectBuffer;
-	sf::Sound _evaSound;
+	//! Points into _evaSounds: whichever entry was last told to play(), so its
+	//! isPlaying() can be polled to know when the next queued EVA sound may
+	//! start. Null until the very first EVA sound is played.
+	Sound *_currentEvaSound = nullptr;
 	std::deque<Event> _eventQueue;
 	tgui::Panel::Ptr _settings;
 	tgui::Panel::Ptr _panel = tgui::Panel::create();

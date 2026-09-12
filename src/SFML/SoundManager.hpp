@@ -33,7 +33,14 @@ public:
 	void addRef(unsigned id);
 	void remove(unsigned id);
 	void play(unsigned id, float volume) const;
+	//! Whether id is currently being played through the audio device (always
+	//! false for id == 0, i.e. an unset/unloaded handle).
+	bool isPlaying(unsigned id) const;
 	void setVolume(float volume);
+	//! Exposes the raw samples backing id, e.g. so MockedSoundManager can write
+	//! them out to a WAV file in MODE_RECORD without actually playing them
+	//! through a real audio device.
+	const sf::SoundBuffer &getBuffer(unsigned id) const;
 };
 
 

@@ -130,6 +130,9 @@ if (UBSAN)
 	add_link_options(-fsanitize=undefined)
 endif ()
 
+# When set, GoogleTest is not downloaded/built and the MixRTS-tests target is not
+# built at all.
+option(NO_TEST "Disable fetching GoogleTest and building the test target" OFF)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -144,6 +147,19 @@ endif ()
 set(CPPTRACE_UNWIND_WITH_LIBUNWIND ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(cpptrace)
 
+if (NOT NO_TEST)
+	FetchContent_Declare(
+		googletest
+		GIT_REPOSITORY https://github.com/google/googletest.git
+		GIT_TAG        v1.15.2
+	)
+	set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+	set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+	set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+	FetchContent_MakeAvailable(googletest)
+	enable_testing()
+endif ()
+
 
 if (WIN32)
 	set(EXTRA_LIBS ntdll dbghelp)
@@ -152,8 +168,12 @@ else ()
 	set(EXTRA_SOURCES src/Debug/CrashUnix.cpp
 		src/Debug/CrashHandlerMain.cpp)
 endif()
-add_executable(
-	MixRTS
+
+# Game engine sources, shared between the MixRTS executable and the MixRTSTests
+# target below. Kept in a single variable so both targets always compile the
+# exact same engine code.
+set(
+	MIXRTS_ENGINE_SOURCES
 	src/Data/Animation.cpp
 	src/Data/Animation.hpp
 	src/Data/ConditionalAnim.cpp
@@ -168,7 +188,6 @@ add_executable(
 	src/Data/Mod.hpp
 	src/Data/ModManager.cpp
 	src/Data/ModManager.hpp
-	src/main.cpp
 	src/Resources/Assert.cpp
 	src/Resources/Assert.hpp
 	src/Resources/Game.cpp
@@ -234,11 +253,17 @@ add_executable(
 	src/Data/Warhead.hpp
 	src/Data/Effect.cpp
 	src/Data/Effect.hpp
+	src/Data/Projectile.cpp
+	src/Data/Projectile.hpp
+)
+
+add_executable(
+	MixRTS
+	${MIXRTS_ENGINE_SOURCES}
+	src/main.cpp
 	src/Debug/Crash.hpp
 	src/Debug/CrashHandlerMain.cpp
 	${EXTRA_SOURCES}
-	src/Data/Projectile.cpp
-	src/Data/Projectile.hpp
 )
 
 target_link_libraries(
@@ -259,3 +284,66 @@ if (WIN32)
 		$<TARGET_FILE_DIR:MixRTS>
 	)
 endif()
+
+# Test target: same engine sources, but with the Screen/TextureManager/SoundManager
+# classes swapped out for MockedScreen/MockedTextureManager/MockedSoundManager (see
+# SCREEN_CLASS_IMPLEM/TEXTURE_MANAGER_CLASS_IMPLEM/SOUND_MANAGER_CLASS_IMPLEM usage
+# in src/Resources/Game.hpp) so that tests can run fast and headless: without a
+# real, visible window, without decoding real texture files, and without needing a
+# real audio device. Entirely skipped when NO_TEST is set (this also means
+# GoogleTest is never even fetched, see above).
+if (NOT NO_TEST)
+	add_executable(
+		MixRTS-tests
+		${MIXRTS_ENGINE_SOURCES}
+
+		src/Mock/MockedScreen.cpp
+		src/Mock/MockedScreen.hpp
+		src/Mock/MockedSoundManager.cpp
+		src/Mock/MockedSoundManager.hpp
+		src/Mock/MockedTextureManager.cpp
+		src/Mock/MockedTextureManager.hpp
+		src/Mock/MockedUI.cpp
+		src/Mock/MockedUI.hpp
+
+		tests/GameFixture.hpp
+		tests/GameFixture.cpp
+		tests/DeployTests.cpp
+		tests/main.cpp
+	)
+	target_compile_definitions(MixRTS-tests PRIVATE MOCK)
+	target_include_directories(MixRTS-tests PRIVATE tests)
+
+	# Deliberately NOT using GTest::gtest_main: tests/main.cpp provides its own
+	# main() so that --mode/--video/--size can be parsed from the command line
+	# and forwarded to GameFixture::configure() before RUN_ALL_TESTS() (see
+	# tests/main.cpp for the exact flags).
+	target_link_libraries(
+		MixRTS-tests
+		SFML::Graphics
+		SFML::Audio
+		SFML::Network
+		TGUI::TGUI
+		cpptrace::cpptrace
+		GTest::gtest
+		${EXTRA_LIBS}
+	)
+
+	if (WIN32)
+		add_custom_command(
+			TARGET MixRTS-tests POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			$<TARGET_FILE:cpptrace::cpptrace>
+			$<TARGET_FILE_DIR:MixRTS-tests>
+		)
+	endif()
+
+	# Deliberately NOT using gtest_discover_tests(): it needs to actually run the
+	# freshly built test executable at build time to enumerate its tests, which
+	# is unnecessarily fragile (e.g. when cross-compiling for Windows, the
+	# resulting .exe would have to run - through Wine - as part of the Linux
+	# build). A single ctest entry running the whole gtest binary is enough.
+	# Tests load mods/fonts using paths relative to the repo root, so make sure
+	# ctest runs the binary from there regardless of the build directory.
+	add_test(NAME MixRTS-tests COMMAND MixRTS-tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+endif ()

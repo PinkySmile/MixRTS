@@ -104,8 +104,7 @@ std::string UI::EVAToString(EVASound snd)
 }
 
 UI::UI(const Faction &faction) :
-	_faction(faction),
-	_evaSound(game->dummySoundBuffer)
+	_faction(faction)
 {
 	this->_hasRadar = faction.hasRadar();
 	this->_panel->getRenderer()->setBackgroundColor(tgui::Color::Transparent);
@@ -127,6 +126,11 @@ bool UI::isEnabled() const
 tgui::Panel::Ptr UI::getPanel() const
 {
 	return this->_panel;
+}
+
+const Faction &UI::getFaction() const
+{
+	return this->_faction;
 }
 
 std::optional<UI::Event> UI::pollEvent()
@@ -210,14 +214,14 @@ void UI::update()
 			this->_globalEvaCooldown--;
 		return;
 	}
-	if (this->_evaSound.getStatus() != sf::Sound::Status::Playing) {
+	if (!this->_currentEvaSound || !this->_currentEvaSound->isPlaying()) {
 		if (this->_globalEvaCooldown == 0) {
 			auto &e = this->_evaQueue.front();
 
 			game->logger.verbose("Playing EVA sound " + std::to_string(e.soundId));
-			assert_msg(this->_evaSounds[e.soundId], "Trying to play invalid EVA " + EVAToString(e.soundId));
-			this->_evaSound.setBuffer(*this->_evaSounds[e.soundId]);
-			this->_evaSound.play();
+			assert_msg(this->_evaSounds[e.soundId].isLoaded(), "Trying to play invalid EVA " + EVAToString(e.soundId));
+			this->_currentEvaSound = &this->_evaSounds[e.soundId];
+			this->_currentEvaSound->play();
 			this->_evaCooldown[e.soundId] = e.cooldown;
 			this->_evaQueue.pop_front();
 			this->_globalEvaCooldown = 30;
@@ -236,7 +240,7 @@ void UI::update()
 
 		game->logger.verbose("Expiring EVA sound " +
 			std::to_string(f.soundId) + " " +
-			std::to_string(static_cast<int>(this->_evaSound.getStatus())) + " " +
+			std::to_string(this->_currentEvaSound && this->_currentEvaSound->isPlaying()) + " " +
 			std::to_string(this->_globalEvaCooldown)
 		);
 		this->_evaQueue.pop_front();

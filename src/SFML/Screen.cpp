@@ -26,7 +26,8 @@ Screen::Screen(const std::string &title) :
 Screen::Screen(const Screen &other) :
 	sf::RenderWindow(sf::VideoMode(other.getSize()), other.getTitle())
 {
-	game->logger.info("Opening game window \"" + other.getTitle() + "\"");
+	if (game)
+		game->logger.info("Opening game window \"" + other.getTitle() + "\"");
 	this->_title = other.getTitle();
 	this->setSize(other.getSize());
 	this->setPosition(other.getPosition());
@@ -34,7 +35,8 @@ Screen::Screen(const Screen &other) :
 
 Screen::~Screen()
 {
-	game->logger.info("Destroying game window \"" + this->_title + "\"");
+	if (game)
+		game->logger.info("Destroying game window \"" + this->_title + "\"");
 }
 
 const std::string& Screen::getTitle() const
@@ -148,17 +150,37 @@ void Screen::displayShrunkRect(const PreparedShrunkRect &sprite, sf::IntRect rec
 
 float Screen::getTextSize(const std::string &txt) const
 {
+	return computeTextWidth(this->_text, txt);
+}
+
+std::unique_ptr<PreparedShrunkRect> Screen::prepareShrunkRect(sf::Sprite &sprite)
+{
+	return prepareShrunkRectFromSprite(sprite);
+}
+
+Vector2i Screen::getMousePosition() const
+{
+	return sf::Mouse::getPosition(*this);
+}
+
+sf::RenderTarget &Screen::getRenderTarget()
+{
+	return *this;
+}
+
+float computeTextWidth(const sf::Text &text, const std::string &txt)
+{
 	float size = 0;
 
 	for (size_t i = 0; i < txt.size(); i++) {
 		if (i != 0)
-			size += this->_text.getFont().getKerning(static_cast<char32_t>(txt[i - 1]), static_cast<char32_t>(txt[i]), this->_text.getCharacterSize());
-		size += this->_text.getFont().getGlyph(txt[i], this->_text.getCharacterSize(), false).advance;
+			size += text.getFont().getKerning(static_cast<char32_t>(txt[i - 1]), static_cast<char32_t>(txt[i]), text.getCharacterSize());
+		size += text.getFont().getGlyph(txt[i], text.getCharacterSize(), false).advance;
 	}
 	return size;
 }
 
-std::unique_ptr<PreparedShrunkRect> Screen::prepareShrunkRect(sf::Sprite &sprite)
+std::unique_ptr<PreparedShrunkRect> prepareShrunkRectFromSprite(sf::Sprite &sprite)
 {
 	auto result = std::make_unique<PreparedShrunkRect>();
 	auto texture = sprite.getTexture();

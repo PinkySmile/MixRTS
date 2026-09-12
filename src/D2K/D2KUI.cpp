@@ -71,37 +71,37 @@ static std::string __unitsOrder[] = {
 
 void D2KUI::_loadEvaSounds(const std::filesystem::path &base, const std::string &folder)
 {
-	this->_evaSounds[EVA_BUILDING]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "build.ogg");
-	this->_evaSounds[EVA_BUILDING_DONE]    = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "building_done.ogg");
-	this->_evaSounds[EVA_BUILDING_LOST]    = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "building_lost.ogg");
-	this->_evaSounds[EVA_CANCEL]           = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "cancel.ogg");
-	this->_evaSounds[EVA_CANNOT_DEPLOY]    = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "cannot_deploy.ogg");
-	this->_evaSounds[EVA_CANNOT_BUILD]     = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "cannot_place.ogg");
-	this->_evaSounds[EVA_GUARDING]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "guarding.ogg");
-	this->_evaSounds[EVA_HOLD_QUEUE]       = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "hold.ogg");
-	this->_evaSounds[EVA_LOST]             = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "lose.ogg");
-	this->_evaSounds[EVA_WON]              = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "win.ogg");
-	this->_evaSounds[EVA_LOW_POWER]        = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "low_power.ogg");
-	this->_evaSounds[EVA_UNLOCKED]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "new_unlock.ogg");
-	this->_evaSounds[EVA_NO_CREDITS]       = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "no_money.ogg");
-	this->_evaSounds[EVA_PRIMARY_SELECTED] = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "primary.ogg");
-	this->_evaSounds[EVA_RETREAT]          = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "retreat.ogg");
-	this->_evaSounds[EVA_SELL]             = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "sell.ogg");
-	this->_evaSounds[EVA_TRAINING]         = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "train.ogg");
-	this->_evaSounds[EVA_UNIT_READY]       = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "unit_ready.ogg");
-	this->_evaSounds[EVA_UPGRADING]        = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "upgrading.ogg");
-	this->_evaSounds[EVA_REQUIRE_STORAGE]  = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "silo_needed.ogg");
-	this->_evaSounds[EVA_UNIT_LOST]        = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "unit_lost.ogg");
-	this->_evaSounds[EVA_HARV_UNDER_ATTACK]= std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "harvester_attacked.ogg");
-	this->_evaSounds[EVA_BUILDING_ATTACKED]= std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "building_attacked.ogg");
-	this->_evaSounds[EVA_BUILDING_CAPTURED]= std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "captured.ogg");
-	this->_evaSounds[EVA_HAZARD_SPAWNED]   = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "worm_sign.ogg");
-	this->_evaSounds[EVA_HAZARD_ATTACKED]  = std::make_unique<sf::SoundBuffer>(base / "announcers" / game->locale / folder / "worm_attack.ogg");
-	this->_evaSounds[EVA_CASH_DOWN]        = std::make_unique<sf::SoundBuffer>(base / "sounds/CASHTIK1.ogg");
-	this->_evaSounds[EVA_CASH_UP]          = std::make_unique<sf::SoundBuffer>(base / "sounds/CASHTIK1.ogg");
-	this->_evaSounds[EVA_POWER_OFF]        = std::make_unique<sf::SoundBuffer>(base / "sounds/POWRDN1.ogg");
-	this->_evaSounds[EVA_POWER_ON]         = std::make_unique<sf::SoundBuffer>(base / "sounds/POWRUP1.ogg");
-	this->_evaSounds[EVA_RADAR_UP]         = std::make_unique<sf::SoundBuffer>(base / "sounds/RADRON1.ogg");
+	this->_evaSounds[EVA_BUILDING]         .load(base / "announcers" / game->locale / folder / "build.ogg");
+	this->_evaSounds[EVA_BUILDING_DONE]    .load(base / "announcers" / game->locale / folder / "building_done.ogg");
+	this->_evaSounds[EVA_BUILDING_LOST]    .load(base / "announcers" / game->locale / folder / "building_lost.ogg");
+	this->_evaSounds[EVA_CANCEL]           .load(base / "announcers" / game->locale / folder / "cancel.ogg");
+	this->_evaSounds[EVA_CANNOT_DEPLOY]    .load(base / "announcers" / game->locale / folder / "cannot_deploy.ogg");
+	this->_evaSounds[EVA_CANNOT_BUILD]     .load(base / "announcers" / game->locale / folder / "cannot_place.ogg");
+	this->_evaSounds[EVA_GUARDING]         .load(base / "announcers" / game->locale / folder / "guarding.ogg");
+	this->_evaSounds[EVA_HOLD_QUEUE]       .load(base / "announcers" / game->locale / folder / "hold.ogg");
+	this->_evaSounds[EVA_LOST]             .load(base / "announcers" / game->locale / folder / "lose.ogg");
+	this->_evaSounds[EVA_WON]              .load(base / "announcers" / game->locale / folder / "win.ogg");
+	this->_evaSounds[EVA_LOW_POWER]        .load(base / "announcers" / game->locale / folder / "low_power.ogg");
+	this->_evaSounds[EVA_UNLOCKED]         .load(base / "announcers" / game->locale / folder / "new_unlock.ogg");
+	this->_evaSounds[EVA_NO_CREDITS]       .load(base / "announcers" / game->locale / folder / "no_money.ogg");
+	this->_evaSounds[EVA_PRIMARY_SELECTED] .load(base / "announcers" / game->locale / folder / "primary.ogg");
+	this->_evaSounds[EVA_RETREAT]          .load(base / "announcers" / game->locale / folder / "retreat.ogg");
+	this->_evaSounds[EVA_SELL]             .load(base / "announcers" / game->locale / folder / "sell.ogg");
+	this->_evaSounds[EVA_TRAINING]         .load(base / "announcers" / game->locale / folder / "train.ogg");
+	this->_evaSounds[EVA_UNIT_READY]       .load(base / "announcers" / game->locale / folder / "unit_ready.ogg");
+	this->_evaSounds[EVA_UPGRADING]        .load(base / "announcers" / game->locale / folder / "upgrading.ogg");
+	this->_evaSounds[EVA_REQUIRE_STORAGE]  .load(base / "announcers" / game->locale / folder / "silo_needed.ogg");
+	this->_evaSounds[EVA_UNIT_LOST]        .load(base / "announcers" / game->locale / folder / "unit_lost.ogg");
+	this->_evaSounds[EVA_HARV_UNDER_ATTACK].load(base / "announcers" / game->locale / folder / "harvester_attacked.ogg");
+	this->_evaSounds[EVA_BUILDING_ATTACKED].load(base / "announcers" / game->locale / folder / "building_attacked.ogg");
+	this->_evaSounds[EVA_BUILDING_CAPTURED].load(base / "announcers" / game->locale / folder / "captured.ogg");
+	this->_evaSounds[EVA_HAZARD_SPAWNED]   .load(base / "announcers" / game->locale / folder / "worm_sign.ogg");
+	this->_evaSounds[EVA_HAZARD_ATTACKED]  .load(base / "announcers" / game->locale / folder / "worm_attack.ogg");
+	this->_evaSounds[EVA_CASH_DOWN]        .load(base / "sounds/CASHTIK1.ogg");
+	this->_evaSounds[EVA_CASH_UP]          .load(base / "sounds/CASHTIK1.ogg");
+	this->_evaSounds[EVA_POWER_OFF]        .load(base / "sounds/POWRDN1.ogg");
+	this->_evaSounds[EVA_POWER_ON]         .load(base / "sounds/POWRUP1.ogg");
+	this->_evaSounds[EVA_RADAR_UP]         .load(base / "sounds/RADRON1.ogg");
 }
 
 D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nlohmann::json &params) :
@@ -169,9 +169,9 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_buildQueue->getVerticalScrollbar()->setScrollAmount(47);
 	this->_unitsQueue->getVerticalScrollbar()->setScrollAmount(47);
 
-	assert_exp(this->_move.loadFromFile(base / "sounds/SIDEBAR1.ogg"));
-	assert_exp(this->_button.loadFromFile(base / "sounds/BUTTON1.ogg"));
-	assert_exp(this->_moveBlocked.loadFromFile(base / "sounds/ENDLIST1.ogg"));
+	this->_soundMove.load(base / "sounds/SIDEBAR1.ogg");
+	this->_soundButton.load(base / "sounds/BUTTON1.ogg");
+	this->_soundMoveBlocked.load(base / "sounds/ENDLIST1.ogg");
 
 	assert_exp(this->_primary.loadFromFile(base / "ui/common/primary.png"));
 

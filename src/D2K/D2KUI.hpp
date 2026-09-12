@@ -9,13 +9,13 @@
 #include <map>
 #include <filesystem>
 #include <nlohmann/json_fwd.hpp>
-#include <SFML/Audio.hpp>
 #include <TGUI/Widgets/ScrollablePanel.hpp>
 #include <TGUI/Widgets/Picture.hpp>
 #include <TGUI/Widgets/Button.hpp>
 #include "../forward.hpp"
 #include "UI.hpp"
 #include "Sprite.hpp"
+#include "Sound.hpp"
 
 
 class D2KUI : public UI {
@@ -59,12 +59,9 @@ private:
 	std::vector<std::string> _upgradeQueueAdded;
 	std::vector<std::string> _starportQueueAdded;
 
-	sf::SoundBuffer _moveBlocked;
-	sf::SoundBuffer _button;
-	sf::SoundBuffer _move;
-	sf::Sound _soundMoveBlocked{this->_moveBlocked};
-	sf::Sound _soundButton{this->_button};
-	sf::Sound _soundMove{this->_move};
+	Sound _soundMoveBlocked;
+	Sound _soundButton;
+	Sound _soundMove;
 	sf::Texture _primary;
 
 	void _loadEvaSounds(const std::filesystem::path &base, const std::string &folder);

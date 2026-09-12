@@ -21,11 +21,6 @@
 #include <windows.h>
 #endif
 
-float guiScale = 1.5f;
-#ifdef _DEBUG
-bool DEBUG_MODE = false;
-#endif
-
 struct Args {
 	bool loadingOnly = false;
 };

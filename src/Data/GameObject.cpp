@@ -1743,7 +1743,6 @@ bool GameObject::_updatePickup(GameObject *target, Vector2f destination)
 	switch (this->pickupState) {
 	case 0: {
 		Vector2f targetCenter = target->getMiddle();
-		Vector2f myCenter = this->getMiddle();
 
 		if (this->_updateMove(targetCenter - this->_getTileOffsetFromCenter(), MOVEREASON_DELIVERY, false, target))
 			this->pickupState = 1;

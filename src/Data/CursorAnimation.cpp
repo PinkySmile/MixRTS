@@ -36,7 +36,7 @@ void CursorAnimation::render() const
 			static_cast<float>(game->screen->getSize().y)
 		}
 	}};
-	auto pos = sf::Mouse::getPosition(*game->screen);
+	auto pos = game->screen->getMousePosition();
 	auto frame = this->_frames[this->_currentAnimation];
 	sf::Sprite cursor{frame.getTexture()};
 	auto &offset = frame.getOffset();

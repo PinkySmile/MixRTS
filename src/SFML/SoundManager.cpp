@@ -106,9 +106,21 @@ void SoundManager::addRef(unsigned int id)
 	game->logger.warn("Cannot add ref to unknown sound " + std::to_string(id));
 }
 
+bool SoundManager::isPlaying(unsigned id) const
+{
+	if (id == 0)
+		return false;
+	return this->_sounds.at(id).sound.getStatus() == sf::Sound::Status::Playing;
+}
+
 void SoundManager::setVolume(float volume)
 {
 	this->_volume = volume;
 	for (auto &pair : this->_sounds)
 		pair.second.sound.setVolume(volume);
+}
+
+const sf::SoundBuffer &SoundManager::getBuffer(unsigned id) const
+{
+	return this->_sounds.at(id).buffer;
 }
