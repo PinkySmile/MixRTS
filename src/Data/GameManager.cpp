@@ -172,12 +172,12 @@ void GameManager::_checkScroll()
 			cursor += UI::CURSOR_SCROLL_DIFF;
 		for (auto &p : this->_players)
 			for (auto &u : p.getUIs())
-				u->forcedCursor = static_cast<UI::Cursor>(cursor);
-	} else {
-		for (auto &p : this->_players)
-			for (auto &u : p.getUIs())
+				if (u)
+					u->forcedCursor = static_cast<UI::Cursor>(cursor);
+	} else for (auto &p : this->_players)
+		for (auto &u : p.getUIs())
+			if (u)
 				u->forcedCursor.reset();
-	}
 }
 
 void GameManager::update()
@@ -606,6 +606,41 @@ void GameManager::_recomputeLocked()
 void GameManager::consumeEvent(const Event &event)
 {
 	if (auto keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+		for (auto &p : this->_players)
+			p.keyPressed(*keyPressed);
+	} else if (auto mouseMove = event.getIf<sf::Event::MouseMoved>()) {
+		Vector2i pos = mouseMove->position;
+
+		pos /= this->_cameraZoom;
+		pos += this->_cameraTranslate;
+		if (!isMouseOverUI()) {
+			for (auto &p : this->_players)
+				p.onMouseMoved(pos);
+		}
+	} else if (auto mouseDown = event.getIf<sf::Event::MouseButtonPressed>()) {
+		Vector2i pos = mouseDown->position;
+
+		pos /= this->_cameraZoom;
+		pos += this->_cameraTranslate;
+		if (mouseDown->button == sf::Mouse::Button::Left) {
+			if (!isMouseOverUI()) {
+				for (auto &p: this->_players)
+					p.onLeftMouseClicked(pos);
+			}
+		} else if (mouseDown->button == sf::Mouse::Button::Right) {
+			if (!isMouseOverUI()) {
+				for (auto &p : this->_players)
+					p.onRightMouseClicked(pos);
+			}
+		}
+	} else if (event.is<sf::Event::FocusLost>()) {
+		game->paused = true;
+	}
+}
+
+void GameManager::consumeGeneralEvent(const sf::Event &event)
+{
+	if (auto keyPressed = event.getIf<sf::Event::KeyPressed>()) {
 	#ifdef _DEBUG
 		if (keyPressed->code == sf::Keyboard::Key::F1) {
 			if (this->_debugGrid == this->_mapStates.size() * 2 + 3 - 1)
@@ -636,35 +671,6 @@ void GameManager::consumeEvent(const Event &event)
 		else if (keyPressed->code == sf::Keyboard::Key::F12)
 			this->_forceStep = true;
 	#endif
-		for (auto &p : this->_players)
-			p.keyPressed(*keyPressed);
-	} else if (auto mouseMove = event.getIf<sf::Event::MouseMoved>()) {
-		Vector2i pos = mouseMove->position;
-
-		pos /= this->_cameraZoom;
-		pos += this->_cameraTranslate;
-		if (!isMouseOverUI()) {
-			for (auto &p : this->_players)
-				p.onMouseMoved(pos);
-		}
-	} else if (auto mouseDown = event.getIf<sf::Event::MouseButtonPressed>()) {
-		Vector2i pos = mouseDown->position;
-
-		pos /= this->_cameraZoom;
-		pos += this->_cameraTranslate;
-		if (mouseDown->button == sf::Mouse::Button::Left) {
-			if (!isMouseOverUI()) {
-				for (auto &p: this->_players)
-					p.onLeftMouseClicked(pos);
-			}
-		} else if (mouseDown->button == sf::Mouse::Button::Right) {
-			if (!isMouseOverUI()) {
-				for (auto &p : this->_players)
-					p.onRightMouseClicked(pos);
-			}
-		}
-	} else if (event.is<sf::Event::FocusLost>()) {
-		game->paused = true;
 	}
 }
 
@@ -892,6 +898,11 @@ noGrid:
 		return &obj;
 	}
 	return nullptr;
+}
+
+std::vector<Faction> & GameManager::getFactions()
+{
+	return this->_factions;
 }
 
 const std::vector<Faction> &GameManager::getFactions() const

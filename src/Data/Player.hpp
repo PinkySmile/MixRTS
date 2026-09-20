@@ -112,6 +112,7 @@ public:
 	GameObject *getSpawnBuilding(const std::string &queue);
 	void onObjectLost(GameObject *obj);
 	void onObjectGained(GameObject *obj);
+	std::vector<GameObject *> getObjects(const std::string &id);
 
 	[[nodiscard]] bool isEnabled() const;
 

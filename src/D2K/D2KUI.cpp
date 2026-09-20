@@ -689,13 +689,7 @@ void D2KUI::update()
 				});
 				this->_placementBuilding = nullptr;
 			} else if (bQueue[id].buildProgress == bQueue[id].buildTime) {
-				auto &map = this->_faction.getObjects();
-				auto it = map.find(id);
-
-				if (it != map.end())
-					this->_placementBuilding = &it->second;
-				else
-					game->logger.debug("Cannot find " + id);
+				this->selectBuildingForPlacement(id);
 			} else
 				this->_eventQueue.emplace_back(StartBuildEvent{
 					id, this->_faction.getBase().getName() + ":building"

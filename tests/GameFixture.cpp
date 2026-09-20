@@ -30,8 +30,10 @@ void GameFixture::SetUpTestSuite()
 	// Deliberately leaked, see the comment on the declaration in GameFixture.hpp.
 	_game = new Game("mods/NotoSans-Regular.ttf", _mode, _video, _size);
 	game->modManager.loadMod("mods/dune2000/");
+	game->modManager.loadMod("tests/");
 	_mod = &game->modManager.get("d2k");
 	_mod->loadFactions("factions.json", _factions);
+	game->modManager.get("test").loadFactions("factions.json", _factions);
 }
 
 void GameFixture::SetUp()
@@ -42,6 +44,7 @@ void GameFixture::SetUp()
 		_factions.at("d2k:atreides"),
 		_factions.at("d2k:harkonnen"),
 		_factions.at("d2k:ordos"),
+		_factions.at("test:dummy"),
 	};
 
 	this->manager = std::make_unique<GameManager>(allFactions, 1);
@@ -65,7 +68,8 @@ void GameFixture::tick(unsigned steps)
 	assert_exp(this->manager);
 
 	while (steps--) {
-		while (auto event = _game->screen->pollEvent()) {}
+		while (auto event = _game->screen->pollEvent())
+			this->manager->consumeGeneralEvent(*event);
 
 		this->manager->update();
 		this->manager->updateRender();

@@ -206,6 +206,13 @@ public:
 	virtual void onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta);
 	virtual void update();
 	virtual void render();
+	//! Enters placement mode for the given (fully-qualified, e.g. "d2k:wtra")
+	//! building id, exactly as if the player had just clicked its ready
+	//! cameo in the build queue. Used internally by subclasses (see D2KUI's
+	//! build queue callback) and also exposed publicly since it is otherwise
+	//! the only way to reach the placement flow without going through TGUI's
+	//! own mouse event handling (e.g. useful for tests or other tooling).
+	void selectBuildingForPlacement(const std::string &id);
 
 protected:
 	struct EVAQueue {

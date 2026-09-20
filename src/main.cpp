@@ -355,6 +355,7 @@ int main(int argc, char **argv)
 				#endif
 				}
 				manager.consumeEvent(*event);
+				manager.consumeGeneralEvent(*event);
 				game->gui.handleEvent(*event);
 			}
 

@@ -184,6 +184,46 @@ const std::unordered_map<std::string, Warhead> &Faction::getWarheads() const
 	return this->_loadedWarheads;
 }
 
+const std::unordered_map<std::string, std::vector<Animation>> & Faction::getAnimations() const
+{
+	return this->_loadedAnimations;
+}
+
+std::unordered_map<std::string, GameObject> &Faction::getObjects()
+{
+	return this->_loadedObjects;
+}
+
+std::unordered_map<std::string, MultiSound> &Faction::getSounds()
+{
+	return this->_loadedSounds;
+}
+
+std::unordered_map<std::string, Upgrade> &Faction::getUpgrades()
+{
+	return this->_loadedUpgrades;
+}
+
+std::unordered_map<std::string, Effect> &Faction::getEffects()
+{
+	return this->_loadedEffects;
+}
+
+std::unordered_map<std::string, Weapon> &Faction::getWeapons()
+{
+	return this->_loadedWeapons;
+}
+
+std::unordered_map<std::string, Warhead> &Faction::getWarheads()
+{
+	return this->_loadedWarheads;
+}
+
+std::unordered_map<std::string, std::vector<Animation>> & Faction::getAnimations()
+{
+	return this->_loadedAnimations;
+}
+
 const std::unordered_map<std::string, unsigned> &Faction::getStartingMoney() const
 {
 	return this->_startingMoney;
@@ -196,7 +236,10 @@ const std::vector<StartObject> &Faction::getStartingObjects() const
 
 UI *Faction::createUI() const
 {
-	return new D2KUI(*this, this->_base.getBase(), this->_uiData);
+	// TODO:
+	if (this->_base.getName() == "d2k")
+		return new D2KUI(*this, this->_base.getBase(), this->_uiData);
+	return nullptr;
 }
 
 const Mod &Faction::getBase() const

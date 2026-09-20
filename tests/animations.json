@@ -1,0 +1,9 @@
+{
+	"dummy": [
+		{
+			"sprite": "dummy.png",
+			"offset": { "x": 0, "y": 0 },
+			"bounds": { "x": 0, "y": 0, "w": 224, "h": 224 }
+		}
+	]
+}

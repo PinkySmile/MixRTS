@@ -1,0 +1,22 @@
+{
+	"dummy7x7": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:building",
+		"tags": ["capturable_building", "building"],
+		"cost": { "base:credits": 225 },
+		"hp": 3000,
+		"requirements": [],
+		"size": { "x": 224, "y": 224 },
+		"tiles": [
+			[ 6, 6, 6, 6, 6, 6, 6 ],
+			[ 6, 6, 6, 6, 6, 6, 6 ],
+			[ 6, 6, 6, 6, 6, 6, 6 ],
+			[ 6, 6, 6, 6, 6, 6, 6 ],
+			[ 6, 6, 6, 6, 6, 6, 6 ],
+			[ 6, 6, 6, 6, 6, 6, 6 ],
+			[ 6, 6, 6, 6, 6, 6, 6 ]
+		]
+	}
+}

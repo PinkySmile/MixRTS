@@ -1,0 +1,31 @@
+{
+	"_general": {
+		"can_sell": true,
+		"can_repair": true,
+		"place": {
+			"ok":   [],
+			"bad":  [],
+			"best": []
+		},
+		"queues": {},
+		"money": [ "base:credits" ],
+		"grid": { "x": 32, "y": 32 },
+		"starting_money": { "base:credits": 10000 },
+		"regress_tech": true,
+		"has_radar": false,
+		"radar_powered": true,
+		"primary_queue": "build",
+		"starting_objects": [],
+		"upgrades": [],
+		"objects": [],
+		"weapons": [],
+		"warheads": [],
+		"effects": [],
+		"sounds": []
+	},
+	"dummy": {
+		"objects": [ "objects.json" ],
+		"animations": [ "animations.json" ],
+		"ui": {}
+	}
+}

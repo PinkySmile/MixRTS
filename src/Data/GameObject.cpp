@@ -2040,10 +2040,10 @@ void GameObject::update()
 	}
 	for (auto &o : this->_orderQueue) {
 		if (auto dump = std::get_if<DumpOrder>(&o)) {
-			if (dump->target->isDisposable())
+			if (dump->target && dump->target->isDisposable())
 				dump->target = nullptr;
 		} else if (auto attack = std::get_if<AttackUnitOrder>(&o))
-			if (attack->target->isDisposable())
+			if (attack->target && attack->target->isDisposable())
 				attack->target = nullptr;
 	}
 	if (this->_dumping && (*this->_dump->during)())

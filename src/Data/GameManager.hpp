@@ -80,6 +80,7 @@ public:
 	void renderAbove();
 	void renderMinimap(Vector2f pos, Vector2u size);
 	std::vector<Player> &getPlayers();
+	std::vector<Faction> &getFactions();
 	const std::vector<Faction> &getFactions() const;
 	GameObject *getObjectById(unsigned index);
 	GameObject *findPickup(size_t owner, MoveReason reason, double dist, GameObject *ignore);
@@ -87,6 +88,7 @@ public:
 	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePos);
 	const LoadedMap &getLoadedMap() const;
 	void consumeEvent(const sf::Event &event);
+	void consumeGeneralEvent(const sf::Event &event);
 	bool isAreaFree(const Vector2i &pos, const Vector2u &size, const std::vector<unsigned> &exclusion = {}, bool stackable = false, bool notSolid = false) const;
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<const GameObject *> &objects);

@@ -528,6 +528,15 @@ void UI::_displayPlacementPreview()
 	}
 }
 
+void UI::selectBuildingForPlacement(const std::string &id)
+{
+	auto &objects = this->_faction.getObjects();
+	auto it = objects.find(id);
+
+	if (it != objects.end())
+		this->_placementBuilding = &it->second;
+}
+
 void UI::_handleTryPlace()
 {
 	auto &tileData = this->_placementBuilding->getTileData();

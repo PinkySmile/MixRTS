@@ -41,8 +41,8 @@ public:
 	TextureManager();
 
 	unsigned load(const std::filesystem::path &file, Vector2u *size = nullptr, bool repeated = false, bool smooth = false);
-	unsigned load(const std::filesystem::path &file, const std::filesystem::path &palette, Vector2u *size = nullptr, bool repeated = false, bool smooth = false);
-	unsigned load(const std::filesystem::path &file, const std::array<Color, 256> &palette, Vector2u *size = nullptr, bool repeated = false, bool smooth = false);
+	unsigned load(const std::filesystem::path &file, const std::filesystem::path &palette, Vector2u *size = nullptr, bool repeated = true, bool smooth = false);
+	unsigned load(const std::filesystem::path &file, const std::array<Color, 256> &palette, Vector2u *size = nullptr, bool repeated = true, bool smooth = false);
 	Vector2u getTextureSize(unsigned id) const;
 	void addRef(unsigned id);
 	void remove(unsigned id);

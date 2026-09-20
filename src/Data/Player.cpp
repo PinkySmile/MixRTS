@@ -37,11 +37,13 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 		auto &f = factions[i];
 
 		this->_uis.emplace_back(f.createUI());
-		this->_uis.back()->manager = &parent;
-		this->_uis.back()->state = &this->uiState;
-		this->_uis.back()->ownerState = &this->state;
-		this->_uis.back()->map = &mapState[i];
-		game->gui.add(this->_uis.back()->getPanel());
+		if (this->_uis.back()) {
+			this->_uis.back()->manager = &parent;
+			this->_uis.back()->state = &this->uiState;
+			this->_uis.back()->ownerState = &this->state;
+			this->_uis.back()->map = &mapState[i];
+			game->gui.add(this->_uis.back()->getPanel());
+		}
 		if (i == index)
 			continue;
 		for (auto &[key, val] : f.getObjects())
@@ -91,7 +93,8 @@ void Player::update()
 	else
 		this->state.hasRadar = std::ranges::any_of(this->state.radars, [](const GameObject *o) { return !o->isDead(); });
 	for (auto &ui : this->_uis)
-		ui->update();
+		if (ui)
+			ui->update();
 	this->_clean();
 	for (auto &[qname, q] : this->state.buildQueues) {
 		if (!q)
@@ -170,7 +173,8 @@ void Player::setEnabled(bool enabled)
 {
 	this->_enabled = enabled;
 	for (size_t i = 0; i < this->_uis.size(); i++)
-		this->_uis[i]->setEnabled(i == this->_currentUi && enabled);
+		if (this->_uis[i])
+			this->_uis[i]->setEnabled(i == this->_currentUi && enabled);
 }
 
 bool Player::isEnabled() const
@@ -235,12 +239,15 @@ void Player::keyPressed(const Event::KeyPressed &key)
 void Player::updateRender()
 {
 	for (auto &ui : this->_uis)
-		ui->updateRender();
+		if (ui)
+			ui->updateRender();
 }
 
 void Player::handleUiEvents()
 {
-	for (auto &ui : this->_uis)
+	for (auto &ui : this->_uis) {
+		if (!ui)
+			continue;
 		while (auto event = ui->pollEvent()) {
 			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event)) {
 				auto &sq = this->state.queues[place->queue][place->id];
@@ -361,6 +368,7 @@ void Player::handleUiEvents()
 			} else
 				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));
 		}
+	}
 }
 
 void Player::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args)
@@ -589,6 +597,16 @@ void Player::onObjectGained(GameObject *obj)
 		++this->state.elementsOwned[id];
 
 	this->checkUnlocked(obj->getFaction());
+}
+
+std::vector<GameObject *> Player::getObjects(const std::string &id)
+{
+	std::vector<GameObject *> obj;
+
+	for (auto &o : this->state.myObjects)
+		if (o->getId() == id)
+			obj.push_back(o);
+	return obj;
 }
 
 template<typename T>

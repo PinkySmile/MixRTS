@@ -66,6 +66,7 @@ public:
 	[[nodiscard]] const std::unordered_map<std::string, Effect> &getEffects() const;
 	[[nodiscard]] const std::unordered_map<std::string, Weapon> &getWeapons() const;
 	[[nodiscard]] const std::unordered_map<std::string, Warhead> &getWarheads() const;
+	[[nodiscard]] const std::unordered_map<std::string, std::vector<Animation>> &getAnimations() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getStartingMoney() const;
 	[[nodiscard]] const std::vector<StartObject> &getStartingObjects() const;
 	[[nodiscard]] UI *createUI() const;
@@ -78,6 +79,14 @@ public:
 	[[nodiscard]] bool isRadarPowered() const;
 	[[nodiscard]] const std::string &getName() const;
 	[[nodiscard]] const std::optional<nlohmann::json> &getRepairAnim() const;
+
+	[[nodiscard]] std::unordered_map<std::string, MultiSound> &getSounds();
+	[[nodiscard]] std::unordered_map<std::string, Upgrade> &getUpgrades();
+	[[nodiscard]] std::unordered_map<std::string, GameObject> &getObjects();
+	[[nodiscard]] std::unordered_map<std::string, Effect> &getEffects();
+	[[nodiscard]] std::unordered_map<std::string, Weapon> &getWeapons();
+	[[nodiscard]] std::unordered_map<std::string, Warhead> &getWarheads();
+	[[nodiscard]] std::unordered_map<std::string, std::vector<Animation>> &getAnimations();
 };
 
 
