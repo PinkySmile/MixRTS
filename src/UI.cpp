@@ -515,7 +515,7 @@ void UI::_displayPlacementPreview()
 				if (tooFar || !this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD) || (
 					this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE) &&
 					buildingMask.placementConcrete && !buildingMask.placementRequired
-				) || !this->manager->isAreaFree(this->map->topLeftCoordToAbs(full), this->map->tileSize))
+				) || !this->manager->isAreaFree(this->map->topLeftCoordToAbs(full), this->map->tileSize, {}, false, true))
 					sprite = &placement[2][this->_placementAnimation[2]];
 				else if (this->map->hasAllGridBits(full, GRIDMASK_HAS_CONCRETE) || buildingMask.placementConcrete)
 					sprite = &placement[0][this->_placementAnimation[0]];
@@ -572,7 +572,7 @@ void UI::_handleTryPlace()
 			if (buildingMask.placementRequired) {
 				if (
 					!this->map->hasAllGridBits(full, GRIDMASK_CAN_BUILD) ||
-					!this->manager->isAreaFree(this->map->topLeftCoordToAbs(full), this->map->tileSize)
+					!this->manager->isAreaFree(this->map->topLeftCoordToAbs(full), this->map->tileSize, {}, false, true)
 				) {
 					this->playEVA(EVA_CANNOT_BUILD, 600, 2, 60, "");
 					return;

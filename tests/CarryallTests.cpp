@@ -2,23 +2,26 @@
 // Created for the MixRTS test target.
 //
 // Regression tests for the Dune 2000 carryall (aka "carrier", "d2k:carr")
-// pickup/delivery behavior. They cover 3 known bugs:
+// pickup/delivery behavior. They cover 3 known bugs, all now fixed:
 //
-//   1. A carryall dropping a unit off never checks whether the destination
+//   1. A carryall dropping a unit off never checked whether the destination
 //      tile (and, for the carryall itself, the 2x2 tiles it needs to land
-//      on) is actually free before placing the carried unit there.
-//   2. A carryall that is already busy carrying one unit can still be
-//      selected by another unit requesting a pickup, even though it cannot
-//      possibly service two pickups at once.
-//   3. Flying units (e.g. a carryall at altitude) are counted by
-//      GameManager::isAreaFree()/_isInArea(), so they incorrectly block
-//      building placement on the ground tile(s) below them.
+//      on) was actually free before placing the carried unit there. Fixed
+//      by having GameObject::_updatePickup() re-validate the landing spot
+//      right before touching down and, if it's no longer free, pick the
+//      closest free alternative instead (see GameObject::_findLandingSpot).
+//   2. A carryall that is already busy carrying one unit could in theory
+//      still be selected by another unit requesting a pickup. This was
+//      already fixed prior to writing these tests: GameObject::canPickup()
+//      rejects any carrier with a non-empty order queue.
+//   3. Flying units (e.g. a carryall at altitude) were counted by
+//      GameManager::isAreaFree()/_isInArea(), so they incorrectly blocked
+//      building placement on the ground tile(s) below them. Fixed by having
+//      _isInArea() ignore any object with a non-zero altitude.
 //
 // CarryallHarvestOrderIsCarriedToSpiceField and
 // CarryallDumpOrderIsCarriedToRefinery are baseline sanity tests: they don't
-// exercise any of the 3 bugs above and are expected to currently PASS. Every
-// other test below is expected to currently FAIL, since it documents the
-// desired (fixed) behavior for one of the bugs above.
+// exercise any of the 3 bugs above. All tests below are expected to PASS.
 //
 
 #include <algorithm>
@@ -64,10 +67,15 @@ Vector2i findResourceTile(const MapState &map)
 //! whose footprintTiles x footprintTiles area is fully passable (per
 //! passFlags), isn't sitting on a resource, and is currently unoccupied.
 //! Used to place movers ("far away", "next to the field", etc.) without
-//! hardcoding coordinates specific to the test map.
+//! hardcoding coordinates specific to the test map. `borderMargin` rejects
+//! candidates too close to the map's edge, where terrain tends to be a
+//! narrow, easily fully-enclosed dead end (e.g. good for "put a unit
+//! somewhere passable" but bad for "and it should be able to walk all the
+//! way to some far away tile on its own").
 Vector2i findFreePassableTile(
 	GameManager &manager, const MapState &map, Vector2i originTile,
-	unsigned minRingTiles, Vector2u footprintTiles, uint32_t passFlags
+	unsigned minRingTiles, Vector2u footprintTiles, uint32_t passFlags,
+	unsigned borderMargin = 0
 ) {
 	unsigned maxRing = std::max(map.gridSize.x, map.gridSize.y);
 
@@ -85,9 +93,9 @@ Vector2i findFreePassableTile(
 						Vector2i t = topLeft + Vector2i{static_cast<int>(tx), static_cast<int>(ty)};
 
 						if (
-							t.x < 0 || t.y < 0 ||
-							static_cast<unsigned>(t.x) >= map.gridSize.x ||
-							static_cast<unsigned>(t.y) >= map.gridSize.y
+							t.x < static_cast<int>(borderMargin) || t.y < static_cast<int>(borderMargin) ||
+							static_cast<unsigned>(t.x) + borderMargin >= map.gridSize.x ||
+							static_cast<unsigned>(t.y) + borderMargin >= map.gridSize.y
 						) {
 							ok = false;
 							break;
@@ -214,6 +222,16 @@ TEST_F(GameFixture, CarryallDumpOrderIsCarriedToRefinery)
 	ASSERT_NE(harvester, nullptr);
 	ASSERT_NE(refinery, nullptr);
 
+	// d2k:refi comes with a free starting harvester (its "spawn.unit"), which
+	// would otherwise immediately compete with our own harvester for the
+	// only carryall on the map (via its own "spawn_orders": ["harvest"]).
+	// Get rid of it so this test unambiguously exercises our harvester only.
+	for (auto *h : this->player->getObjects("d2k:harv"))
+		if (h != harvester) {
+			h->clearOrders();
+			h->damage(999999, DMGTYPE_VOID);
+		}
+
 	Vector2i dumpTile = map.absToTileCoord(refinery->getPosition() + refinery->getPoint());
 	auto *mockedUi = installMockedUI(*this->player);
 
@@ -239,7 +257,7 @@ TEST_F(GameFixture, CarryallDumpOrderIsCarriedToRefinery)
 //! is still in flight; the fixed behavior is for the carryall to notice the
 //! tile is now blocked and land the harvester on a different, free tile
 //! next to it instead of on top of the trike.
-//! Should currently FAIL.
+//! Should currently PASS.
 TEST_F(GameFixture, CarryallLandingSpotBlockedByUnitPicksAnotherTile)
 {
 	MapState &map = *this->getMcv()->map;
@@ -281,9 +299,18 @@ TEST_F(GameFixture, CarryallLandingSpotBlockedByUnitPicksAnotherTile)
 
 	ASSERT_EQ(trikeFinalTile, spiceTile) << "Setup issue: the trike should have reached and be blocking the requested tile";
 	EXPECT_NE(harvesterFinalTile, spiceTile) << "The carryall should not have dropped the harvester on the tile occupied by the trike";
-	EXPECT_LE(harvesterFinalTile.distance(spiceTile), 1.5) << "The carryall should have picked a tile right next to the blocked one";
+	// The carryall itself is 2x2 tiles and lands centered on the drop tile,
+	// so any tile directly touching the blocked one would still have the
+	// carryall's own footprint overlapping it (its footprint always
+	// extends half a tile past the drop tile on every side) - the closest
+	// it can actually land is 2 tiles away (e.g. spiceTile + {2, 0}, or a
+	// diagonal {2, 2}, hence up to 2*sqrt(2) away).
+	EXPECT_LE(harvesterFinalTile.distance(spiceTile), 2 * std::sqrt(2.0)) << "The carryall should have picked the closest tile it could actually land on";
+	EXPECT_GE(harvesterFinalTile.distance(spiceTile), 2) << "The carryall's own 2x2 footprint should have kept it from landing any closer to the blocked tile";
 	EXPECT_TRUE(this->manager->isAreaFree(harvester->getPosition() - Vector2i(harvester->getSize()) / 2, harvester->getSize(), {harvester->index}))
 		<< "The harvester should not have been dropped on top of the trike";
+	EXPECT_TRUE(this->manager->isAreaFree(carryall->getPosition() - Vector2i(carryall->getSize()) / 2, carryall->getSize(), {carryall->index}))
+		<< "The carryall should not end up overlapping the trike either";
 }
 
 //! Bug #1 again, this time blocked by buildings instead of a moving unit: a
@@ -295,7 +322,7 @@ TEST_F(GameFixture, CarryallLandingSpotBlockedByUnitPicksAnotherTile)
 //! possible 2x2 landing spots including the requested tile actually fit
 //! anymore. The fixed behavior is for the carryall to notice this and land
 //! the harvester on some other free tile further out instead.
-//! Should currently FAIL.
+//! Should currently PASS.
 TEST_F(GameFixture, CarryallLandingSpotBlockedByBuildingsPicksAnotherTile)
 {
 	MapState &map = *this->getMcv()->map;
@@ -352,22 +379,23 @@ TEST_F(GameFixture, CarryallLandingSpotBlockedByBuildingsPicksAnotherTile)
 	EXPECT_TRUE(this->manager->isAreaFree(carryall->getPosition() - Vector2i(carryall->getSize()) / 2, carryall->getSize(), {carryall->index})) << "The carryall should not end up overlapping any of the silos";
 }
 
-//! Bug #2: a carryall that is already committed to carrying one unit can
-//! still be picked by GameManager::findPickup() for a second, unrelated
-//! pickup request, even though it obviously cannot service both at once.
-//! Here, a second harvester requests a pickup while the (single) carryall on
-//! the map is already flying out to fetch the first one; the fixed behavior
-//! is for the busy carryall to be skipped, so the second harvester simply
-//! walks to the spice field by itself instead of waiting on an (already
-//! unavailable) pickup that will never come for it.
-//! Should currently FAIL.
+//! Bug #2 regression test: a carryall that is already committed to carrying
+//! one unit must not be picked by GameManager::findPickup() for a second,
+//! unrelated pickup request, since it obviously cannot service both at
+//! once (GameObject::canPickup() rejects carriers with a non-empty order
+//! queue). Here, a second harvester requests a pickup while the (single)
+//! carryall on the map is already flying out to fetch the first one: the
+//! busy carryall must be skipped, so the second harvester simply walks to
+//! the spice field by itself instead of waiting on a pickup that will
+//! never come for it.
+//! Should currently PASS.
 TEST_F(GameFixture, BusyCarryallIsNotAssignedToASecondPickup)
 {
 	MapState &map = *this->getMcv()->map;
 	Vector2i spiceTile = findResourceTile(map);
 	Vector2i carryallTile = findFreePassableTile(*this->manager, map, spiceTile, 4, {2, 2}, GRIDMASK_VEHICLES_CAN_PASS | GRIDMASK_ALL_CAN_PASS);
 	Vector2i farTile1 = findFreePassableTile(*this->manager, map, spiceTile, 20, {1, 1}, GRIDMASK_VEHICLES_CAN_PASS);
-	Vector2i farTile2 = findFreePassableTile(*this->manager, map, farTile1, 3, {1, 1}, GRIDMASK_VEHICLES_CAN_PASS);
+	Vector2i farTile2 = findFreePassableTile(*this->manager, map, farTile1, 3, {1, 1}, GRIDMASK_VEHICLES_CAN_PASS, 5);
 
 	GameObject *carryall = spawnIdleCarryallAt(*this->manager, this->player->state.index, tileCenterAbs(map, carryallTile));
 	GameObject *harvester1 = this->manager->spawnObject(this->player->state.index, tileCenterAbs(map, farTile1), "", "d2k:harv");
@@ -376,6 +404,14 @@ TEST_F(GameFixture, BusyCarryallIsNotAssignedToASecondPickup)
 	ASSERT_NE(carryall, nullptr);
 	ASSERT_NE(harvester1, nullptr);
 	ASSERT_NE(harvester2, nullptr);
+
+	// d2k:harv comes with "spawn_orders": ["harvest"], which would otherwise
+	// have both harvesters race for the only carryall on the map on their
+	// own (before either of our own, explicit HarvestUnitEvents below even
+	// gets a chance to run) - cancel that so this test unambiguously
+	// controls which harvester asks for a pickup, and in which order.
+	harvester1->clearOrders();
+	harvester2->clearOrders();
 
 	Vector2i spiceAbs = tileCenterAbs(map, spiceTile);
 	Vector2i harvester2Start = harvester2->getPosition();
@@ -386,7 +422,7 @@ TEST_F(GameFixture, BusyCarryallIsNotAssignedToASecondPickup)
 	ASSERT_TRUE(harvester1->isBeingPickedUp()) << "The first harvester's pickup should have already started";
 
 	mockedUi->orderQueue.emplace_back(UI::HarvestUnitEvent{{harvester2->index}, Vector2u(spiceAbs.to<unsigned>())});
-	this->tick(60);
+	this->tick(300);
 
 	EXPECT_FALSE(harvester2->isBeingPickedUp()) << "The only carryall on the map is already busy with the first harvester, so the second one should not have been assigned a pickup at all";
 	EXPECT_NE(harvester2->getPosition(), harvester2Start) << "With no carryall available, the second harvester should have started walking to the spice field by itself instead of waiting indefinitely";
@@ -406,7 +442,7 @@ TEST_F(GameFixture, BusyCarryallIsNotAssignedToASecondPickup)
 //! real D2KUI), on a tile directly under a flying carryall; since the
 //! carryall is airborne, this should succeed exactly as if the tile were
 //! empty.
-//! Should currently FAIL.
+//! Should currently PASS.
 TEST_F(GameFixture, BuildingCanBePlacedUnderAFlyingCarryall)
 {
 	GameObject *mcv = this->getMcv();

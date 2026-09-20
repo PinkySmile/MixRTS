@@ -194,6 +194,8 @@ public:
 	bool isEnabled() const;
 	tgui::Panel::Ptr getPanel() const;
 	const Faction &getFaction() const;
+	void selectBuildingForPlacement(const std::string &id);
+
 	virtual void playEVA(EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
 	virtual std::optional<Event> pollEvent();
 	virtual void renderAbove();
@@ -206,13 +208,6 @@ public:
 	virtual void onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta);
 	virtual void update();
 	virtual void render();
-	//! Enters placement mode for the given (fully-qualified, e.g. "d2k:wtra")
-	//! building id, exactly as if the player had just clicked its ready
-	//! cameo in the build queue. Used internally by subclasses (see D2KUI's
-	//! build queue callback) and also exposed publicly since it is otherwise
-	//! the only way to reach the placement flow without going through TGUI's
-	//! own mouse event handling (e.g. useful for tests or other tooling).
-	void selectBuildingForPlacement(const std::string &id);
 
 protected:
 	struct EVAQueue {
@@ -246,13 +241,8 @@ protected:
 	unsigned _globalEvaCooldown = 0;
 	std::list<EVAQueue> _evaQueue;
 	std::array<unsigned, EVA_COUNT> _evaCooldown{0};
-	//! Loaded (through the SoundManager, see Sound) once per EVASound value by
-	//! _loadEvaSounds()/the D2KUI constructor.
 	std::array<Sound, EVA_COUNT> _evaSounds;
 	std::vector<const GameObject *> _objectBuffer;
-	//! Points into _evaSounds: whichever entry was last told to play(), so its
-	//! isPlaying() can be polled to know when the next queued EVA sound may
-	//! start. Null until the very first EVA sound is played.
 	Sound *_currentEvaSound = nullptr;
 	std::deque<Event> _eventQueue;
 	tgui::Panel::Ptr _settings;

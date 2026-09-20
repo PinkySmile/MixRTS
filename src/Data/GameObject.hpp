@@ -528,6 +528,13 @@ protected:
 	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);
 	bool _tileAvailableFor(Vector2i tile) const;
 	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size, const GameObject *ignoreObject) const;
+	//! Looks for the tile closest to preferredTile (preferredTile itself
+	//! included) where both target's footprint and this carrier's own
+	//! footprint (it briefly lands to set target down, see _updatePickup's
+	//! altitude-0 states) can fit without overlapping any other (solid)
+	//! object, and where target's terrain is passable for it. Falls back to
+	//! preferredTile itself if nothing else is found on the whole map.
+	[[nodiscard]] Vector2i _findLandingSpot(GameObject *target, Vector2i preferredTile) const;
 	CollisionResolution _resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject);
 	CollisionResolution _resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject);
 	// Order update functions

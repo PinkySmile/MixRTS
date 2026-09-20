@@ -1738,6 +1738,48 @@ bool GameObject::_updateSpin(float amount)
 	return false;
 }
 
+Vector2i GameObject::_findLandingSpot(GameObject *target, Vector2i preferredTile) const
+{
+	auto &map = *target->map;
+	Vector2u targetSize = target->getSize();
+	Vector2u carrierSize = this->getSize();
+	unsigned maxRing = std::max(map.gridSize.x, map.gridSize.y);
+
+	for (unsigned r = 0; r <= maxRing; r++) {
+		for (int dy = -static_cast<int>(r); dy <= static_cast<int>(r); dy++)
+			for (int dx = -static_cast<int>(r); dx <= static_cast<int>(r); dx++) {
+				if (std::max(std::abs(dx), std::abs(dy)) != static_cast<int>(r))
+					continue;
+
+				Vector2i tile = preferredTile + Vector2i{dx, dy};
+
+				if (
+					tile.x < 0 || tile.y < 0 ||
+					static_cast<unsigned>(tile.x) >= map.gridSize.x ||
+					static_cast<unsigned>(tile.y) >= map.gridSize.y
+				)
+					continue;
+
+				Vector2i tileAbs = map.topLeftCoordToAbs(tile);
+				MapState::Quad footprint = {
+					tileAbs.to<float>(),
+					{static_cast<float>(tileAbs.x + targetSize.x), static_cast<float>(tileAbs.y)},
+					{static_cast<float>(tileAbs.x + targetSize.x), static_cast<float>(tileAbs.y + targetSize.y)},
+					{static_cast<float>(tileAbs.x), static_cast<float>(tileAbs.y + targetSize.y)}
+				};
+
+				// target must be able to stand there at all (passable terrain for its own pass flags).
+				if (!map.allHasAnyGridBits(footprint, target->_passFlags))
+					continue;
+				// Nothing else already sitting on target's own tile(s).
+				if (!this->manager->isAreaFree(tileAbs, targetSize, {target->index}, target->_stackable))
+					continue;
+				return tile;
+			}
+	}
+	return preferredTile;
+}
+
 bool GameObject::_updatePickup(GameObject *target, Vector2f destination)
 {
 	switch (this->pickupState) {
@@ -1779,11 +1821,23 @@ bool GameObject::_updatePickup(GameObject *target, Vector2f destination)
 		[[fallthrough]];
 	case 5: {
 		auto d = destination - this->_getTileOffsetFromCenter() - target->_getTileOffsetFromCenter();
+		bool arrived = this->_updateMove(d, MOVEREASON_DELIVERY, false, target);
 
-		if (this->_updateMove(d, MOVEREASON_DELIVERY, false, target))
-			this->pickupState = 6;
 		target->_currentDir = round((this->getFacingAngle() + M_PI_2) * target->_anims.size() / (M_PI * 2));
 		target->setPosition(this->getMiddle() + target->_getTileOffsetFromCenter());
+		if (!arrived)
+			return false;
+
+		Vector2i landingTile = this->_findLandingSpot(target, target->_gridPos);
+
+		if (landingTile == target->_gridPos) {
+			this->pickupState = 6;
+			return false;
+		}
+		this->pickupState = 4;
+		if (auto *order = std::get_if<PickupOrder>(&this->_orderQueue.front()))
+			order->destination = target->map->topLeftCoordToAbs(landingTile);
+		this->_pathCached = false;
 		return false;
 	}
 	case 6:
