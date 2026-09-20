@@ -18,5 +18,135 @@
 			[ 6, 6, 6, 6, 6, 6, 6 ],
 			[ 6, 6, 6, 6, 6, 6, 6 ]
 		]
+	},
+
+	"conc": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 500,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"tiles": [[1]]
+	},
+
+	"target": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 }
+	},
+
+	"target_ground": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": ["mtag_ground"],
+		"cost": {},
+		"hp": 1000,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 }
+	},
+
+	"target_air": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": ["mtag_air"],
+		"cost": {},
+		"hp": 1000,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"altitude": 64
+	},
+
+	"atk_hitscan": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 500,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"barrels": [
+			{ "weapons": [ { "name": "weapon.hitscan", "cooldown": 200 } ] }
+		]
+	},
+
+	"atk_projectile": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 500,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"barrels": [
+			{ "weapons": [ { "name": "weapon.projectile", "cooldown": 200 } ] }
+		]
+	},
+
+	"atk_homing": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 500,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"barrels": [
+			{ "weapons": [ { "name": "weapon.homing", "cooldown": 200 } ] }
+		]
+	},
+
+	"atk_homing_short": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 500,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"barrels": [
+			{ "weapons": [ { "name": "weapon.homing_shortrange", "cooldown": 20 } ] }
+		]
+	},
+
+	"atk_overlap": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 500,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"barrels": [
+			{
+				"weapons": [
+					{ "name": "weapon.overlap_a", "cooldown": 200 },
+					{ "name": "weapon.overlap_b", "cooldown": 200 }
+				]
+			}
+		]
+	},
+
+	"atk_multi": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 500,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"barrels": [
+			{
+				"weapons": [
+					{ "name": "weapon.multi_ground", "cooldown": 200 },
+					{ "name": "weapon.multi_air", "cooldown": 200 }
+				]
+			}
+		]
 	}
 }

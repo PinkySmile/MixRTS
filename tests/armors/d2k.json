@@ -1,0 +1,24 @@
+{
+	"wh_direct": {
+		"none": 1.0,
+		"wall": 1.0,
+		"building": 1.0,
+		"wood": 1.0,
+		"light": 1.0,
+		"heavy": 1.0,
+		"concrete": 1.0,
+		"cy": 1.0,
+		"harvester": 1.0
+	},
+	"wh_splash": {
+		"none": 1.0,
+		"wall": 1.0,
+		"building": 1.0,
+		"wood": 1.0,
+		"light": 1.0,
+		"heavy": 1.0,
+		"concrete": 1.0,
+		"cy": 1.0,
+		"harvester": 1.0
+	}
+}

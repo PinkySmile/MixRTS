@@ -113,8 +113,8 @@ void Projectile::update()
 
 		this->_disposable = false;
 		if (hitEffect)
-			this->manager->spawnEffect(*hitEffect, this->_targetPos, this->_owner);
-		this->manager->weaponUsedAt(this->_damage, this->_weapon, this->_targetPos, this->_ownerIndex);
+			this->manager->spawnEffect(*hitEffect, this->_position, this->_owner);
+		this->manager->weaponUsedAt(this->_damage, this->_weapon, this->_position, this->_ownerIndex);
 		this->_disposable = true;
 		return;
 	}

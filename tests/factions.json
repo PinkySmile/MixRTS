@@ -18,8 +18,8 @@
 		"starting_objects": [],
 		"upgrades": [],
 		"objects": [],
-		"weapons": [],
-		"warheads": [],
+		"weapons": ["weapons/weapons.json"],
+		"warheads": ["weapons/warheads.json"],
 		"effects": [],
 		"sounds": []
 	},

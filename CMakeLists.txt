@@ -310,6 +310,7 @@ if (NOT NO_TEST)
 		tests/GameFixture.cpp
 		tests/DeployTests.cpp
 		tests/CarryallTests.cpp
+		tests/WeaponTests.cpp
 		tests/main.cpp
 	)
 	target_compile_definitions(MixRTS-tests PRIVATE MOCK)

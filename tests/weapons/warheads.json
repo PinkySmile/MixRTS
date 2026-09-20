@@ -1,0 +1,10 @@
+{
+	"wh_direct": {
+		"radius": 40,
+		"dmg_type": "bullet"
+	},
+	"wh_splash": {
+		"radius": 100,
+		"dmg_type": "blast"
+	}
+}

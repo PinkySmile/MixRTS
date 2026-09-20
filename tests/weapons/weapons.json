@@ -1,0 +1,89 @@
+{
+	"weapon.hitscan": {
+		"type": "hitscan",
+		"damage": 100,
+		"range": 640,
+		"warhead": "wh_direct",
+		"can_hit_tags": ["any"],
+		"ground": true,
+		"air": true
+	},
+	"weapon.projectile": {
+		"type": "projectile",
+		"damage": 100,
+		"range": 640,
+		"warhead": "wh_direct",
+		"can_hit_tags": ["any"],
+		"ground": true,
+		"air": true,
+		"projectile": {
+			"anim": { "anim": "dummy", "layer": 2 },
+			"speed": 8
+		}
+	},
+	"weapon.homing": {
+		"type": "projectile",
+		"damage": 100,
+		"range": 640,
+		"warhead": "wh_direct",
+		"can_hit_tags": ["any"],
+		"ground": true,
+		"air": true,
+		"projectile": {
+			"anim": { "anim": "dummy", "layer": 2 },
+			"speed": 8,
+			"homing": true
+		}
+	},
+	"weapon.homing_shortrange": {
+		"type": "projectile",
+		"damage": 60,
+		"range": 640,
+		"warhead": "wh_splash",
+		"can_hit_tags": ["any"],
+		"ground": true,
+		"air": true,
+		"projectile": {
+			"anim": { "anim": "dummy", "layer": 2 },
+			"speed": 8,
+			"homing": true,
+			"range": 120
+		}
+	},
+	"weapon.multi_ground": {
+		"type": "hitscan",
+		"damage": 50,
+		"range": 640,
+		"warhead": "wh_direct",
+		"can_hit_tags": ["mtag_ground", "any"],
+		"ground": true,
+		"air": false
+	},
+	"weapon.multi_air": {
+		"type": "hitscan",
+		"damage": 77,
+		"range": 640,
+		"warhead": "wh_direct",
+		"can_hit_tags": ["mtag_air", "any"],
+		"ground": false,
+		"air": true
+	},
+	"weapon.overlap_a": {
+		"type": "hitscan",
+		"damage": 11,
+		"range": 640,
+		"warhead": "wh_direct",
+		"can_hit_tags": ["any"],
+		"ground": true,
+		"air": true
+	},
+	"weapon.overlap_b": {
+		"type": "hitscan",
+		"damage": 22,
+		"range": 640,
+		"warhead": "wh_direct",
+		"can_hit_tags": ["any"],
+		"ground": true,
+		"air": true
+	}
+}
