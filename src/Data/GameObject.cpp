@@ -1277,12 +1277,12 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid, const Ga
 
 bool GameObject::_updateMove(Vector2i destination, MoveReason reason, bool force, const GameObject *ignoreObject)
 {
+	if (this->_firstEvent)
+		this->currentSpeed = this->_speed;
 	if (this->_pickup) {
 		this->_pathCached = false;
 		return false;
 	}
-	if (this->_firstEvent)
-		this->currentSpeed = this->_speed;
 	if (!this->_pathCached) {
 		this->_cachedDest = destination;
 		this->_computeMovePath(destination, force, ignoreObject);
@@ -1510,6 +1510,14 @@ bool GameObject::_updateHarvest()
 		}
 	}
 	return false;
+}
+
+bool GameObject::_updateHarvestClose()
+{
+	if (this->_pickup)
+		return false;
+	this->_harvestClosestResource();
+	return true;
 }
 
 bool GameObject::_updateDump(GameObject *place)
@@ -1936,6 +1944,8 @@ bool GameObject::_handleOrder(const Order &o)
 		return this->_updateCheckMove(cmove->destination, cmove->fail);
 	if (std::holds_alternative<HarvestOrder>(o))
 		return this->_updateHarvest();
+	if (std::holds_alternative<HarvestCloseOrder>(o))
+		return this->_updateHarvestClose();
 	if (auto dump = std::get_if<DumpOrder>(&o))
 		return this->_updateDump(dump->target);
 	if (std::holds_alternative<DeployOrder>(o))
@@ -2569,7 +2579,7 @@ void GameObject::harvest(const Vector2i &pos, bool automatic, bool straight)
 
 void GameObject::harvest()
 {
-	this->_harvestClosestResource();
+	this->_orderQueue.emplace_back(HarvestCloseOrder{});
 }
 
 void GameObject::attack(GameObject *obj, bool automatic, bool force)

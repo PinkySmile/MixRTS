@@ -57,6 +57,7 @@ struct MoveOrder {
 };
 struct FinishMovementOrder {};
 struct HarvestOrder {};
+struct HarvestCloseOrder {};
 struct DeployOrder {};
 struct DieOrder {};
 struct DumpOrder {
@@ -77,6 +78,7 @@ typedef std::variant<
 	MoveOrder,
 	DeployOrder,
 	HarvestOrder,
+	HarvestCloseOrder,
 	DumpOrder,
 	MoveCheckOrder,
 	AttackUnitOrder,
@@ -550,6 +552,7 @@ protected:
 	bool _updateMove(Vector2i pos, MoveReason reason, bool force, const GameObject *ignoreObject);
 	bool _updateCheckMove(Vector2i pos, void (GameObject::*fail)());
 	bool _updateHarvest();
+	bool _updateHarvestClose();
 	bool _updateDump(GameObject *place);
 	bool _updateDeploy();
 	bool _updateAttack(GameObject *obj, bool automatic, bool force);
