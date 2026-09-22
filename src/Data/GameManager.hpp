@@ -60,6 +60,8 @@ private:
 	void _unlockAll();
 	void _recomputeLocked();
 
+	GameObject *_spawnExtra(GameObject &parent, const ExtraSpawn &extra);
+
 	void _checkScroll();
 	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1}, bool drawGrid = false);
 	void _initObject(MapState &map, Player &owner, GameObject &obj);

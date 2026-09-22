@@ -39,40 +39,11 @@ enum MoveReason {
 };
 MoveReason moveReasonFromString(const std::string &);
 
-struct SpinOrder;
-struct TurnOrder;
-struct MoveOrder;
-struct HarvestOrder;
-struct DeployOrder;
-struct DumpOrder;
-struct MoveCheckOrder;
-struct AttackUnitOrder;
-struct FinishMovementOrder;
-struct WaitPickupOrder;
-struct PickupOrder;
-typedef std::variant<
-	SpinOrder,
-	TurnOrder,
-	MoveOrder,
-	DeployOrder,
-	HarvestOrder,
-	DumpOrder,
-	MoveCheckOrder,
-	AttackUnitOrder,
-	FinishMovementOrder,
-	PickupOrder,
-	WaitPickupOrder
-> Order;
-
 struct PickupOrder {
 	GameObject *target;
 	Vector2f destination;
 };
-struct WaitPickupOrder {
-	std::vector<MoveReason> targets;
-	double dist;
-	std::shared_ptr<Order> other;
-};
+struct WaitPickupOrder;
 struct SpinOrder {
 	float angle;
 };
@@ -87,6 +58,7 @@ struct MoveOrder {
 struct FinishMovementOrder {};
 struct HarvestOrder {};
 struct DeployOrder {};
+struct DieOrder {};
 struct DumpOrder {
 	GameObject *target;
 };
@@ -99,6 +71,27 @@ struct AttackUnitOrder {
 	bool automatic;
 	bool force;
 };
+typedef std::variant<
+	SpinOrder,
+	TurnOrder,
+	MoveOrder,
+	DeployOrder,
+	HarvestOrder,
+	DumpOrder,
+	MoveCheckOrder,
+	AttackUnitOrder,
+	FinishMovementOrder,
+	PickupOrder,
+	WaitPickupOrder,
+	DieOrder
+> Order;
+
+struct WaitPickupOrder {
+	std::vector<MoveReason> targets;
+	double dist;
+	std::shared_ptr<Order> other;
+};
+
 
 // Result of resolving a dynamic collision while a grid-bound unit moves.
 enum CollisionResolution {
@@ -108,10 +101,34 @@ enum CollisionResolution {
 };
 
 
+struct Position {
+	enum Pos {
+		POS_CLOSE_BORDER,
+		POS_FAR_BORDER,
+		POS_MIN_BORDER,
+		POS_MAX_BORDER
+	};
+
+	Vector2f pos = {0, 0};
+
+	Position() = default;
+	Position(const nlohmann::json &json);
+	[[nodiscard]] Vector2f getPosition(const Vector2f &target, const MapState &map, Vector2f extraOffset) const;
+
+private:
+	[[nodiscard]] float _getPos(const nlohmann::json &json) const;
+	[[nodiscard]] float _getPos(float base, float target, float border, float extraOffset) const;
+};
 
 struct ExtraSpawn {
 	std::string unit;
-	Vector2i pos;
+	Position pos;
+	bool invincible;
+	std::optional<Position> dest;
+	std::optional<Position> out;
+	std::vector<ExtraSpawn> carry;
+
+	ExtraSpawn(const Mod &base, const nlohmann::json &json);
 };
 
 struct DumpInfo {
@@ -216,23 +233,12 @@ struct ObjectSpawnParams {
 	enum Type {
 		TYPE_APPEAR
 	};
-	enum Pos {
-		POS_CLOSE_BORDER,
-		POS_FAR_BORDER,
-		POS_MIN_BORDER,
-		POS_MAX_BORDER
-	};
 
 	Type type = TYPE_APPEAR;
-	Vector2f pos = {0, 0};
+	Position pos;
 
 	ObjectSpawnParams() = default;
 	ObjectSpawnParams(const nlohmann::json &json);
-	[[nodiscard]] Vector2f getPosition(const Vector2f &target, const MapState &map) const;
-
-private:
-	[[nodiscard]] float _getPos(const nlohmann::json &json) const;
-	[[nodiscard]] float _getPos(float base, float target, float border) const;
 };
 
 struct ObjectDecel {
@@ -419,10 +425,12 @@ public:
 	void harvest(const Vector2i &pos, bool automatic, bool straight = false);
 	void harvest();
 	void attack(GameObject *obj, bool automatic, bool force);
+	void moveOut(const Vector2i &pos);
 	void moveTo(const Vector2i &pos, MoveReason reason, bool straight = false);
 	bool moveAside(GameObject *asker);
 	void dumpResourcesTo(GameObject *dump, bool automatic, bool straight = false);
 	void pickup(GameObject *target, Vector2f destination);
+	void deliverTo(const std::vector<GameObject *> &objects, Vector2f destination);
 	void select() const;
 	void playBuiltSound() const;
 	void clearOrders();

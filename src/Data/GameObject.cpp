@@ -334,6 +334,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("anim_crawl_fire") || json["anim_crawl_fire"].is_object());
 	assert_exp(!json.contains("muzzle") || json["muzzle"].is_string());
 	assert_exp(!json.contains("idle_time") || json["idle_time"].is_array());
+	assert_exp(!json.contains("spawn") || json["spawn"].is_object());
 	if (json.contains("idle_time")) {
 		assert_exp(json["idle_time"].size() == 2);
 		for (size_t i = 0; i < json["idle_time"].size(); i++)
@@ -397,17 +398,6 @@ GameObject::GameObject(
 		assert_exp(json["spawn_orders"].is_array());
 		for (size_t i = 0; i < json["spawn_orders"].size(); i++)
 			assert_msg(json["spawn_orders"][i].is_string(), "json[\"spawn_orders\"][" + std::to_string(i) + "]");
-	}
-	if (json.contains("spawn")) {
-		assert_exp(json["spawn"].is_object());
-		assert_exp(json["spawn"].contains("unit"));
-		assert_exp(json["spawn"]["unit"].is_string());
-		assert_exp(json["spawn"].contains("pos"));
-		assert_exp(json["spawn"]["pos"].is_object());
-		assert_exp(json["spawn"]["pos"].contains("x"));
-		assert_exp(json["spawn"]["pos"]["x"].is_number_integer());
-		assert_exp(json["spawn"]["pos"].contains("y"));
-		assert_exp(json["spawn"]["pos"]["y"].is_number_integer());
 	}
 	if (json.contains("storage"))
 		for (auto &[key, value] : json["storage"].items())
@@ -488,10 +478,7 @@ GameObject::GameObject(
 	if (json.contains("radar"))
 		this->_isRadar = json["radar"];
 	if (json.contains("spawn"))
-		this->_extraSpawn = {
-			RESOURCE(base.getName(), json["spawn"]["unit"]),
-			{json["spawn"]["pos"]["x"], json["spawn"]["pos"]["y"]}
-		};
+		this->_extraSpawn = ExtraSpawn{base, json["spawn"]};
 	if (json.contains("central"))
 		this->_central = json["central"];
 	if (json.contains("spawn_orders"))
@@ -1742,7 +1729,6 @@ Vector2i GameObject::_findLandingSpot(GameObject *target, Vector2i preferredTile
 {
 	auto &map = *target->map;
 	Vector2u targetSize = target->getSize();
-	Vector2u carrierSize = this->getSize();
 	unsigned maxRing = std::max(map.gridSize.x, map.gridSize.y);
 
 	for (unsigned r = 0; r <= maxRing; r++) {
@@ -1964,6 +1950,8 @@ bool GameObject::_handleOrder(const Order &o)
 		return this->_updatePickup(pickup->target, pickup->destination);
 	if (auto wpickup = std::get_if<WaitPickupOrder>(&o))
 		return this->_updateWaitPickup(wpickup->targets, wpickup->dist, &*wpickup->other);
+	if (std::holds_alternative<DieOrder>(o))
+		this->_disposable = true;
 	return true;
 }
 
@@ -2589,6 +2577,16 @@ void GameObject::attack(GameObject *obj, bool automatic, bool force)
 	this->_orderQueue.emplace_back(AttackUnitOrder{.target = obj, .automatic = automatic, .force = force});
 }
 
+void GameObject::moveOut(const Vector2i &pos)
+{
+	this->_orderQueue.emplace_back(MoveOrder{
+		.destination = this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)),
+		.reason = MOVEREASON_DELIVERY,
+		.force = true
+	});
+	this->_orderQueue.emplace_back(DieOrder{});
+}
+
 void GameObject::moveTo(const Vector2i &pos, MoveReason reason, bool straight)
 {
 	assert_exp(this->canMove());
@@ -2716,6 +2714,18 @@ void GameObject::dumpResourcesTo(GameObject *dump, bool automatic, bool straight
 void GameObject::pickup(GameObject *target, Vector2f destination)
 {
 	this->_orderQueue.emplace_front(PickupOrder{target, destination});
+}
+
+void GameObject::deliverTo(const std::vector<GameObject *> &objects, Vector2f destination)
+{
+	// TODO: For now only handle carryalls
+	assert_exp(objects.size() == 1);
+	this->_orderQueue.emplace_back(PickupOrder{objects.front(), destination});
+	objects.front()->_pickup = this;
+	objects.front()->setAltitude(this->_altitude);
+	this->pickupState = 4;
+	this->pickupOldAltitude = this->_altitude;
+	this->_firstREvent = false;
 }
 
 void GameObject::clearOrders()
@@ -3147,7 +3157,7 @@ void GameObject::setOwner(Player *player, unsigned time, unsigned timeDecOnAtk)
 
 void GameObject::spawn(const Vector2f &spawnPoint)
 {
-	Vector2f pos = this->_spawnParams.getPosition(spawnPoint, *this->map);
+	Vector2f pos = this->_spawnParams.pos.getPosition(spawnPoint, *this->map, {0, 0});
 	Vector2i gridPos = this->map->absToTileCoord(pos);
 	Vector2f off = this->_tiles ? Vector2f{0, 0} : this->_getTileOffsetFromCenter() + this->map->tileSize / 2;
 
@@ -3566,23 +3576,15 @@ ObjectDeathParams::ObjectDeathParams(const GameObject *obj, const ObjectDeathPar
 	if (other.shake) this->shake = std::make_unique<ShakeParams>(*other.shake);
 }
 
-ObjectSpawnParams::ObjectSpawnParams(const nlohmann::json &json)
+Position::Position(const nlohmann::json &json)
 {
-	assert_exp(json.contains("type") && json["type"].is_string());
 	assert_exp(json.contains("x") && (json["x"].is_string() || json["x"].is_number()));
 	assert_exp(json.contains("y") && (json["y"].is_string() || json["y"].is_number()));
-
-	std::string type = json["type"];
-
 	this->pos.x = this->_getPos(json["x"]);
 	this->pos.y = this->_getPos(json["y"]);
-	if (type == "appear")
-		this->type = TYPE_APPEAR;
-	else
-		assert_not_reached_msg(type);
 }
 
-float ObjectSpawnParams::_getPos(const nlohmann::json &json) const
+float Position::_getPos(const nlohmann::json &json) const
 {
 	if (json.is_number())
 		return json;
@@ -3604,7 +3606,7 @@ float ObjectSpawnParams::_getPos(const nlohmann::json &json) const
 	return *reinterpret_cast<float *>(&value);
 }
 
-float ObjectSpawnParams::_getPos(float base, float target, float border) const
+float Position::_getPos(float base, float target, float border, float extraOffset) const
 {
 	if (!std::isnan(base))
 		return target + base;
@@ -3614,28 +3616,59 @@ float ObjectSpawnParams::_getPos(float base, float target, float border) const
 	switch (type) {
 	case POS_CLOSE_BORDER:
 		if (target + 1 < border - target)
-			return -1;
-		return border;
+			return -extraOffset;
+		return border + extraOffset;
 	case POS_FAR_BORDER:
 		if (target + 1 > border - target)
-			return -1;
-		return border;
+			return -extraOffset;
+		return border + extraOffset;
 	case POS_MIN_BORDER:
-		return -1;
+		return -extraOffset;
 	case POS_MAX_BORDER:
-		return border;
+		return border + extraOffset;
 	default:
 		assert_not_reached_msg(std::to_string(type));
 	}
 }
 
-Vector2f ObjectSpawnParams::getPosition(const Vector2f &target, const MapState &map) const
+Vector2f Position::getPosition(const Vector2f &target, const MapState &map, Vector2f extraOffset) const
 {
 	Vector2f result = this->pos;
 
-	result.x = this->_getPos(result.x, target.x, map.gridSize.x * map.tileSize.x);
-	result.y = this->_getPos(result.y, target.y, map.gridSize.y * map.tileSize.y);
+	result.x = this->_getPos(result.x, target.x, map.gridSize.x * map.tileSize.x, extraOffset.x);
+	result.y = this->_getPos(result.y, target.y, map.gridSize.y * map.tileSize.y, extraOffset.y);
 	return result;
+}
+
+ExtraSpawn::ExtraSpawn(const Mod &base, const nlohmann::json &json)
+{
+	assert_exp(json.contains("unit") && json["unit"].is_string());
+	assert_exp(!json.contains("delivery") || json["delivery"].is_array());
+	assert_exp(!json.contains("invincible") || json["invincible"].is_boolean());
+
+	this->unit = RESOURCE(base.getName(), json["unit"]);
+	this->pos = Position{json["pos"]};
+	this->invincible = json.contains("invincible") && json["invincible"];
+	if (json.contains("dest"))
+		this->dest = Position{json["dest"]};
+	if (json.contains("out"))
+		this->out = Position{json["out"]};
+	if (json.contains("carry"))
+		for (auto &d : json["carry"])
+			this->carry.emplace_back(base, d);
+}
+
+ObjectSpawnParams::ObjectSpawnParams(const nlohmann::json &json)
+{
+	assert_exp(json.contains("type") && json["type"].is_string());
+
+	std::string type = json["type"];
+
+	this->pos = Position(json);
+	if (type == "appear")
+		this->type = TYPE_APPEAR;
+	else
+		assert_not_reached_msg(type);
 }
 
 ObjectWeapon::ObjectWeapon(unsigned short extraPrio, unsigned barrel, const Mod &base, const std::unordered_map<std::string, Weapon> &weapons, const nlohmann::json &j)

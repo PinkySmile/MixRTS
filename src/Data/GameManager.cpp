@@ -736,16 +736,42 @@ void GameManager::_initObject(MapState &map, Player &owner, GameObject &obj)
 	this->_objectMap[this->_lastObjectId++] = &obj;
 }
 
+GameObject *GameManager::_spawnExtra(GameObject &parent, const ExtraSpawn &extra)
+{
+	GameObject *eobj = this->spawnObject(
+		parent.owner->state.index,
+		extra.pos.getPosition(parent.getPosition(), *parent.map, {0, 0}),
+		"",
+		extra.unit
+	);
+
+	eobj->setPosition(extra.pos.getPosition(parent.getPosition(), *parent.map, Vector2f{32, 32} + eobj->getSize()));
+	if (!extra.carry.empty()) {
+		std::vector<GameObject *> objects;
+
+		eobj->clearOrders();
+		for (auto &cobj : extra.carry)
+			objects.push_back(this->_spawnExtra(*eobj, cobj));
+		assert_exp(extra.dest);
+		eobj->deliverTo(objects, extra.dest->getPosition(parent.getPosition(), *parent.map, Vector2f{0, 0}));
+	}
+	if (extra.out)
+		eobj->moveOut(extra.out->getPosition(parent.getPosition(), *parent.map, Vector2f{32, 32} + eobj->getSize()));
+	return eobj;
+}
+
 void GameManager::_onObjectSpawned(Vector2i pos, GameObject &obj)
 {
-	obj.spawn(obj.map->topLeftCoordToAbs(pos));
+	auto p = obj.map->topLeftCoordToAbs(pos);
+
+	obj.spawn(p);
 	for (auto &order : obj.getSpawnOrders())
 		this->_pushOrder(obj, order);
 
-	auto extra = obj.getExtraSpawn();
+	const auto &extra = obj.getExtraSpawn();
 
 	if (extra)
-		this->spawnObject(obj.owner->state.index, obj.getPosition() + extra->pos, "", extra->unit);
+		this->_spawnExtra(obj, *extra);
 	obj.owner->onObjectGained(&obj);
 	obj.built();
 }
@@ -1104,9 +1130,9 @@ void GameManager::modUnitInArea(Vector2i rel, Vector2u tileSize, size_t player, 
 {
 	const MapState::Quad quad = {
 		rel,
-		Vector2f(rel.x + tileSize.x, rel.y),
-		Vector2f(rel.x + tileSize.x, rel.y + tileSize.y),
-		Vector2f(rel.x, rel.y + tileSize.y),
+		Vector2f(rel.x + static_cast<int>(tileSize.x), rel.y),
+		Vector2f(rel.x + static_cast<int>(tileSize.x), rel.y + static_cast<int>(tileSize.y)),
+		Vector2f(rel.x, rel.y + static_cast<int>(tileSize.y)),
 	};
 	size_t team = this->_players[player].state.team;
 
