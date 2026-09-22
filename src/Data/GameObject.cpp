@@ -1612,7 +1612,6 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 		myCenter = (abs.pt1 + abs.pt2 + abs.pt3 + abs.pt4) / 4;
 	} else
 		myCenter = this->_position + this->_size / 2;
-	myCenter.y -= this->_altitude;
 
 	Vector2f opCenter = obj->getHitboxCenter(myCenter);
 	Vector2f diff = opCenter - myCenter;
@@ -1659,8 +1658,9 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 	const Effect *effect = weapon->weapon->getEffect();
 	const Effect *hitEffect = weapon->weapon->getHitEffect();
 	Vector2f targetPos = opCenter;
-	Vector2f spawnPos = myCenter;
+	Vector2f spawnPos = this->_position + this->_size / 2;
 
+	spawnPos.y -= this->_altitude;
 	barrel.shootTimer = weapon->cooldown;
 	if (weapon->weapon->sendForward()) {
 		double dist = (targetPos - spawnPos).magnitude();
