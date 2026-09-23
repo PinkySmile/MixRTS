@@ -341,6 +341,7 @@ protected:
 	unsigned _repairHeal = 0;
 	unsigned _repairTimer = 0;
 	unsigned _sellTimer = 0;
+	unsigned _crouchTimer = 0;
 	std::pair<unsigned, unsigned> _idleTimerRange;
 	int _altitude = 0;
 	int _power = 0;

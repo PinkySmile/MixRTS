@@ -674,7 +674,7 @@ void GameManager::consumeGeneralEvent(const sf::Event &event)
 	}
 }
 
-bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePosAbs)
+bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePosAbs) const
 {
 	auto &player = this->_players[owner];
 	auto &map = this->_mapStates[player.state.factionIndex];

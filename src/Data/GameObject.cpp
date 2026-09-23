@@ -1361,6 +1361,8 @@ bool GameObject::_updateMove(Vector2i destination, MoveReason reason, bool force
 		diff.normalize();
 		diff *= this->currentSpeed;
 	//}
+	if (this->_crouchTimer != 0)
+		diff /= 2;
 	this->_cachedDist -= diff.magnitude();
 	pos += diff;
 
@@ -2053,8 +2055,13 @@ void GameObject::update()
 	} else
 		this->_currentIdle = 0;
 	if (this->_shooting) {
-		if (!this->_fireAnim.empty() && this->_fireAnim[this->_currentDir].update())
-			this->_shooting = false;
+		if (this->_crouchTimer == 0) {
+			if (!this->_fireAnim.empty() && this->_fireAnim[this->_currentDir].update())
+				this->_shooting = false;
+		} else {
+			if (!this->_crawlFireAnim.empty() && this->_crawlFireAnim[this->_currentDir].update())
+				this->_shooting = false;
+		}
 	}
 	if (this->_built) {
 		if (!this->_buildAnim || !(*this->_buildAnim)() || this->_buildAnim->update())
@@ -2083,12 +2090,22 @@ void GameObject::update()
 	if (this->_asideCooldown != 0)
 		this->_asideCooldown--;
 	if (!this->_shooting && !this->_dumpStop && !this->_dumpStart && !this->_dumping && !this->_currentIdle) {
-		if (this->_moving && !this->_moveAnim.empty()) {
-			if (this->_moveAnim[this->_currentDir]())
-				this->_moveAnim[this->_currentDir].update();
-		} else for (auto &anim: this->_anims[this->_currentDir])
-			if (anim())
-				anim.update();
+		if (this->_crouchTimer == 0) {
+			if (this->_moving && !this->_moveAnim.empty()) {
+				if (this->_moveAnim[this->_currentDir]())
+					this->_moveAnim[this->_currentDir].update();
+			} else for (auto &anim: this->_anims[this->_currentDir])
+				if (anim())
+					anim.update();
+		} else {
+			if (this->_moving && !this->_crawlAnim.empty()) {
+				if (this->_crawlAnim[this->_currentDir]())
+					this->_crawlAnim[this->_currentDir].update();
+			} else {
+				if (this->_crouchAnim[this->_currentDir]())
+					this->_crouchAnim[this->_currentDir].update();
+			}
+		}
 	}
 	for (auto &o : this->_orderQueue) {
 		if (auto dump = std::get_if<DumpOrder>(&o)) {
@@ -2107,6 +2124,8 @@ void GameObject::update()
 		if (!anim() || anim.update())
 			this->_harvesting = false;
 	}
+	if (this->_crouchTimer)
+		this->_crouchTimer--;
 }
 
 void GameObject::drawSkirt() const
@@ -2181,24 +2200,43 @@ void GameObject::render(int layer)
 		display = false;
 	if (display) {
 		if (!this->_dumpStop && !this->_dumpStart && !this->_dumping) {
-			if (this->_shooting && !this->_fireAnim.empty()) {
-				auto &anim = this->_fireAnim[this->_currentDir];
+			if (this->_crouchTimer == 0) {
+				if (this->_shooting && !this->_fireAnim.empty()) {
+					auto &anim = this->_fireAnim[this->_currentDir];
 
-				if (anim() && anim.getLayer() == layer)
-					this->_displayAnim(anim.getAnim());
-			} else if (this->_moving && !this->_moveAnim.empty()) {
-				auto &anim = this->_moveAnim[this->_currentDir];
+					if (anim() && anim.getLayer() == layer)
+						this->_displayAnim(anim.getAnim());
+				} else if (this->_moving && !this->_moveAnim.empty()) {
+					auto &anim = this->_moveAnim[this->_currentDir];
 
-				if (anim() && anim.getLayer() == layer)
-					this->_displayAnim(anim.getAnim());
-			} else if (this->_currentIdle) {
-				auto &anim = this->_idleAnims[this->_currentIdle - 1];
+					if (anim() && anim.getLayer() == layer)
+						this->_displayAnim(anim.getAnim());
+				} else if (this->_currentIdle) {
+					auto &anim = this->_idleAnims[this->_currentIdle - 1];
 
-				if (anim() && anim.getLayer() == layer)
-					this->_displayAnim(anim.getAnim());
-			} else for (auto &anim: this->_anims[this->_currentDir])
-				if (anim() && anim.getLayer() == layer)
-					this->_displayAnim(anim.getAnim());
+					if (anim() && anim.getLayer() == layer)
+						this->_displayAnim(anim.getAnim());
+				} else for (auto &anim: this->_anims[this->_currentDir])
+					if (anim() && anim.getLayer() == layer)
+						this->_displayAnim(anim.getAnim());
+			} else {
+				if (this->_shooting && !this->_crawlFireAnim.empty()) {
+					auto &anim = this->_crawlFireAnim[this->_currentDir];
+
+					if (anim() && anim.getLayer() == layer)
+						this->_displayAnim(anim.getAnim());
+				} else if (this->_moving && !this->_crawlAnim.empty()) {
+					auto &anim = this->_crawlAnim[this->_currentDir];
+
+					if (anim() && anim.getLayer() == layer)
+						this->_displayAnim(anim.getAnim());
+				} else {
+					auto &anim = this->_crouchAnim[this->_currentDir];
+
+					if (anim() && anim.getLayer() == layer)
+						this->_displayAnim(anim.getAnim());
+				}
+			}
 		}
 		if (this->_dumping && (*this->_dump->during)() && this->_dump->during->getLayer() == layer)
 			this->_displayAnim(this->_dump->during->getAnim());
@@ -2324,6 +2362,8 @@ void GameObject::damage(unsigned amount, DamageType type)
 {
 	if (this->isDead())
 		return;
+	if (this->_crouchTimer)
+		amount /= 2;
 	this->setHealth(std::max<int>(this->_hp - amount, 0));
 	if (this->_resourceStorage != 0)
 		this->owner->playEVA(UI::EVA_HARV_UNDER_ATTACK, 300, 3, 600, this->_id);
@@ -2331,6 +2371,9 @@ void GameObject::damage(unsigned amount, DamageType type)
 		this->owner->playEVA(UI::EVA_BUILDING_ATTACKED, 300, 3, 600, this->_id);
 	else
 		this->owner->playEVA(UI::EVA_UNIT_ATTACKED, 300, 1, 600, this->_id);
+	//if (this->_moving && amount > this->_)
+	if (!this->_crouchAnim.empty())
+		this->_crouchTimer = 600;
 	this->_reduceTimeControlTimer(this->_timeDecOnAtk);
 	if (!this->isDead())
 		return;
