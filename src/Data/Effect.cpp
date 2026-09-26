@@ -109,13 +109,8 @@ int Effect::getLayer() const
 	return this->_layer;
 }
 
-const MultiSound *Effect::getSound() const
-{
-	return this->_sound;
-}
-
 void Effect::playSound() const
 {
 	if (this->_sound)
-		this->_sound->play();
+		this->_sound->play(this->_position);
 }

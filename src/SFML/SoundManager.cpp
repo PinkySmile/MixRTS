@@ -7,14 +7,16 @@
 #include "Resources/Game.hpp"
 #include "Data/Logger.hpp"
 
-#define MAX_SOUND 64
+#define MAX_DISTANCE 2048.f
 
-unsigned SoundManager::load(const std::filesystem::path &file)
+unsigned SoundManager::load(const std::filesystem::path &file, bool directionalSound)
 {
-	if (this->_allocatedSounds[file].second != 0) {
-		this->_allocatedSounds[file].second++;
-		game->logger.verbose("Returning already loaded file " + file.string());
-		return this->_allocatedSounds[file].first;
+	std::string id = file.string() + (directionalSound ? " directional" : " static");
+
+	if (this->_allocatedSounds[id].second != 0) {
+		this->_allocatedSounds[id].second++;
+		game->logger.verbose("Returning already loaded file " + id);
+		return this->_allocatedSounds[id].first;
 	}
 
 	std::error_code err;
@@ -41,15 +43,17 @@ unsigned SoundManager::load(const std::filesystem::path &file)
 		this->_freedIndexes.pop_back();
 	}
 
-	game->logger.debug("Loading sound file " + file.string());
-	if (!this->_sounds[index].buffer.loadFromFile(file))
+	auto &snd = this->_sounds[index];
+
+	game->logger.debug("Loading sound file " + id);
+	if (!snd.buffer.loadFromFile(file))
 		game->logger.warn("Failed to sound load " + file.string());
 	else
 		game->logger.verbose("Loaded sound " + file.string() + " successfully");
 
-	this->_sounds[index].sound.setVolume(this->_volume);
-	this->_allocatedSounds[file].first = index;
-	this->_allocatedSounds[file].second = 1;
+	snd.spacial = directionalSound;
+	this->_allocatedSounds[id].first = index;
+	this->_allocatedSounds[id].second = 1;
 	return index;
 }
 
@@ -58,14 +62,14 @@ void SoundManager::remove(unsigned int id)
 	if (!id)
 		return;
 
-	for (auto &[loadedPath, attr] : this->_allocatedSounds)
+	for (auto &[name, attr] : this->_allocatedSounds)
 		if (attr.first == id && attr.second) {
 			attr.second--;
 			if (attr.second) {
-				game->logger.verbose("Remove ref to " + loadedPath.string());
+				game->logger.verbose("Remove ref to " + name);
 				return;
 			}
-			game->logger.debug("Destroying sound " + loadedPath.string());
+			game->logger.debug("Destroying sound " + name);
 			break;
 		}
 
@@ -77,29 +81,78 @@ void SoundManager::remove(unsigned int id)
 	this->_freedIndexes.push_back(id);
 }
 
-void SoundManager::play(unsigned id, float volume) const
+void SoundManager::setCamera(Vector2f pos, Vector2f size)
+{
+	if (pos == this->_pos && this->_size == size / 2)
+		return;
+	this->_pos = pos;
+	this->_size = size / 2;
+	for (auto &pair : this->_sounds | std::ranges::views::values)
+		this->_initSoundPos(pair);
+}
+
+void SoundManager::_initSoundPos(SoundPair &pair)
+{
+	auto &snd = pair.sound;
+
+	if (!pair.spacial) {
+		snd.setPan(0);
+		snd.setVolume(this->_volume * pair.volume);
+		return;
+	}
+
+	Vector2f pos = pair.pos;
+	float volume = 0;
+
+	pos.x -= this->_pos.x;
+	pos.y -= this->_pos.y;
+	if (pos.x < -this->_size.x - MAX_DISTANCE)
+		;
+	else if (pos.x < -this->_size.x) {
+		snd.setPan(-1);
+		volume = 1 + (pos.x + this->_size.x) / MAX_DISTANCE;
+	} else if (pos.x <= this->_size.x) {
+		snd.setPan(pos.x / this->_size.x);
+		volume = 1;
+	} else if (pos.x <= this->_size.x + MAX_DISTANCE) {
+		snd.setPan(1);
+		volume = 1 - (pos.x - this->_size.x) / MAX_DISTANCE;
+	}
+
+	if (pos.y < -this->_size.y - MAX_DISTANCE || pos.y > this->_size.y + MAX_DISTANCE)
+		volume = 0;
+	else if (pos.y < -this->_size.y) {
+		volume *= 1 + (pos.y + this->_size.y) / MAX_DISTANCE;
+	} else if (pos.y <= this->_size.y) {
+	} else if (pos.y <= this->_size.y + MAX_DISTANCE) {
+		volume *= 1 - (pos.y - this->_size.y) / MAX_DISTANCE;
+	}
+	snd.setVolume(volume * this->_volume * pair.volume);
+}
+
+void SoundManager::play(unsigned id, float volume, Vector2f pos)
 {
 	if (id == 0)
 		return;
 	game->logger.debug("Playing sound " + std::to_string(id));
 
-	auto &snd = this->_sounds.at(id).sound;
+	auto &snd = this->_sounds.at(id);
 
-	volume *= this->_volume;
-	volume /= 100;
-	snd.setVolume(volume);
-	snd.play();
+	snd.pos = pos;
+	snd.volume = volume / 100;
+	this->_initSoundPos(snd);
+	snd.sound.play();
 }
 
 void SoundManager::addRef(unsigned int id)
 {
 	if (id == 0)
 		return;
-	for (auto &[loadedPath, attr] : this->_allocatedSounds)
+	for (auto &[name, attr] : this->_allocatedSounds)
 		if (attr.first == id && attr.second) {
 			if (attr.second < 1)
-				return game->logger.warn("Cannot add ref to " + loadedPath.string() + " (" + std::to_string(id) + ") because it was unloaded");
-			game->logger.verbose("Adding ref to " + loadedPath.string());
+				return game->logger.warn("Cannot add ref to " + name + " (" + std::to_string(id) + ") because it was unloaded");
+			game->logger.verbose("Adding ref to " + name);
 			attr.second++;
 			return;
 		}

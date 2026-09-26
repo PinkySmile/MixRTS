@@ -27,11 +27,11 @@ Sound::~Sound()
 	game->soundMgr.remove(this->_handle);
 }
 
-void Sound::load(const std::filesystem::path &file)
+void Sound::load(const std::filesystem::path &file, bool relativeToCamera)
 {
 	if (this->_handle)
 		game->soundMgr.remove(this->_handle);
-	this->_handle = game->soundMgr.load(file);
+	this->_handle = game->soundMgr.load(file, relativeToCamera);
 }
 
 void Sound::setHandle(unsigned handle)
@@ -41,9 +41,9 @@ void Sound::setHandle(unsigned handle)
 	game->soundMgr.addRef(handle);
 }
 
-void Sound::play() const
+void Sound::play(Vector2f pos) const
 {
-	game->soundMgr.play(this->_handle, this->_volume);
+	game->soundMgr.play(this->_handle, this->_volume, pos);
 }
 
 bool Sound::isPlaying() const

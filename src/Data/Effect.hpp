@@ -39,7 +39,6 @@ public:
 	void setPosition(Vector2f pos);
 	void setColor(HSLColor color);
 	[[nodiscard]] int getLayer() const;
-	[[nodiscard]] const MultiSound *getSound() const;
 };
 
 

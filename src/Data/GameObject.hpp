@@ -435,7 +435,7 @@ public:
 	void pickup(GameObject *target, Vector2f destination);
 	void deliverTo(const std::vector<GameObject *> &objects, Vector2f destination);
 	void select() const;
-	void playBuiltSound() const;
+	void playBuiltSound(Vector2f pos) const;
 	void clearOrders();
 	void renderPathFindingPath() const;
 	void playDoSound();

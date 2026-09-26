@@ -475,7 +475,7 @@ TEST_F(GameFixture, BuildingCanBePlacedUnderAFlyingCarryall)
 	Vector2i placementTile = findFreeBuildableTile(*this->manager, map, conyardTile, 1, {2, 2});
 	Vector2i placementAbs = map.topLeftCoordToAbs(placementTile);
 
-	ASSERT_TRUE(this->manager->canSpawnBuilding(this->player->state.index, placementAbs, "d2k:wtra", conyard->getPosition()))
+	ASSERT_TRUE(this->manager->canSpawnBuilding(this->player->state.index, placementAbs, "d2k:wtra", conyard->getPosition(), {}))
 		<< "Setup issue: the wind trap should be placeable there before the carryall shows up";
 
 	// Park a flying carryall exactly over that spot.

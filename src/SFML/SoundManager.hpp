@@ -17,29 +17,31 @@ class SoundManager {
 private:
 	struct SoundPair {
 		sf::SoundBuffer buffer;
-		mutable sf::Sound sound{this->buffer};
+		sf::Sound sound{this->buffer};
+		Vector2f pos;
+		float volume;
+		bool spacial;
 	};
 
 	float _volume = 100;
 	unsigned _lastIndex = 0;
+	Vector2f _pos;
+	Vector2f _size;
 	std::vector<unsigned> _freedIndexes;
 	std::unordered_map<unsigned, SoundPair> _sounds;
-	std::unordered_map<std::filesystem::path, std::pair<unsigned, unsigned>> _allocatedSounds;
+	std::unordered_map<std::string, std::pair<unsigned, unsigned>> _allocatedSounds;
 
+	void _initSoundPos(SoundPair &pair);
 public:
 	SoundManager() = default;
 
-	unsigned load(const std::filesystem::path &file);
+	unsigned load(const std::filesystem::path &file, bool directionalSound);
 	void addRef(unsigned id);
 	void remove(unsigned id);
-	void play(unsigned id, float volume) const;
-	//! Whether id is currently being played through the audio device (always
-	//! false for id == 0, i.e. an unset/unloaded handle).
+	void setCamera(Vector2f pos, Vector2f size);
+	void play(unsigned id, float volume, Vector2f pos);
 	bool isPlaying(unsigned id) const;
 	void setVolume(float volume);
-	//! Exposes the raw samples backing id, e.g. so MockedSoundManager can write
-	//! them out to a WAV file in MODE_RECORD without actually playing them
-	//! through a real audio device.
 	const sf::SoundBuffer &getBuffer(unsigned id) const;
 };
 

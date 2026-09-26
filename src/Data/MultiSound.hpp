@@ -18,6 +18,7 @@ private:
 	void addObject(const std::filesystem::path &base, const nlohmann::json &json);
 public:
 	void init(const std::filesystem::path &base, const nlohmann::json &json);
+	void play(Vector2f pos) const;
 	void play() const;
 };
 

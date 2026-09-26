@@ -7,6 +7,7 @@
 
 
 #include <string>
+#include "Data/Vector.hpp"
 #include "forward.hpp"
 
 class Sound {
@@ -19,9 +20,10 @@ public:
 	Sound(unsigned handle);
 	Sound(const Sound &o);
 	~Sound();
-	void load(const std::filesystem::path &file);
+	void load(const std::filesystem::path &file, bool relativeToCamera);
 	void setHandle(unsigned handle);
-	void play() const;
+	inline void play() const { this->play({}); }
+	void play(Vector2f pos) const;
 	//! Whether this sound is currently being played (always false if load()
 	//! hasn't been called, or the underlying SoundManager never really loads
 	//! anything, e.g. MockedSoundManager in MODE_NORMAL/MODE_RECORD).

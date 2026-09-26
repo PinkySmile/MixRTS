@@ -88,6 +88,10 @@ void Mod::loadSounds(const std::filesystem::path &path, std::unordered_map<std::
 
 		assert_msg(stream, "Failed to open " + path.string());
 		stream >> json;
+		if (json.contains("_general"))
+			gen = json["_general"];
+		else
+			gen = nlohmann::json::object();
 		for (auto &[id, jsound]: json.items()) {
 			if (id.starts_with('_'))
 				continue;
@@ -95,7 +99,12 @@ void Mod::loadSounds(const std::filesystem::path &path, std::unordered_map<std::
 			TRY {
 				std::string fullId = RESOURCE(this->_name, id);
 				assert_exp(!sounds.contains(fullId));
+				assert_exp(jsound.is_object() || jsound.is_array());
 
+				if (jsound.is_object())
+					mergeObjects(jsound, gen);
+				else for (auto &s : jsound)
+					mergeObjects(s, gen);
 				sounds[fullId].init(this->_base, jsound);
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}

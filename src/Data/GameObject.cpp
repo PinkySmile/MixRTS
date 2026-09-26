@@ -1597,7 +1597,7 @@ bool GameObject::_updateDeploy()
 	if (this->_onDeploy->spawnBuilding) {
 		auto &s = *this->_onDeploy->spawnBuilding;
 
-		if (this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position)) {
+		if (this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position, {this->index})) {
 			this->_solid = false;
 			this->_disposable = true;
 
@@ -1687,7 +1687,7 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 		targetPos.y += std::sin(dangle * M_PI / 180) * offset;
 	}
 	if (sound)
-		sound->play();
+		sound->play(spawnPos);
 	if (effect)
 		this->manager->spawnEffect(*effect, spawnPos, this->owner);
 	this->_shooting = true;
@@ -1967,10 +1967,10 @@ bool GameObject::_handleOrder(const Order &o)
 	return true;
 }
 
-void GameObject::playBuiltSound() const
+void GameObject::playBuiltSound(Vector2f pos) const
 {
 	if (this->_buildSound)
-		this->_buildSound->play();
+		this->_buildSound->play(pos + this->_size / 2);
 }
 
 void GameObject::update()
@@ -2372,7 +2372,7 @@ void GameObject::damage(unsigned amount, DamageType type)
 	else
 		this->owner->playEVA(UI::EVA_UNIT_ATTACKED, 300, 1, 600, this->_id);
 	//if (this->_moving && amount > this->_)
-	if (!this->_crouchAnim.empty())
+	if (!this->_crouchAnim.empty() && random_distrib(game->gameRandom, 0, 3) == 0)
 		this->_crouchTimer = 600;
 	this->_reduceTimeControlTimer(this->_timeDecOnAtk);
 	if (!this->isDead())
@@ -2460,7 +2460,7 @@ void GameObject::setHealth(unsigned health)
 		this->owner->state.producedPower += this->getPower();
 	if (health == 0) {
 		if (this->_deathSound)
-			this->_deathSound->play();
+			this->_deathSound->play(this->_position + this->_size / 2);
 		// TODO: Also fire for all allies
 		if (this->_tiles)
 			this->owner->playEVA(UI::EVA_BUILDING_LOST, 300, 3, 600, this->_id);
@@ -2582,7 +2582,7 @@ void GameObject::select() const
 {
 	// TODO: Avoid overlaps
 	if (this->_selectSound)
-		this->_selectSound->play();
+		this->_selectSound->play(this->_position + this->_size / 2);
 }
 
 void GameObject::deploy()
@@ -2593,7 +2593,7 @@ void GameObject::deploy()
 		this->_orderQueue.emplace_back(DeployOrder{});
 	}
 	if (this->_doSound)
-		this->_doSound->play();
+		this->_doSound->play(this->_position + this->_size / 2);
 }
 
 bool GameObject::canDeploy() const
@@ -2602,7 +2602,7 @@ bool GameObject::canDeploy() const
 		if (this->_onDeploy->spawnBuilding) {
 			auto &s = *this->_onDeploy->spawnBuilding;
 
-			return this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position);
+			return this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position, {this->index});
 		}
 	}
 	return false;
@@ -2795,7 +2795,7 @@ void GameObject::clearOrders()
 void GameObject::playDoSound()
 {
 	if (this->_doSound)
-		this->_doSound->play();
+		this->_doSound->play(this->_position + this->_size / 2);
 }
 
 void GameObject::clearPrimaryDump()
@@ -2937,7 +2937,7 @@ void GameObject::crushedBy(GameObject *)
 {
 	this->deinitGlobalGrid();
 	this->setHealth(0);
-	this->_crushSound->play();
+	this->_crushSound->play(this->_position + this->_size / 2);
 	this->_deathAnim = &*this->_crushAnim;
 	this->_gpTimerU[2] = 0;
 	this->_gpTimerU[3] = 0;

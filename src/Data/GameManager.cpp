@@ -178,6 +178,7 @@ void GameManager::_checkScroll()
 		for (auto &u : p.getUIs())
 			if (u)
 				u->forcedCursor.reset();
+	game->soundMgr.setCamera(this->_cameraTranslate + size / 2, size);
 }
 
 void GameManager::update()
@@ -674,7 +675,7 @@ void GameManager::consumeGeneralEvent(const sf::Event &event)
 	}
 }
 
-bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePosAbs) const
+bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePosAbs, const std::vector<unsigned> &exclusionList) const
 {
 	auto &player = this->_players[owner];
 	auto &map = this->_mapStates[player.state.factionIndex];
@@ -703,9 +704,7 @@ bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::str
 			if (line[x].placementRequired) {
 				uint32_t mask = GRIDMASK_CAN_BUILD;
 
-				if (basePos == fullPos)
-					mask &= ~GRIDMASK_IS_FREE;
-				else if (!this->isAreaFree(map.topLeftCoordToAbs(fullPos), map.tileSize))
+				if (!this->isAreaFree(map.topLeftCoordToAbs(fullPos), map.tileSize, exclusionList))
 					return false;
 				if (!map.hasAllGridBits(fullPos, mask))
 					return false;
@@ -869,7 +868,7 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 				line[x].placementConcrete &&
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				map.hasAllGridBits(fullPos, GRIDMASK_CAN_BUILD) &&
-				this->isAreaFree(map.topLeftCoordToAbs(fullPos), map.tileSize)
+				this->isAreaFree(map.topLeftCoordToAbs(fullPos), map.tileSize, {}, false, true)
 			) {
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				this->_map.grid.setGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
@@ -884,20 +883,21 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 
 noGrid:
 	auto proxy = base.getProxy();
+	GameObject *obj = nullptr;
 
 	if (proxy)
 		assert_msg(in.contains(*proxy), *proxy);
-	base.playBuiltSound();
+	base.playBuiltSound(absPos);
 	if (!base.isFake()) {
 		if (proxy)
 			out.push_back(*in.at(*proxy));
 		else
 			out.push_back(base);
+		obj = &out.back();
 
-		auto &obj = out.back();
 		auto parent = player.getSpawnBuilding(buildQueue);
 
-		this->_initObject(map, player, obj);
+		this->_initObject(map, player, *obj);
 		if (parent) {
 			auto exit = parent->getExitOffset();
 			auto spawn = parent->getSpawnOffset();
@@ -907,23 +907,22 @@ noGrid:
 				if (exit) {
 					auto next = *exit + parent->getPosition();
 
-					obj.moveTo(next, MOVEREASON_MOVE_SPAWN, true);
-					obj.setDirection(obj.getPosition().angle(next));
+					obj->moveTo(next, MOVEREASON_MOVE_SPAWN, true);
+					obj->setDirection(obj->getPosition().angle(next));
 				}
 			}
 		}
-		this->_onObjectSpawned(pos, obj);
+		this->_onObjectSpawned(pos, *obj);
 
-		auto &gqueue = obj.getGivenQueue();
-		auto &bqueue = obj.getBuildQueue();
+		auto &gqueue = obj->getGivenQueue();
+		auto &bqueue = obj->getBuildQueue();
 
 		if (parent)
 			parent->produced();
 		else if (gqueue && bqueue && !parent && *gqueue == *bqueue)
-			obj.produced();
-		return &obj;
+			obj->produced();
 	}
-	return nullptr;
+	return obj;
 }
 
 std::vector<Faction> & GameManager::getFactions()
@@ -943,6 +942,8 @@ const LoadedMap &GameManager::getLoadedMap() const
 
 bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const Vector2u &size, bool onlySolid)
 {
+	if (obj.isDisposable())
+		return false;
 	if (onlySolid && !obj.isSolid())
 		return false;
 
@@ -1346,8 +1347,7 @@ Effect &GameManager::spawnEffect(const Effect &effect, Vector2f pos, const Playe
 	result.setPosition(pos);
 	if (owner)
 		result.setColor(owner->getColor());
-	if (auto sound = result.getSound())
-		sound->play();
+	result.playSound();
 	return result;
 }
 
@@ -1420,9 +1420,9 @@ void GameManager::centerCameraOn(Vector2f target)
 	Vector2u size = game->screen->getSize();
 
 	// TODO: Hardcoded UI offset
+	size /= this->_cameraZoom;
 	size.x -= 160 * guiScale;
 	size.y -= 20 * guiScale;
-	// size /= this->_cameraZoom;
 	this->_cameraTranslate = {
 		target.x - size.x / 2,
 		target.y - size.y / 2 + 20 * guiScale
@@ -1435,4 +1435,5 @@ void GameManager::centerCameraOn(Vector2f target)
 		this->_cameraTranslate.x = 0;
 	if (this->_cameraTranslate.y >= this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y)
 		this->_cameraTranslate.y = 0;
+	game->soundMgr.setCamera(this->_cameraTranslate + size / 2, size);
 }
