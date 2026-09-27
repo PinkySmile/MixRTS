@@ -13,13 +13,19 @@
 #include <deque>
 #include <memory>
 #include <SFML/Window/Event.hpp>
-#include "../forward.hpp"
+#include "forward.hpp"
 #include "Vector.hpp"
 #include "Color.hpp"
 #include "Utils.hpp"
 #include "UI.hpp"
 
 struct PlayerQueue {
+	std::unordered_map<std::string, PlayerQueueEntry> entries;
+	const FactionQueue *params;
+};
+
+struct PlayerQueueEntry {
+	PlayerQueue *queue;
 	const Faction *faction;
 	const Upgrade *upgrade;
 	const GameObject *object;
@@ -49,8 +55,8 @@ struct PlayerState {
 	std::unordered_map<std::string, GameObject *> primaryBuildings;
 	std::list<GameObject *> myObjects;
 	std::list<GameObject *> radars;
-	std::unordered_map<std::string, PlayerQueue *> buildQueues;
-	std::unordered_map<std::string, std::unordered_map<std::string, PlayerQueue>> queues;
+	std::unordered_map<std::string, PlayerQueueEntry *> buildQueues;
+	std::unordered_map<std::string, PlayerQueue> queues;
 
 	unsigned getCombinedMoney(const std::string &key);
 };
@@ -71,8 +77,15 @@ private:
 	std::vector<std::unique_ptr<UI>> _uis;
 	std::unordered_map<std::string, const GameObject *> _loadedObjects;
 
-	void _tryEndBuild(const std::string &name, PlayerQueue &queue);
 	void _clean();
+
+	void _updateQueue(PlayerQueueEntry &entry);
+	void _updateSingleQueue(PlayerQueueEntry &entry);
+	void _updateStarportQueue(PlayerQueueEntry &entry);
+
+	void _spawnDelivery(Vector2f target, const ExtraSpawn &params, const std::vector<GameObject *> &objects);
+	void _tryEndBuildSingle(PlayerQueueEntry &entry);
+	void _tryEndBuildStarport(PlayerQueueEntry &entry);
 
 public:
 	PlayerState state;
@@ -113,6 +126,7 @@ public:
 	void onObjectLost(GameObject *obj);
 	void onObjectGained(GameObject *obj);
 	std::vector<GameObject *> getObjects(const std::string &id);
+	PlayerQueue &getQueue(const std::string &name);
 
 	[[nodiscard]] bool isEnabled() const;
 

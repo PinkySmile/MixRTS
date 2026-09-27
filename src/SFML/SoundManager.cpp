@@ -102,12 +102,12 @@ void SoundManager::_initSoundPos(SoundPair &pair)
 	}
 
 	Vector2f pos = pair.pos;
-	float volume = 0;
+	float volume;
 
 	pos.x -= this->_pos.x;
 	pos.y -= this->_pos.y;
-	if (pos.x < -this->_size.x - MAX_DISTANCE)
-		;
+	if (pos.x < -this->_size.x - MAX_DISTANCE || pos.x > this->_size.x + MAX_DISTANCE)
+		volume = 0;
 	else if (pos.x < -this->_size.x) {
 		snd.setPan(-1);
 		volume = 1 + (pos.x + this->_size.x) / MAX_DISTANCE;

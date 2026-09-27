@@ -15,6 +15,70 @@
 #include "GameObject.hpp"
 #include "D2K/D2KUI.hpp"
 
+FactionQueue::FactionQueue(const Mod &base, const nlohmann::json &data)
+{
+	assert_exp(data.contains("requires_producer") && data["requires_producer"].is_boolean());
+	assert_exp(data.contains("behavior") && data["behavior"].is_string());
+	assert_exp(data.contains("unit_spawn") && data["unit_spawn"].is_string());
+
+	std::string behavior = data["behavior"];
+	std::string spawnType = data["unit_spawn"];
+
+	this->requiresProducer = data["requires_producer"];
+	if (behavior == "single_queue")
+		this->behavior = TYPE_SINGLE_QUEUE;
+	else if (behavior == "multi_queue")
+		this->behavior = TYPE_MULTI_QUEUE;
+	else if (behavior == "starport")
+		this->behavior = TYPE_STARPORT;
+	else
+		assert_not_reached_msg("Invalid queue behavior");
+
+	if (spawnType == "none")
+		this->unitSpawn = SPAWN_NONE;
+	else if (spawnType == "inside")
+		this->unitSpawn = SPAWN_INSIDE;
+	else if (spawnType == "placement")
+		this->unitSpawn = SPAWN_PLACEMENT;
+	else if (spawnType == "delivery")
+		this->unitSpawn = SPAWN_DELIVERY;
+	else
+		assert_not_reached_msg("Invalid queue unit_spawn");
+
+	if (this->behavior == TYPE_STARPORT)
+		this->starportParams.emplace(base, data);
+	if (this->unitSpawn == SPAWN_DELIVERY)
+		this->delivery.emplace(base, data);
+}
+
+FactionQueue::StarportParams::StarportParams(const Mod &base, const nlohmann::json &data)
+{
+	assert_exp(data.contains("stock_increase_delay") && data["stock_increase_delay"].is_number_unsigned());
+	assert_exp(data.contains("stock_increase_proba") && data["stock_increase_proba"].is_number_unsigned());
+	assert_exp(data.contains("stock_max") && data["stock_max"].is_number_unsigned());
+	assert_exp(data.contains("discount_min") && data["discount_min"].is_number());
+	assert_exp(data.contains("discount_max") && data["discount_max"].is_number());
+	assert_exp(data.contains("delivery_delay") && data["delivery_delay"].is_number_unsigned());
+	assert_exp(data.contains("delivery_max") && data["delivery_max"].is_number_unsigned());
+	assert_exp(data.contains("single_max") && data["single_max"].is_number_unsigned());
+	assert_exp(data.contains("units") && data["units"].is_array());
+
+	this->stockIncreaseDelay = data["stock_increase_delay"];
+	this->stockIncreaseProba = data["stock_increase_proba"];
+	this->stockMax = data["stock_max"];
+	this->discountMin = data["discount_min"];
+	this->discountMax = data["discount_max"];
+	this->deliveryDelay = data["delivery_delay"];
+	this->deliveryMax = data["delivery_max"];
+	this->singleMax = data["single_max"];
+	this->units.reserve(data["units"].size());
+	for (size_t i = 0; i < data["units"].size(); i++)
+		TRY {
+			assert_exp(data["units"][i].is_string());
+			this->units.emplace_back(RESOURCE(base.getName(), data["units"][i]));
+		} CATCH_AND_RETHROW("In [\"units\"][" + std::to_string(i) + "]");
+}
+
 Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json &data) :
 	_base(base),
 	_name(name)
@@ -26,6 +90,7 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	assert_exp(data.contains("has_radar") && data["has_radar"].is_boolean());
 	assert_exp(data.contains("radar_powered") && data["radar_powered"].is_boolean());
 	assert_exp(!data.contains("repairing_animation") || data["repairing_animation"].is_object());
+	assert_exp(data.contains("queues") && data["queues"].is_object());
 
 	assert_exp(data.contains("sounds") && data["sounds"].is_array());
 	for (size_t i = 0; i < data["sounds"].size(); i++)
@@ -130,6 +195,10 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 		}
 		this->_startingObjects.push_back(b);
 	}
+	for (const auto &[n, q] : data["queues"].items())
+		TRY {
+			this->_queues.emplace(RESOURCE(base.getName(), n), FactionQueue{base, q});
+		} CATCH_AND_RETHROW("In faction queue \"" + n + "\"\n")
 }
 
 void Faction::load(const std::vector<std::string> &allFactions)
@@ -151,6 +220,12 @@ void Faction::load(const std::vector<std::string> &allFactions)
 			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects, this->_loadedWeapons, this->_loadedObjects);
 		for (auto &u: this->_upgrades)
 			this->_base.loadUpgrades(u, *this, this->_loadedUpgrades);
+		for (auto &[n, q] : this->_queues)
+			if (q.starportParams)
+				for (auto &u : q.starportParams->units)
+					TRY {
+						assert_exp(this->_loadedObjects.contains(u));
+					} CATCH_AND_RETHROW("In queue \"" + n + "\"")
 	} CATCH_AND_RETHROW("While loading faction \"" + this->_name + "\"\n")
 }
 
@@ -285,6 +360,11 @@ const std::string &Faction::getName() const
 const std::optional<nlohmann::json> &Faction::getRepairAnim() const
 {
 	return this->_repairAnim;
+}
+
+const std::unordered_map<std::string, FactionQueue> & Faction::getQueues() const
+{
+	return this->_queues;
 }
 
 const std::optional<std::string> &Faction::getPrimaryQueue() const

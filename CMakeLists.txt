@@ -255,6 +255,8 @@ set(
 	src/Data/Effect.hpp
 	src/Data/Projectile.cpp
 	src/Data/Projectile.hpp
+	src/Data/Extra.cpp
+	src/Data/Extra.hpp
 )
 
 add_executable(

@@ -576,21 +576,22 @@ void GameManager::_checkObjectLocked(const std::string &name, T &object, Player 
 	if (!bqueue)
 		return;
 
-	auto &q = owner.state.queues[*bqueue][name];
+	auto &queue = owner.state.queues[*bqueue];
+	auto &entry = queue.entries[name];
 	auto &req = object.getRequirements();
 
 	if (
 		(object.requiresQueueBuilding() && owner.state.queueBuildings[*bqueue].empty()) ||
 		!req(owner.state.elementsOwned)
 	) {
-		q.unlocked = false;
-		if (q.buildTime != 0) {
-			for (auto &p : q.spent)
+		entry.unlocked = false;
+		if (entry.buildTime != 0) {
+			for (auto &p : entry.spent)
 				owner.credit(p.first, p.second, Player::CREDIT_SYSTEM);
 			owner.resetQueue(*bqueue);
 		}
 	}
-	q.buildTime = object.getBuildSpeed() * 8;
+	entry.buildTime = object.getBuildSpeed() * 8;
 }
 
 void GameManager::_recomputeLocked()

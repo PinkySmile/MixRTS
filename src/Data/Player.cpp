@@ -48,9 +48,13 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 			continue;
 		for (auto &[key, val] : f.getObjects())
 			this->_loadedObjects[key] = &val;
+		for (auto &[key, params] : f.getQueues())
+			this->state.queues[key].params = &params;
 	}
 	for (auto &[key, val] : this->_primaryFaction.getObjects())
 		this->_loadedObjects[key] = &val;
+	for (auto &[key, params] : this->_primaryFaction.getQueues())
+		this->state.queues[key].params = &params;
 }
 
 void Player::_clean()
@@ -84,6 +88,135 @@ void Player::_clean()
 		assert_exp(!b || !b->isDisposable());
 }
 
+void Player::_updateQueue(PlayerQueueEntry &entry)
+{
+	switch (entry.queue->params->behavior) {
+	case FactionQueue::TYPE_SINGLE_QUEUE:
+		return this->_updateSingleQueue(entry);
+	case FactionQueue::TYPE_STARPORT:
+		return this->_updateStarportQueue(entry);
+	default:
+		assert_not_reached();
+	}
+}
+
+void Player::_updateSingleQueue(PlayerQueueEntry &entry)
+{
+	if (entry.buildProgress == entry.buildTime)
+		return this->_tryEndBuildSingle(entry);
+	if (entry.paused)
+		return;
+
+	double percent = static_cast<double>(entry.buildProgress + 1) / entry.buildTime;
+	std::unordered_map<std::string, unsigned> expected;
+	std::unordered_map<std::string, unsigned> extra;
+
+	if (entry.object)
+		expected = entry.object->getCost();
+	else if (entry.upgrade)
+		expected = entry.upgrade->getCost();
+	else
+		assert_not_reached();
+	for (auto &f : expected | std::ranges::views::values)
+		f = round(f * percent);
+	for (auto &[n, f] : expected)
+		extra[n] = f - entry.spent[n];
+	if (std::ranges::any_of(extra, [this](const std::pair<std::string, unsigned> &p){
+		if (this->state.getCombinedMoney(p.first) >= p.second)
+			return false;
+		this->playEVA(UI::EVA_NO_CREDITS, 15, 2, 1800, p.first);
+		return true;
+	}))
+		return;
+
+	for (auto &p : extra)
+		this->consume(p.first, p.second);
+
+	unsigned amount;
+
+	percent = 100 + (static_cast<double>(this->state.producedPower) - this->state.consumedPower) / 2;
+	if (percent >= 100)
+		amount = 8;
+	else if (percent >= 50)
+		amount = 4;
+	else
+		amount = 2;
+	switch (this->state.queueBuildings[*entry.queueId].size()) {
+	case 0:
+	case 1:
+		break;
+	case 2:
+		amount += amount / 2;
+		break;
+	default:
+		amount *= 2;
+		break;
+	}
+	entry.buildProgress += amount;
+	entry.spent = expected;
+	if (entry.buildProgress >= entry.buildTime) {
+		this->playEVA(UI::EVA_BUILDING_DONE, EXPIRE_BUILD, PRIORITY_BUILD, 0, *entry.queueId);
+		entry.buildProgress = entry.buildTime;
+	}
+}
+
+void Player::_updateStarportQueue(PlayerQueueEntry &entry)
+{
+	assert_exp(entry.object);
+}
+
+void Player::_spawnDelivery(Vector2f target, const ExtraSpawn &extra, const std::vector<GameObject *> &objects)
+{
+	GameObject *eobj = this->_parent.spawnObject(
+		this->state.index,
+		{0, 0},
+		"",
+		extra.unit
+	);
+
+	assert_exp(extra.dest);
+	assert_exp(extra.carry.empty());
+	eobj->setPosition(extra.pos.getPosition(target, this->_mapState, this->_mapState.tileSize + eobj->getSize()));
+	eobj->deliverTo(objects, extra.dest->getPosition(target, this->_mapState, {0, 0}));
+	if (extra.out)
+		eobj->moveOut(extra.out->getPosition(target, this->_mapState, this->_mapState.tileSize + eobj->getSize()));
+}
+
+void Player::_tryEndBuildSingle(PlayerQueueEntry &entry)
+{
+	auto defaultPos = this->_parent.getLoadedMap().pathFindingGrid.gridSize / 2;
+
+	switch (entry.queue->params->unitSpawn) {
+	case FactionQueue::SPAWN_NONE:
+		this->state.elementsOwned[*entry.elementId]++;
+		entry.spent.clear();
+		this->resetQueue(*entry.queueId);
+		this->checkUnlocked(*entry.faction);
+		break;
+	case FactionQueue::SPAWN_INSIDE:
+		this->_parent.spawnObject(this->state.index, defaultPos, *entry.queueId, *entry.elementId);
+		entry.spent.clear();
+		this->resetQueue(*entry.queueId);
+		this->checkUnlocked(*entry.faction);
+		break;
+	case FactionQueue::SPAWN_DELIVERY: {
+		GameObject *obj = this->_parent.spawnObject(this->state.index, defaultPos, *entry.queueId, *entry.elementId);
+
+		this->_spawnDelivery(obj->getMiddle(), *entry.queue->params->delivery, {obj});
+		entry.spent.clear();
+		this->resetQueue(*entry.queueId);
+		this->checkUnlocked(*entry.faction);
+		break;
+	}
+	case FactionQueue::SPAWN_PLACEMENT:
+		break;
+	}
+}
+
+void Player::_tryEndBuildStarport(PlayerQueueEntry &entry)
+{
+}
+
 void Player::update()
 {
 	if (this->_primaryFaction.hasRadar())
@@ -99,59 +232,7 @@ void Player::update()
 	for (auto &[qname, q] : this->state.buildQueues) {
 		if (!q)
 			continue;
-		if (q->buildProgress == q->buildTime) {
-			this->_tryEndBuild(qname, *q);
-		} else if (!q->paused) {
-			double percent = static_cast<double>(q->buildProgress + 1) / q->buildTime;
-			std::unordered_map<std::string, unsigned> expected;
-			std::unordered_map<std::string, unsigned> extra;
-
-			if (q->object)
-				expected = q->object->getCost();
-			else if (q->upgrade)
-				expected = q->upgrade->getCost();
-			for (auto &f : expected | std::ranges::views::values)
-				f = round(f * percent);
-			for (auto &[n, f] : expected)
-				extra[n] = f - q->spent[n];
-			if (std::ranges::any_of(extra, [this](const std::pair<std::string, unsigned> &p){
-				if (this->state.getCombinedMoney(p.first) >= p.second)
-					return false;
-				this->playEVA(UI::EVA_NO_CREDITS, 15, 2, 1800, p.first);
-				return true;
-			}))
-				continue;
-
-			for (auto &p : extra)
-				this->consume(p.first, p.second);
-
-			unsigned amount;
-
-			percent = 100 + (static_cast<double>(this->state.producedPower) - this->state.consumedPower) / 2;
-			if (percent >= 100)
-				amount = 8;
-			else if (percent >= 50)
-				amount = 4;
-			else
-				amount = 2;
-			switch (this->state.queueBuildings[qname].size()) {
-			case 0:
-			case 1:
-				break;
-			case 2:
-				amount += amount / 2;
-				break;
-			default:
-				amount *= 2;
-				break;
-			}
-			q->buildProgress += amount;
-			q->spent = expected;
-			if (q->buildProgress >= q->buildTime) {
-				this->playEVA(UI::EVA_BUILDING_DONE, EXPIRE_BUILD, PRIORITY_BUILD, 0, qname);
-				q->buildProgress = q->buildTime;
-			}
-		}
+		this->_updateQueue(*q);
 	}
 	if (this->state.producedPower < this->state.consumedPower)
 		this->playEVA(UI::EVA_LOW_POWER, EXPIRE_POWER, PRIORITY_POWER, COOLDOWN_POWER);
@@ -250,28 +331,31 @@ void Player::handleUiEvents()
 			continue;
 		while (auto event = ui->pollEvent()) {
 			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event)) {
-				auto &sq = this->state.queues[place->queue][place->id];
+				auto &q = this->state.queues.at(place->queue);
+				assert_exp(q.params->unitSpawn == FactionQueue::SPAWN_PLACEMENT);
+				auto &sq = q.entries[place->id];
 
 				this->_parent.spawnObject(this->state.index, place->position, place->queue, place->id);
 				sq.spent.clear();
 				this->resetQueue(place->queue);
 			} else if (auto startBuild = std::get_if<UI::StartBuildEvent>(&*event)) {
 				bool b = true;
-				auto &queue = this->state.queues[startBuild->queue][startBuild->id];
+				auto &q = this->state.queues.at(startBuild->queue);
+				auto &queue = q.entries[startBuild->id];
 
 				if ((queue.buildProgress != 0 && !queue.paused) || !queue.buildable) {
 					if (this->state.buildQueues[startBuild->queue] != nullptr)
 						this->playEVA(UI::EVA_ALREADY_BUILDING, 300, 2, 300);
 					continue;
 				}
-				for (auto &[name, q] : this->state.queues[startBuild->queue]) {
-					if (q.paused) {
+				for (auto &[name, entry] : q.entries) {
+					if (entry.paused) {
 						if (name == startBuild->id)
-							q.paused = false;
+							entry.paused = false;
 						b = false;
 						break;
 					}
-					q.buildable = false;
+					entry.buildable = false;
 				}
 				if (b) {
 					queue.buildable = true;
@@ -288,7 +372,8 @@ void Player::handleUiEvents()
 				if (this->state.buildQueues[cancelBuild->queue] == nullptr)
 					continue;
 
-				auto &sq = this->state.queues[cancelBuild->queue][cancelBuild->id];
+				auto &q = this->state.queues.at(cancelBuild->queue);
+				auto &sq = q.entries[cancelBuild->id];
 
 				if (sq.buildProgress == 0);
 				else if (sq.paused || sq.buildProgress == sq.buildTime) {
@@ -380,7 +465,7 @@ void Player::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int pri
 void Player::recomputeLocked()
 {
 	for (auto &list : this->state.queues | std::ranges::views::values) {
-		for (auto &q : list | std::ranges::views::values) {
+		for (auto &q : list.entries | std::ranges::views::values) {
 			if (!q.faction->regressesTech())
 				continue;
 			if (
@@ -402,32 +487,9 @@ void Player::checkUnlocked(const Faction &faction)
 		this->unlockObject(faction, name, upgrade);
 }
 
-void Player::_tryEndBuild(const std::string &name, PlayerQueue &queue)
-{
-	if (queue.upgrade) {
-		this->state.elementsOwned[*queue.elementId]++;
-		queue.spent.clear();
-		this->resetQueue(*queue.queueId);
-		this->checkUnlocked(*queue.faction);
-	} else if (queue.object) {
-		if (
-			!queue.object->requiresPlacement() &&
-			(!this->getPrimaryBuilding(name) || this->getSpawnBuilding(name))
-		) {
-			auto defaultPos = this->_parent.getLoadedMap().pathFindingGrid.gridSize / 2;
-
-			this->_parent.spawnObject(this->state.index, defaultPos, *queue.queueId, *queue.elementId);
-			queue.spent.clear();
-			this->resetQueue(*queue.queueId);
-			this->checkUnlocked(*queue.faction);
-		}
-	} else
-		assert_not_reached();
-}
-
 void Player::lockQueue(const std::string &queueId)
 {
-	for (auto &[name, q] : this->state.queues[queueId]) {
+	for (auto &[name, q] : this->state.queues.at(queueId).entries) {
 		q.buildable = false;
 		q.unlocked = false;
 		q.paused = false;
@@ -444,7 +506,7 @@ void Player::resetQueue(const std::string &queueId)
 
 	if (building)
 		building->producing(false);
-	for (auto &[name, q] : this->state.queues[queueId]) {
+	for (auto &[name, q] : this->state.queues.at(queueId).entries) {
 		q.buildable = this->state.elementsOwned[name] < q.limit;
 		q.paused = false;
 		q.buildProgress = 0;
@@ -624,28 +686,30 @@ void Player::unlockObject(const Faction &f, const std::string &name, T &object, 
 			return;
 	}
 
-	auto &queue = this->state.queues[*bqueue][name];
+	auto &queue = this->state.queues.at(*bqueue);
+	auto &entry = queue.entries[name];
 
-	if (!debugTime && queue.unlocked)
+	if (!debugTime && entry.unlocked)
 		return;
 
-	queue.unlocked = true;
-	queue.limit = object.getLimit();
-	queue.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < queue.limit;
-	queue.paused = false;
-	queue.buildProgress = 0;
-	queue.buildTime = debugTime ? 1 : object.getBuildSpeed() * 8;
-	queue.faction = &f;
-	if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*queue.object)>>) {
-		queue.object = &object;
-		queue.upgrade = nullptr;
-	} else if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*queue.upgrade)>>) {
-		queue.object = nullptr;
-		queue.upgrade = &object;
+	entry.unlocked = true;
+	entry.limit = object.getLimit();
+	entry.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < entry.limit;
+	entry.paused = false;
+	entry.buildProgress = 0;
+	entry.buildTime = debugTime ? 1 : object.getBuildSpeed() * 8;
+	entry.faction = &f;
+	entry.queue = &queue;
+	if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*entry.object)>>) {
+		entry.object = &object;
+		entry.upgrade = nullptr;
+	} else if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*entry.upgrade)>>) {
+		entry.object = nullptr;
+		entry.upgrade = &object;
 	} else
 		static_assert(false);
-	queue.elementId = &name;
-	queue.queueId = &*bqueue;
+	entry.elementId = &name;
+	entry.queueId = &*bqueue;
 	this->playEVA(UI::EVA_UNLOCKED, 1800, 3, 60, *bqueue);
 }
 

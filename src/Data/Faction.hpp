@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <nlohmann/json.hpp>
 #include "forward.hpp"
+#include "Extra.hpp"
 #include "Sprite.hpp"
 #include "MultiSound.hpp"
 
@@ -16,6 +17,42 @@ struct StartObject {
 	Vector2i offset = {0, 0};
 	std::string name;
 	std::string queue;
+};
+
+struct FactionQueue {
+	enum Type {
+		TYPE_SINGLE_QUEUE,
+		TYPE_MULTI_QUEUE,
+		TYPE_STARPORT
+	};
+	enum Spawn {
+		SPAWN_NONE,
+		SPAWN_INSIDE,
+		SPAWN_PLACEMENT,
+		SPAWN_DELIVERY
+	};
+
+	struct StarportParams {
+		unsigned stockIncreaseDelay;
+		unsigned stockIncreaseProba;
+		unsigned stockMax;
+		int discountMin;
+		int discountMax;
+		unsigned deliveryDelay;
+		unsigned deliveryMax;
+		unsigned singleMax;
+		std::vector<std::string> units;
+
+		StarportParams(const Mod &base, const nlohmann::json &data);
+	};
+
+	Type behavior;
+	bool requiresProducer;
+	Spawn unitSpawn;
+	std::optional<StarportParams> starportParams;
+	std::optional<ExtraSpawn> delivery;
+
+	FactionQueue(const Mod &base, const nlohmann::json &data);
 };
 
 class Faction {
@@ -29,6 +66,7 @@ private:
 	std::vector<std::string> _effects;
 	std::vector<std::string> _weapons;
 	std::vector<std::string> _warheads;
+	std::unordered_map<std::string, FactionQueue> _queues;
 	std::unordered_map<std::string, MultiSound> _loadedSounds;
 	std::unordered_map<std::string, Upgrade> _loadedUpgrades;
 	std::unordered_map<std::string, GameObject> _loadedObjects;
@@ -79,6 +117,7 @@ public:
 	[[nodiscard]] bool isRadarPowered() const;
 	[[nodiscard]] const std::string &getName() const;
 	[[nodiscard]] const std::optional<nlohmann::json> &getRepairAnim() const;
+	[[nodiscard]] const std::unordered_map<std::string, FactionQueue> &getQueues() const;
 
 	[[nodiscard]] std::unordered_map<std::string, MultiSound> &getSounds();
 	[[nodiscard]] std::unordered_map<std::string, Upgrade> &getUpgrades();

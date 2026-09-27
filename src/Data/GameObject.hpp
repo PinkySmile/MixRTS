@@ -20,6 +20,7 @@
 #include "FindPath.hpp"
 #include "ConditionalAnim.hpp"
 #include "Warhead.hpp"
+#include "Extra.hpp"
 
 enum MoveReason {
 	MOVEREASON_MOVE_COMMAND,
@@ -100,37 +101,6 @@ enum CollisionResolution {
 	COLLISION_PROCEED, // The way ahead is clear (possibly on a freshly found path).
 	COLLISION_WAIT,    // Blocked for now; keep the order and retry next frame.
 	COLLISION_ABORT    // Nothing can be done; the unit must stop here.
-};
-
-
-struct Position {
-	enum Pos {
-		POS_CLOSE_BORDER,
-		POS_FAR_BORDER,
-		POS_MIN_BORDER,
-		POS_MAX_BORDER
-	};
-
-	Vector2f pos = {0, 0};
-
-	Position() = default;
-	Position(const nlohmann::json &json);
-	[[nodiscard]] Vector2f getPosition(const Vector2f &target, const MapState &map, Vector2f extraOffset) const;
-
-private:
-	[[nodiscard]] float _getPos(const nlohmann::json &json) const;
-	[[nodiscard]] float _getPos(float base, float target, float border, float extraOffset) const;
-};
-
-struct ExtraSpawn {
-	std::string unit;
-	Position pos;
-	bool invincible;
-	std::optional<Position> dest;
-	std::optional<Position> out;
-	std::vector<ExtraSpawn> carry;
-
-	ExtraSpawn(const Mod &base, const nlohmann::json &json);
 };
 
 struct DumpInfo {
@@ -371,6 +341,7 @@ protected:
 	bool _repairing = false;
 	bool _animFinished = false;
 	bool _ignoreTerrain = false;
+	bool _moveWhileTurn = false;
 	// TODO: Find a better way to do this
 	bool _shooting = false;
 	bool _dumpStop = false;

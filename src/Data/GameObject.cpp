@@ -319,6 +319,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("altitude") || json["altitude"].is_number());
 	assert_exp(!json.contains("can_crush") || json["can_crush"].is_boolean());
 	assert_exp(!json.contains("radar") || json["radar"].is_boolean());
+	assert_exp(!json.contains("move_while_turn") || json["move_while_turn"].is_boolean());
 	assert_exp(!json.contains("repair_delay") || json["repair_delay"].is_number());
 	assert_exp(!json.contains("repair_heal") || json["repair_heal"].is_number());
 	assert_exp(!json.contains("repair_cost") || json["repair_cost"].is_object());
@@ -477,6 +478,9 @@ GameObject::GameObject(
 		this->_repairCost = json["repair_cost"];
 	if (json.contains("radar"))
 		this->_isRadar = json["radar"];
+	if (json.contains("move_while_turn"))
+		// TODO: Not actually implemented
+		this->_moveWhileTurn = json["move_while_turn"];
 	if (json.contains("spawn"))
 		this->_extraSpawn = ExtraSpawn{base, json["spawn"]};
 	if (json.contains("central"))
@@ -802,6 +806,7 @@ GameObject::GameObject(
 		std::ranges::sort(w, [](ObjectWeapon *a, ObjectWeapon *b){
 			return a->priority < b->priority;
 		});
+	assert_msg(!this->_moveWhileTurn || (!this->_boundToGrid && this->_ignoreTerrain), "move_while_turn only works if the unit isn't bound to grid, and ignores terrain");
 }
 
 GameObject::~GameObject()
@@ -1324,12 +1329,21 @@ bool GameObject::_updateMove(Vector2i destination, MoveReason reason, bool force
 	} else
 		a = this->_position.angle(dest);
 
+	// TODO: All units should still have a direction even when non directional sprites are used
+	//       so the turn speed can be changed.
 	if (a) {
 		unsigned angle = round((*a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
 
 		angle %= this->_anims.size();
-		if (angle != this->_currentDir && !this->_updateTurn(angle))
-			return false;
+		if (angle != this->_currentDir) {
+			if (!this->_updateTurn(angle) && !this->_moveWhileTurn)
+				return false;
+			*a = this->getFacingAngle();
+			dest = {
+				std::cos(*a) * this->currentSpeed * 2,
+				std::sin(*a) * this->currentSpeed * 2
+			};
+		}
 	}
 
 	switch (this->_boundToGrid ? this->_resolveGridCollision(force, ignoreObject) : this->_resolveFreeCollision(force, ignoreObject)) {
@@ -3627,88 +3641,6 @@ ObjectDeathParams::ObjectDeathParams(const GameObject *obj, const ObjectDeathPar
 	this->projectilesTarget = other.projectilesTarget;
 	this->projectilesCount = other.projectilesCount;
 	if (other.shake) this->shake = std::make_unique<ShakeParams>(*other.shake);
-}
-
-Position::Position(const nlohmann::json &json)
-{
-	assert_exp(json.contains("x") && (json["x"].is_string() || json["x"].is_number()));
-	assert_exp(json.contains("y") && (json["y"].is_string() || json["y"].is_number()));
-	this->pos.x = this->_getPos(json["x"]);
-	this->pos.y = this->_getPos(json["y"]);
-}
-
-float Position::_getPos(const nlohmann::json &json) const
-{
-	if (json.is_number())
-		return json;
-	assert_exp(json.is_string());
-
-	std::string pos = json;
-	unsigned value = 0x7FFF0000;
-
-	if (pos == "close_border")
-		value |= POS_CLOSE_BORDER;
-	else if (pos == "far_border")
-		value |= POS_FAR_BORDER;
-	else if (pos == "min_border")
-		value |= POS_MIN_BORDER;
-	else if (pos == "max_border")
-		value |= POS_MAX_BORDER;
-	else
-		assert_not_reached_msg(pos);
-	return *reinterpret_cast<float *>(&value);
-}
-
-float Position::_getPos(float base, float target, float border, float extraOffset) const
-{
-	if (!std::isnan(base))
-		return target + base;
-
-	unsigned type = *reinterpret_cast<unsigned *>(&base) & 0xFFFF;
-
-	switch (type) {
-	case POS_CLOSE_BORDER:
-		if (target + 1 < border - target)
-			return -extraOffset;
-		return border + extraOffset;
-	case POS_FAR_BORDER:
-		if (target + 1 > border - target)
-			return -extraOffset;
-		return border + extraOffset;
-	case POS_MIN_BORDER:
-		return -extraOffset;
-	case POS_MAX_BORDER:
-		return border + extraOffset;
-	default:
-		assert_not_reached_msg(std::to_string(type));
-	}
-}
-
-Vector2f Position::getPosition(const Vector2f &target, const MapState &map, Vector2f extraOffset) const
-{
-	Vector2f result = this->pos;
-
-	result.x = this->_getPos(result.x, target.x, map.gridSize.x * map.tileSize.x, extraOffset.x);
-	result.y = this->_getPos(result.y, target.y, map.gridSize.y * map.tileSize.y, extraOffset.y);
-	return result;
-}
-
-ExtraSpawn::ExtraSpawn(const Mod &base, const nlohmann::json &json)
-{
-	assert_exp(json.contains("unit") && json["unit"].is_string());
-	assert_exp(!json.contains("delivery") || json["delivery"].is_array());
-	assert_exp(!json.contains("invincible") || json["invincible"].is_boolean());
-
-	this->unit = RESOURCE(base.getName(), json["unit"]);
-	this->pos = Position{json["pos"]};
-	this->invincible = json.contains("invincible") && json["invincible"];
-	if (json.contains("dest"))
-		this->dest = Position{json["dest"]};
-	if (json.contains("out"))
-		this->out = Position{json["out"]};
-	if (json.contains("carry"))
-		for (auto &d : json["carry"])
-			this->carry.emplace_back(base, d);
 }
 
 ObjectSpawnParams::ObjectSpawnParams(const nlohmann::json &json)

@@ -341,7 +341,7 @@ bool D2KUI::_hasUpgrades()
 
 	if (it == this->ownerState->queues.end())
 		return false;
-	return std::ranges::any_of(it->second | std::ranges::views::values, [](const PlayerQueue &q){
+	return std::ranges::any_of(it->second.entries | std::ranges::views::values, [](const PlayerQueueEntry &q){
 		return q.buildable && q.unlocked;
 	});
 }
@@ -350,7 +350,7 @@ static void updateList(
 	const std::string &prefix,
 	const std::string &modName,
 	const std::filesystem::path &base,
-	const std::unordered_map<std::string, PlayerQueue> &list,
+	const std::unordered_map<std::string, PlayerQueueEntry> &list,
 	const std::vector<std::string> &order,
 	tgui::ScrollablePanel::Ptr panel,
 	std::vector<std::string> &added,
@@ -458,7 +458,7 @@ static void updateList(
 
 static void updateList2(
 	const std::filesystem::path &base,
-	const std::unordered_map<std::string, PlayerQueue> &list,
+	const std::unordered_map<std::string, PlayerQueueEntry> &list,
 	const std::vector<std::string> &order,
 	tgui::ScrollablePanel::Ptr panel,
 	std::vector<std::string> &added,
@@ -534,7 +534,7 @@ static void updateList2(
 
 static void updateList3(
 	const std::filesystem::path &base,
-	const std::vector<std::unordered_map<std::string, PlayerQueue> *> &&list,
+	const std::vector<std::unordered_map<std::string, PlayerQueueEntry> *> &&list,
 	const std::vector<std::string> &order,
 	tgui::ScrollablePanel::Ptr panel,
 	std::vector<std::string> &added,
@@ -547,7 +547,7 @@ static void updateList3(
 	for (auto &b : order) {
 		size_t i = 0;
 		bool mustBeAdded = false;
-		std::unordered_map<std::string, PlayerQueue>::iterator it;
+		std::unordered_map<std::string, PlayerQueueEntry>::iterator it;
 
 		while (i != list.size()) {
 			it = list[i]->find(b);
@@ -614,7 +614,7 @@ static void updateList3(
 
 	for (auto &b : order) {
 		size_t i = 0;
-		std::unordered_map<std::string, PlayerQueue>::iterator it;
+		std::unordered_map<std::string, PlayerQueueEntry>::iterator it;
 
 		while (i != list.size()) {
 			it = list[i]->find(b);
@@ -660,12 +660,12 @@ void D2KUI::update()
 	}
 
 	unsigned credits = std::min(99999999U, this->ownerState->getCombinedMoney("base:credits"));
-	auto &bQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":building"];
-	auto &pQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":upgrade"];
-	auto &iQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":infantry"];
-	auto &aQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":aircraft"];
-	auto &lvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":light_vehicle"];
-	auto &hvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":heavy_vehicle"];
+	auto &bQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":building"].entries;
+	auto &pQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":upgrade"].entries;
+	auto &iQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":infantry"].entries;
+	auto &aQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":aircraft"].entries;
+	auto &lvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":light_vehicle"].entries;
+	auto &hvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":heavy_vehicle"].entries;
 
 	for (unsigned i = 0; i < 8; i++) {
 		if (credits != 0 || i == 0)
