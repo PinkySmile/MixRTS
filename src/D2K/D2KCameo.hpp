@@ -35,6 +35,7 @@ public:
 
 	static constexpr const char StaticWidgetType[] = "D2KCameo"; //!< Type name of the widget
 
+	void setCount(std::optional<unsigned> count);
 	float getFill() const;
 	void setFill(float fill);
 	bool isOnHold() const;
@@ -60,10 +61,12 @@ protected:
 	bool _ready = false;
 	float _fill = 0;
 	unsigned _timer = 0;
+	std::optional<unsigned> _count;
 	tgui::Sprite _sprite;
 	Sprite _spriteHold;
 	Sprite _spriteReady;
 	sf::Texture _bnwTexture;
+	sf::Text _text;
 	sf::VertexArray _vertices{sf::PrimitiveType::TriangleFan, 0};
 };
 

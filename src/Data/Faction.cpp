@@ -60,6 +60,7 @@ FactionQueue::StarportParams::StarportParams(const Mod &base, const nlohmann::js
 	assert_exp(data.contains("discount_max") && data["discount_max"].is_number());
 	assert_exp(data.contains("delivery_delay") && data["delivery_delay"].is_number_unsigned());
 	assert_exp(data.contains("delivery_max") && data["delivery_max"].is_number_unsigned());
+	assert_exp(data.contains("delivery_eva_times") && data["delivery_eva_times"].is_number_unsigned());
 	assert_exp(data.contains("single_max") && data["single_max"].is_number_unsigned());
 	assert_exp(data.contains("units") && data["units"].is_array());
 
@@ -70,6 +71,7 @@ FactionQueue::StarportParams::StarportParams(const Mod &base, const nlohmann::js
 	this->discountMax = data["discount_max"];
 	this->deliveryDelay = data["delivery_delay"];
 	this->deliveryMax = data["delivery_max"];
+	this->deliveryEvaTimes = data["delivery_eva_times"];
 	this->singleMax = data["single_max"];
 	this->units.reserve(data["units"].size());
 	for (size_t i = 0; i < data["units"].size(); i++)

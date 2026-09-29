@@ -52,10 +52,15 @@ ShakeParams::ShakeParams(const nlohmann::json &j)
 }
 
 GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers) :
+	_text{game->font},
 	_factions(factions)
 {
 	std::vector<std::string> allFactions;
 
+	this->_text.setCharacterSize(12 * guiScale);
+	this->_text.setOutlineThickness(1);
+	this->_text.setOutlineColor(sf::Color::Black);
+	this->_text.setPosition({2, 20 * guiScale});
 	allFactions.reserve(this->_factions.size());
 	for (auto &f : this->_factions)
 		allFactions.push_back(f.getName());
@@ -481,7 +486,6 @@ void GameManager::renderAbove()
 	for (auto &player : this->_players)
 		player.renderAbove();
 	if (this->_debugGrid != 255) {
-		sf::Text text{game->font};
 		sf::View old = game->screen->getView();
 		sf::View v = sf::View{sf::FloatRect{
 			{0, 0},
@@ -491,22 +495,18 @@ void GameManager::renderAbove()
 			}
 		}};
 
-		text.setCharacterSize(12 * guiScale);
-		text.setOutlineThickness(1);
-		text.setOutlineColor(sf::Color::Black);
-		text.setPosition({2, 20 * guiScale});
 		if (this->_debugGrid == 0)
-			text.setString("Path finding grid");
+			this->_text.setString("Path finding grid");
 		else if (this->_debugGrid == 1)
-			text.setString("Original map grid");
+			this->_text.setString("Original map grid");
 		else if (this->_debugGrid == 2)
-			text.setString("Original map grid (path finding)");
+			this->_text.setString("Original map grid (path finding)");
 		else if ((this->_debugGrid - 3) % 2 == 0)
-			text.setString("Map for " + this->_factions[(this->_debugGrid - 3) / 2].getName());
+			this->_text.setString("Map for " + this->_factions[(this->_debugGrid - 3) / 2].getName());
 		else
-			text.setString("Map for " + this->_factions[(this->_debugGrid - 3) / 2].getName() + " (path finding)");
+			this->_text.setString("Map for " + this->_factions[(this->_debugGrid - 3) / 2].getName() + " (path finding)");
 		game->screen->setView(v);
-		game->screen->draw(text);
+		game->screen->draw(this->_text);
 		game->screen->setView(old);
 	}
 }
@@ -576,7 +576,8 @@ void GameManager::_checkObjectLocked(const std::string &name, T &object, Player 
 	if (!bqueue)
 		return;
 
-	auto &queue = owner.state.queues[*bqueue];
+	assert_msg(owner.state.queues.contains(*bqueue), *bqueue);
+	auto &queue = owner.state.queues.at(*bqueue);
 	auto &entry = queue.entries[name];
 	auto &req = object.getRequirements();
 

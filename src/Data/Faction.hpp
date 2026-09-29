@@ -40,6 +40,7 @@ struct FactionQueue {
 		int discountMax;
 		unsigned deliveryDelay;
 		unsigned deliveryMax;
+		unsigned deliveryEvaTimes;
 		unsigned singleMax;
 		std::vector<std::string> units;
 

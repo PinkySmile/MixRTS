@@ -16,6 +16,52 @@
 #define EXPIRE_POWER 1800
 #define COOLDOWN_POWER 1800
 
+void PlayerQueue::init(const std::string *id, const FactionQueue *params, const std::unordered_map<std::string, const GameObject *> &objs)
+{
+	this->params = params;
+	if (params->behavior == FactionQueue::TYPE_STARPORT) {
+		for (auto &u : params->starportParams->units) {
+			assert_msg(objs.contains(u), u);
+			const GameObject *obj = objs.at(u);
+			auto &entry = this->entries[u];
+
+			entry.object = obj;
+			entry.queue = this;
+			entry.queueId = id;
+			entry.elementId = &u;
+			this->stock[u] = 0;
+			this->prices[u] = obj->getCost();
+			this->basket[u] = 0;
+		}
+	}
+}
+
+void PlayerQueue::update()
+{
+	if (this->params->behavior == FactionQueue::TYPE_STARPORT) {
+		if (this->timer == 0 && !this->checkingMenu) {
+			for (auto &[n, v] : this->stock) {
+				if (v >= this->params->starportParams->stockMax)
+					v = this->params->starportParams->stockMax;
+				else {
+					auto r = random_distrib(game->gameRandom, 0, 99);
+
+					if (r < this->params->starportParams->stockIncreaseProba)
+						v++;
+				}
+
+				float percent = (100 - random_distrib(game->gameRandom, this->params->starportParams->discountMin, this->params->starportParams->discountMax)) / 100.f;
+
+				this->prices[n] = this->entries[n].object->getCost();
+				for (auto &p : this->prices[n] | std::ranges::views::values)
+					p *= percent;
+			}
+			this->timer = this->params->starportParams->stockIncreaseDelay;
+		} else
+			this->timer--;
+	}
+}
+
 unsigned PlayerState::getCombinedMoney(const std::string &key)
 {
 	auto sys = this->systemMoney[key];
@@ -48,13 +94,20 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 			continue;
 		for (auto &[key, val] : f.getObjects())
 			this->_loadedObjects[key] = &val;
-		for (auto &[key, params] : f.getQueues())
-			this->state.queues[key].params = &params;
 	}
 	for (auto &[key, val] : this->_primaryFaction.getObjects())
 		this->_loadedObjects[key] = &val;
+
+	for (size_t i = 0; i < factions.size(); i++) {
+		auto &f = factions[i];
+
+		if (i == index)
+			continue;
+		for (auto &[key, params] : f.getQueues())
+			this->state.queues[key].init(&key, &params, this->_loadedObjects);
+	}
 	for (auto &[key, params] : this->_primaryFaction.getQueues())
-		this->state.queues[key].params = &params;
+		this->state.queues[key].init(&key, &params, this->_loadedObjects);
 }
 
 void Player::_clean()
@@ -162,10 +215,32 @@ void Player::_updateSingleQueue(PlayerQueueEntry &entry)
 
 void Player::_updateStarportQueue(PlayerQueueEntry &entry)
 {
-	assert_exp(entry.object);
+	PlayerQueue &q = *entry.queue;
+
+	assert_exp(q.params->starportParams->deliveryEvaTimes == 5);
+	if (entry.buildProgress == entry.buildTime)
+		return this->_tryEndBuildStarport(entry);
+	entry.buildProgress++;
+	if (entry.buildProgress % (entry.buildTime / 4) == 0)
+		switch (entry.buildProgress / (entry.buildTime / 4)) {
+		case 4:
+			this->playEVA(UI::EVA_ORDER_IN_1, 300, 4, 300);
+			break;
+		case 3:
+			this->playEVA(UI::EVA_ORDER_IN_2, 300, 4, 300);
+			break;
+		case 2:
+			this->playEVA(UI::EVA_ORDER_IN_3, 300, 4, 300);
+			break;
+		case 1:
+			this->playEVA(UI::EVA_ORDER_IN_4, 300, 4, 300);
+			break;
+		default:
+			break;
+		}
 }
 
-void Player::_spawnDelivery(Vector2f target, const ExtraSpawn &extra, const std::vector<GameObject *> &objects)
+void Player::_spawnDelivery(const std::string &queue, Vector2f target, const ExtraSpawn &extra, const std::vector<std::string> &objects)
 {
 	GameObject *eobj = this->_parent.spawnObject(
 		this->state.index,
@@ -177,7 +252,11 @@ void Player::_spawnDelivery(Vector2f target, const ExtraSpawn &extra, const std:
 	assert_exp(extra.dest);
 	assert_exp(extra.carry.empty());
 	eobj->setPosition(extra.pos.getPosition(target, this->_mapState, this->_mapState.tileSize + eobj->getSize()));
-	eobj->deliverTo(objects, extra.dest->getPosition(target, this->_mapState, {0, 0}));
+	eobj->deliverTo(objects, queue, *extra.dest, this->_mapState);
+	eobj->execCb([queue, this] {
+		this->state.queues[queue].busy = false;
+		return true;
+	});
 	if (extra.out)
 		eobj->moveOut(extra.out->getPosition(target, this->_mapState, this->_mapState.tileSize + eobj->getSize()));
 }
@@ -200,12 +279,11 @@ void Player::_tryEndBuildSingle(PlayerQueueEntry &entry)
 		this->checkUnlocked(*entry.faction);
 		break;
 	case FactionQueue::SPAWN_DELIVERY: {
-		GameObject *obj = this->_parent.spawnObject(this->state.index, defaultPos, *entry.queueId, *entry.elementId);
+		GameObject *s = this->getSpawnBuilding(*entry.queueId);
 
-		this->_spawnDelivery(obj->getMiddle(), *entry.queue->params->delivery, {obj});
+		assert_exp(s);
+		this->_spawnDelivery(*entry.queueId, s->getPosition() + s->getPoint(), *entry.queue->params->delivery, {*entry.elementId});
 		entry.spent.clear();
-		this->resetQueue(*entry.queueId);
-		this->checkUnlocked(*entry.faction);
 		break;
 	}
 	case FactionQueue::SPAWN_PLACEMENT:
@@ -215,6 +293,29 @@ void Player::_tryEndBuildSingle(PlayerQueueEntry &entry)
 
 void Player::_tryEndBuildStarport(PlayerQueueEntry &entry)
 {
+	std::vector<std::string> pool;
+
+	for (auto &[n, v] : entry.queue->basket) {
+		while (v--)
+			pool.push_back(n);
+		v = 0;
+	}
+	this->state.buildQueues[*entry.queueId] = nullptr;
+
+	GameObject *s = this->getSpawnBuilding(*entry.queueId);
+
+	assert_exp(s);
+	switch (entry.queue->params->unitSpawn) {
+	case FactionQueue::SPAWN_DELIVERY: {
+		this->_spawnDelivery(*entry.queueId, s->getPosition() + s->getPoint(), *entry.queue->params->delivery, pool);
+		entry.spent.clear();
+		break;
+	}
+	case FactionQueue::SPAWN_NONE:
+	case FactionQueue::SPAWN_INSIDE:
+	case FactionQueue::SPAWN_PLACEMENT:
+		assert_not_reached();
+	}
 }
 
 void Player::update()
@@ -229,11 +330,13 @@ void Player::update()
 		if (ui)
 			ui->update();
 	this->_clean();
-	for (auto &[qname, q] : this->state.buildQueues) {
+	for (auto &q : this->state.buildQueues | std::ranges::views::values) {
 		if (!q)
 			continue;
 		this->_updateQueue(*q);
 	}
+	for (auto &q : this->state.queues | std::ranges::views::values)
+		q.update();
 	if (this->state.producedPower < this->state.consumedPower)
 		this->playEVA(UI::EVA_LOW_POWER, EXPIRE_POWER, PRIORITY_POWER, COOLDOWN_POWER);
 }
@@ -324,135 +427,240 @@ void Player::updateRender()
 			ui->updateRender();
 }
 
+void Player::_handleUiEvent(const UI::StartBuildEvent &event)
+{
+	bool b = true;
+	assert_msg(this->state.queues.contains(event.queue), event.queue);
+	auto &q = this->state.queues.at(event.queue);
+
+	if (q.params->behavior == FactionQueue::TYPE_STARPORT) {
+		if (q.busy || q.providers == 0)
+			return;
+
+		if (event.id == "base:order") {
+			if (q.nb != 0) {
+				auto &entry = q.entries.begin()->second;
+
+				this->playEVA(UI::EVA_ORDER_PLACED, 900, 4, 0);
+				this->playEVA(UI::EVA_ORDER_IN_5, 1200, 4, 300);
+				this->state.buildQueues[event.queue] = &entry;
+				entry.buildTime = q.params->starportParams->deliveryDelay;
+				entry.buildProgress = 1;
+				q.busy = true;
+				q.nb = 0;
+			}
+			return;
+		}
+		if (q.nb >= q.params->starportParams->deliveryMax || q.stock.at(event.id) == 0)
+			return;
+		for (auto &p : q.prices[event.id])
+			if (!this->consume(p.first, p.second))
+				// TODO: Handle refund the ones before
+				return;
+		q.stock[event.id]--;
+		q.basket[event.id]++;
+		q.nb++;
+		return;
+	}
+
+	auto &entry = q.entries[event.id];
+
+	if ((entry.buildProgress != 0 && !entry.paused) || !entry.buildable) {
+		if (this->state.buildQueues[event.queue] != nullptr)
+			this->playEVA(UI::EVA_ALREADY_BUILDING, 300, 2, 300);
+		return;
+	}
+	for (auto &[name, entry] : q.entries) {
+		if (entry.paused) {
+			if (name == event.id)
+				entry.paused = false;
+			b = false;
+			break;
+		}
+		entry.buildable = false;
+	}
+	if (b) {
+		entry.buildable = true;
+		entry.buildProgress = 1;
+		this->state.buildQueues[event.queue] = &entry;
+	}
+
+	GameObject *building = this->getPrimaryBuilding(event.queue);
+
+	if (building)
+		building->producing(true);
+	this->playEVA(UI::EVA_BUILDING, EXPIRE_BUILD, PRIORITY_BUILD, 0, event.queue);
+}
+
+void Player::_handleUiEvent(const UI::PlaceBuildEvent &event)
+{
+	assert_msg(this->state.queues.contains(event.queue), event.queue);
+	auto &q = this->state.queues.at(event.queue);
+	assert_exp(q.params->unitSpawn == FactionQueue::SPAWN_PLACEMENT);
+	auto &sq = q.entries[event.id];
+
+	this->_parent.spawnObject(this->state.index, event.position, event.queue, event.id);
+	sq.spent.clear();
+	this->resetQueue(event.queue);
+}
+
+void Player::_handleUiEvent(const UI::CancelBuildEvent &event)
+{
+	assert_msg(this->state.queues.contains(event.queue), event.queue);
+	auto &q = this->state.queues.at(event.queue);
+
+	if (q.params->behavior == FactionQueue::TYPE_STARPORT) {
+		if (q.basket[event.id] == 0)
+			return;
+		for (auto &p : q.prices[event.id])
+			this->credit(p.first, p.second, CREDIT_SYSTEM);
+		q.stock[event.id]++;
+		q.basket[event.id]--;
+		q.nb--;
+		return;
+	}
+
+	if (this->state.buildQueues[event.queue] == nullptr)
+		return;
+	auto &sq = q.entries[event.id];
+
+	if (sq.buildProgress == 0);
+	else if (sq.paused || sq.buildProgress == sq.buildTime) {
+		this->playEVA(UI::EVA_CANCEL, EXPIRE_BUILD, PRIORITY_BUILD, 0, event.queue);
+		this->resetQueue(event.queue);
+	} else {
+		this->playEVA(UI::EVA_HOLD_QUEUE, EXPIRE_BUILD, PRIORITY_BUILD, 0, event.queue);
+		sq.paused = true;
+	}
+}
+
+void Player::_handleUiEvent(const UI::DeployUnitEvent &event)
+{
+	GameObject *obj = this->_parent.getObjectById(event.index);
+
+	obj->clearOrders();
+	obj->deploy();
+	obj->playDoSound();
+}
+
+void Player::_handleUiEvent(const UI::MoveUnitEvent &event)
+{
+	for (unsigned i : event.indices) {
+		GameObject *obj = this->_parent.getObjectById(i);
+
+		obj->clearOrders();
+		obj->moveTo(event.position, MOVEREASON_MOVE_COMMAND);
+		obj->playDoSound();
+	}
+}
+
+void Player::_handleUiEvent(const UI::HarvestUnitEvent &event)
+{
+	for (unsigned i : event.indices) {
+		GameObject *obj = this->_parent.getObjectById(i);
+
+		obj->clearPrimaryDump();
+		obj->clearOrders();
+		obj->harvest(event.position, false);
+		obj->playDoSound();
+	}
+}
+
+void Player::_handleUiEvent(const UI::DumpUnitEvent &event)
+{
+	GameObject *hole = this->_parent.getObjectById(event.hole);
+
+	for (unsigned i : event.indices) {
+		GameObject *obj = this->_parent.getObjectById(i);
+
+		obj->clearOrders();
+		obj->dumpResourcesTo(hole, false);
+		obj->playDoSound();
+	}
+}
+
+void Player::_handleUiEvent(const UI::SetPrimaryEvent &event)
+{
+	GameObject *building = this->_parent.getObjectById(event.index);
+	std::optional<std::string> gq = building->getGivenQueue();
+	assert_exp(gq);
+	GameObject *old = this->state.primaryBuildings[*gq];
+	bool producing = false;
+
+	if (old)
+		old->setPrimary(false);
+	for (GameObject *o : this->state.queueBuildings[*gq]) {
+		producing |= o->isProducing();
+		o->producing(false);
+	}
+	this->state.primaryBuildings[*gq] = building;
+	building->setPrimary();
+	building->producing(producing);
+	this->playEVA(UI::EVA_PRIMARY_SELECTED, 120, 1, 0, *gq);
+}
+
+void Player::_handleUiEvent(const UI::RepairEvent &event)
+{
+	this->_parent.getObjectById(event.index)->toggleRepair();
+}
+
+void Player::_handleUiEvent(const UI::SellEvent &event)
+{
+	this->_parent.getObjectById(event.index)->sell();
+	this->playEVA(UI::EVA_SELL, 120, 1, 0);
+}
+
+void Player::_handleUiEvent(const UI::AttackUnitEvent &event)
+{
+	GameObject *target = this->_parent.getObjectById(event.target);
+
+	for (unsigned o : event.indices) {
+		GameObject *obj = this->_parent.getObjectById(o);
+
+		obj->clearOrders();
+		obj->attack(target, false, false);
+		obj->playDoSound();
+	}
+}
+
+void Player::_handleUiEvent(const UI::StopEvent &event)
+{
+	for (unsigned i : event.indices)
+		this->_parent.getObjectById(i)->clearOrders();
+}
+
+void Player::_handleUiEvent(const UI::OpenQueueEvent &event)
+{
+	assert_msg(this->state.queues.contains(event.queue), event.queue);
+	this->state.queues.at(event.queue).checkingMenu = true;
+}
+
+void Player::_handleUiEvent(const UI::CloseQueueEvent &event)
+{
+	assert_msg(this->state.queues.contains(event.queue), event.queue);
+
+	auto &q = this->state.queues.at(event.queue);
+
+	if (!q.busy)
+		for (auto &b : q.basket) {
+			for (auto &[c, v] : q.prices[b.first])
+				this->credit(c, v * b.second, CREDIT_SYSTEM);
+			q.stock[b.first] += b.second;
+			b.second = 0;
+		}
+	q.checkingMenu = false;
+	q.nb = 0;
+}
+
 void Player::handleUiEvents()
 {
 	for (auto &ui : this->_uis) {
 		if (!ui)
 			continue;
-		while (auto event = ui->pollEvent()) {
-			if (auto place = std::get_if<UI::PlaceBuildEvent>(&*event)) {
-				auto &q = this->state.queues.at(place->queue);
-				assert_exp(q.params->unitSpawn == FactionQueue::SPAWN_PLACEMENT);
-				auto &sq = q.entries[place->id];
-
-				this->_parent.spawnObject(this->state.index, place->position, place->queue, place->id);
-				sq.spent.clear();
-				this->resetQueue(place->queue);
-			} else if (auto startBuild = std::get_if<UI::StartBuildEvent>(&*event)) {
-				bool b = true;
-				auto &q = this->state.queues.at(startBuild->queue);
-				auto &queue = q.entries[startBuild->id];
-
-				if ((queue.buildProgress != 0 && !queue.paused) || !queue.buildable) {
-					if (this->state.buildQueues[startBuild->queue] != nullptr)
-						this->playEVA(UI::EVA_ALREADY_BUILDING, 300, 2, 300);
-					continue;
-				}
-				for (auto &[name, entry] : q.entries) {
-					if (entry.paused) {
-						if (name == startBuild->id)
-							entry.paused = false;
-						b = false;
-						break;
-					}
-					entry.buildable = false;
-				}
-				if (b) {
-					queue.buildable = true;
-					queue.buildProgress = 1;
-					this->state.buildQueues[startBuild->queue] = &queue;
-				}
-
-				GameObject *building = this->getPrimaryBuilding(startBuild->queue);
-
-				if (building)
-					building->producing(true);
-				this->playEVA(UI::EVA_BUILDING, EXPIRE_BUILD, PRIORITY_BUILD, 0, startBuild->queue);
-			} else if (auto cancelBuild = std::get_if<UI::CancelBuildEvent>(&*event)) {
-				if (this->state.buildQueues[cancelBuild->queue] == nullptr)
-					continue;
-
-				auto &q = this->state.queues.at(cancelBuild->queue);
-				auto &sq = q.entries[cancelBuild->id];
-
-				if (sq.buildProgress == 0);
-				else if (sq.paused || sq.buildProgress == sq.buildTime) {
-					this->playEVA(UI::EVA_CANCEL, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
-					this->resetQueue(cancelBuild->queue);
-				} else {
-					this->playEVA(UI::EVA_HOLD_QUEUE, EXPIRE_BUILD, PRIORITY_BUILD, 0, cancelBuild->queue);
-					sq.paused = true;
-				}
-			} else if (auto deploy = std::get_if<UI::DeployUnitEvent>(&*event)) {
-				auto obj = this->_parent.getObjectById(deploy->index);
-
-				obj->clearOrders();
-				obj->deploy();
-				obj->playDoSound();
-			} else if (auto move = std::get_if<UI::MoveUnitEvent>(&*event)) {
-				for (auto i: move->indices) {
-					auto obj = this->_parent.getObjectById(i);
-
-					obj->clearOrders();
-					obj->moveTo(move->position, MOVEREASON_MOVE_COMMAND);
-					obj->playDoSound();
-				}
-			} else if (auto harvest = std::get_if<UI::HarvestUnitEvent>(&*event)) {
-				for (auto i: harvest->indices) {
-					auto obj = this->_parent.getObjectById(i);
-
-					obj->clearPrimaryDump();
-					obj->clearOrders();
-					obj->harvest(harvest->position, false);
-					obj->playDoSound();
-				}
-			} else if (auto dump = std::get_if<UI::DumpUnitEvent>(&*event)) {
-				GameObject *hole = this->_parent.getObjectById(dump->hole);
-
-				for (auto i: dump->indices) {
-					auto obj = this->_parent.getObjectById(i);
-
-					obj->clearOrders();
-					obj->dumpResourcesTo(hole, false);
-					obj->playDoSound();
-				}
-			} else if (auto primary = std::get_if<UI::SetPrimaryEvent>(&*event)) {
-				GameObject *building = this->_parent.getObjectById(primary->index);
-				auto gq = building->getGivenQueue();
-				assert_exp(gq);
-				auto old = this->state.primaryBuildings[*gq];
-				auto producing = false;
-
-				if (old)
-					old->setPrimary(false);
-				for (auto &o : this->state.queueBuildings[*gq]) {
-					producing |= o->isProducing();
-					o->producing(false);
-				}
-				this->state.primaryBuildings[*gq] = building;
-				building->setPrimary();
-				building->producing(producing);
-				this->playEVA(UI::EVA_PRIMARY_SELECTED, 120, 1, 0, *gq);
-			} else if (auto repair = std::get_if<UI::RepairEvent>(&*event)) {
-				this->_parent.getObjectById(repair->index)->toggleRepair();
-			} else if (auto sell = std::get_if<UI::SellEvent>(&*event)) {
-				this->_parent.getObjectById(sell->index)->sell();
-				this->playEVA(UI::EVA_SELL, 120, 1, 0);
-			} else if (auto attack = std::get_if<UI::AttackUnitEvent>(&*event)) {
-				auto target = this->_parent.getObjectById(attack->target);
-				for (unsigned o : attack->indices) {
-					GameObject *obj = this->_parent.getObjectById(o);
-
-					obj->clearOrders();
-					obj->attack(target, false, false);
-					obj->playDoSound();
-				}
-			} else if (auto stop = std::get_if<UI::StopEvent>(&*event)) {
-				for (auto i: stop->indices)
-					this->_parent.getObjectById(i)->clearOrders();
-			} else
-				assert_not_reached_msg("Not implemented: Event index " + std::to_string(event->index()));
-		}
+		while (auto event = ui->pollEvent())
+			std::visit([this](auto &&arg) {
+				this->_handleUiEvent(arg);
+			}, *event);
 	}
 }
 
@@ -465,6 +673,8 @@ void Player::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int pri
 void Player::recomputeLocked()
 {
 	for (auto &list : this->state.queues | std::ranges::views::values) {
+		if (list.params->behavior == FactionQueue::TYPE_STARPORT)
+			continue;
 		for (auto &q : list.entries | std::ranges::views::values) {
 			if (!q.faction->regressesTech())
 				continue;
@@ -489,6 +699,7 @@ void Player::checkUnlocked(const Faction &faction)
 
 void Player::lockQueue(const std::string &queueId)
 {
+	assert_msg(this->state.queues.contains(queueId), queueId);
 	for (auto &[name, q] : this->state.queues.at(queueId).entries) {
 		q.buildable = false;
 		q.unlocked = false;
@@ -506,6 +717,7 @@ void Player::resetQueue(const std::string &queueId)
 
 	if (building)
 		building->producing(false);
+	assert_msg(this->state.queues.contains(queueId), queueId);
 	for (auto &[name, q] : this->state.queues.at(queueId).entries) {
 		q.buildable = this->state.elementsOwned[name] < q.limit;
 		q.paused = false;
@@ -518,6 +730,8 @@ void Player::resetQueue(const std::string &queueId)
 
 bool Player::credit(const std::string &type, unsigned int amount, CreditStrategy strategy)
 {
+	if (amount == 0)
+		return true;
 	switch (strategy) {
 	case CREDIT_SYSTEM:
 		this->playEVA(UI::EVA_CASH_UP, 1, 0, 0);
@@ -541,6 +755,9 @@ bool Player::credit(const std::string &type, unsigned int amount, CreditStrategy
 
 bool Player::consume(const std::string &type, unsigned int amount)
 {
+	if (amount == 0)
+		return true;
+
 	auto &stored = this->state.money[type];
 
 	if (stored >= amount) {
@@ -613,6 +830,37 @@ void Player::onObjectLost(GameObject *obj)
 		this->state.radars.erase(it1);
 	}
 	if (queue) {
+		assert_msg(this->state.queues.contains(*queue), *queue);
+
+		auto &pq = this->state.queues.at(*queue);
+
+		pq.providers--;
+		if (pq.providers == 0) {
+			if (pq.params->behavior == FactionQueue::TYPE_STARPORT) {
+				if (!pq.busy) {
+					if (pq.checkingMenu)
+						for (auto &b : pq.basket) {
+							for (auto &[c, v] : pq.prices[b.first])
+								this->credit(c, v * b.second, CREDIT_SYSTEM);
+							pq.stock[b.first] += b.second;
+							b.second = 0;
+						}
+				} else {
+					pq.busy = false;
+					pq.nb = 0;
+					pq.timer = 0;
+				}
+				this->state.buildQueues[*queue] = nullptr;
+			} else if (this->state.buildQueues[*queue]) {
+				PlayerQueueEntry *q1 = this->state.buildQueues[*queue];
+
+				for (auto &[c, v] : q1->spent)
+					this->credit(c, v, CREDIT_SYSTEM);
+				q1->spent.clear();
+				this->state.buildQueues[*queue] = nullptr;
+			}
+		}
+
 		auto &q = this->state.queueBuildings[*queue];
 		bool empty = q.empty();
 		auto it = std::ranges::find(q, obj);
@@ -651,8 +899,11 @@ void Player::onObjectGained(GameObject *obj)
 		this->state.totalStorage[pair.first] += pair.second;
 	if (obj->isRadar())
 		this->state.radars.push_back(obj);
-	if (queue)
+	if (queue) {
+		assert_msg(this->state.queues.contains(*queue), *queue);
+		this->state.queues.at(*queue).providers++;
 		this->state.queueBuildings[*queue].push_back(obj);
+	}
 
 	++this->state.elementsOwned[group];
 	if (group != id)
@@ -686,6 +937,7 @@ void Player::unlockObject(const Faction &f, const std::string &name, T &object, 
 			return;
 	}
 
+	assert_msg(this->state.queues.contains(*bqueue), *bqueue);
 	auto &queue = this->state.queues.at(*bqueue);
 	auto &entry = queue.entries[name];
 

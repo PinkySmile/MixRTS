@@ -32,6 +32,7 @@ struct ShakeParams {
 
 class GameManager {
 private:
+	sf::Text _text;
 	ShakeParams _shake;
 	unsigned _shakeTimer = 0;
 	float _cameraZoom = 1;

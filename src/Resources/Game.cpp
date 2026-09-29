@@ -14,6 +14,7 @@ bool DEBUG_MODE = false;
 
 #ifdef MOCK
 Game::Game(const std::filesystem::path &fontPath, MockMode mode, const std::filesystem::path &video, Vector2u size, const std::filesystem::path &loggerPath) :
+	gameRandom(random()),
 	logger(loggerPath),
 	font(fontPath),
 	screen(new ScreenImpl("MixRTS", mode, video, size)),
@@ -28,6 +29,7 @@ Game::Game(const std::filesystem::path &fontPath, MockMode mode, const std::file
 }
 #else
 Game::Game(const std::filesystem::path &fontPath, const std::filesystem::path &loggerPath) :
+	gameRandom(random()),
 	logger(loggerPath),
 	font(fontPath),
 	screen(new ScreenImpl("MixRTS")),

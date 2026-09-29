@@ -22,6 +22,17 @@
 struct PlayerQueue {
 	std::unordered_map<std::string, PlayerQueueEntry> entries;
 	const FactionQueue *params;
+	unsigned providers = 0;
+	unsigned timer = 0;
+	unsigned nb = 0;
+	std::unordered_map<std::string, unsigned> stock;
+	std::unordered_map<std::string, unsigned> basket;
+	std::unordered_map<std::string, std::unordered_map<std::string, unsigned>> prices;
+	bool checkingMenu = false;
+	bool busy = false;
+
+	void init(const std::string *id, const FactionQueue *params, const std::unordered_map<std::string, const GameObject *> &objs);
+	void update();
 };
 
 struct PlayerQueueEntry {
@@ -77,13 +88,28 @@ private:
 	std::vector<std::unique_ptr<UI>> _uis;
 	std::unordered_map<std::string, const GameObject *> _loadedObjects;
 
+	void _handleUiEvent(const UI::StartBuildEvent &event);
+	void _handleUiEvent(const UI::PlaceBuildEvent &event);
+	void _handleUiEvent(const UI::CancelBuildEvent &event);
+	void _handleUiEvent(const UI::DeployUnitEvent &event);
+	void _handleUiEvent(const UI::MoveUnitEvent &event);
+	void _handleUiEvent(const UI::HarvestUnitEvent &event);
+	void _handleUiEvent(const UI::DumpUnitEvent &event);
+	void _handleUiEvent(const UI::SetPrimaryEvent &event);
+	void _handleUiEvent(const UI::RepairEvent &event);
+	void _handleUiEvent(const UI::SellEvent &event);
+	void _handleUiEvent(const UI::AttackUnitEvent &event);
+	void _handleUiEvent(const UI::StopEvent &event);
+	void _handleUiEvent(const UI::OpenQueueEvent &event);
+	void _handleUiEvent(const UI::CloseQueueEvent &event);
+
 	void _clean();
 
 	void _updateQueue(PlayerQueueEntry &entry);
 	void _updateSingleQueue(PlayerQueueEntry &entry);
 	void _updateStarportQueue(PlayerQueueEntry &entry);
 
-	void _spawnDelivery(Vector2f target, const ExtraSpawn &params, const std::vector<GameObject *> &objects);
+	void _spawnDelivery(const std::string &queue, Vector2f target, const ExtraSpawn &params, const std::vector<std::string> &objects);
 	void _tryEndBuildSingle(PlayerQueueEntry &entry);
 	void _tryEndBuildStarport(PlayerQueueEntry &entry);
 
@@ -126,7 +152,6 @@ public:
 	void onObjectLost(GameObject *obj);
 	void onObjectGained(GameObject *obj);
 	std::vector<GameObject *> getObjects(const std::string &id);
-	PlayerQueue &getQueue(const std::string &name);
 
 	[[nodiscard]] bool isEnabled() const;
 

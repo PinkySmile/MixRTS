@@ -40,6 +40,15 @@ enum MoveReason {
 };
 MoveReason moveReasonFromString(const std::string &);
 
+struct ExecCbOrder {
+	std::function<bool()> cb;
+};
+struct DeliveryOrder {
+	std::vector<std::string> objects;
+	std::string queue;
+	Position destination;
+	const MapState *state;
+};
 struct PickupOrder {
 	GameObject *target;
 	Vector2f destination;
@@ -86,7 +95,9 @@ typedef std::variant<
 	FinishMovementOrder,
 	PickupOrder,
 	WaitPickupOrder,
-	DieOrder
+	DieOrder,
+	DeliveryOrder,
+	ExecCbOrder
 > Order;
 
 struct WaitPickupOrder {
@@ -384,6 +395,7 @@ public:
 	bool canMove() const;
 	void deploy();
 	void built();
+	void execCb(const std::function<bool()> &cb);
 	std::optional<float> getStorageDisplay() const;
 	void initGlobalGrid();
 	void deinitGlobalGrid();
@@ -405,6 +417,7 @@ public:
 	void dumpResourcesTo(GameObject *dump, bool automatic, bool straight = false);
 	void pickup(GameObject *target, Vector2f destination);
 	void deliverTo(const std::vector<GameObject *> &objects, Vector2f destination);
+	void deliverTo(const std::vector<std::string> &objects, const std::string &queue, const Position &destination, const MapState &state);
 	void select() const;
 	void playBuiltSound(Vector2f pos) const;
 	void clearOrders();
@@ -532,6 +545,7 @@ protected:
 	bool _updatePickup(GameObject *target, Vector2f destination);
 	bool _updateWaitPickup(const std::vector<MoveReason> &targets, double dist, const Order *other);
 	bool _updateFinishMovement();
+	bool _updateDelivery(const std::vector<std::string> &objects, const std::string &queue, const Position &destination, const MapState &state);
 	void _reduceTimeControlTimer(unsigned dec);
 	void _spawnUnits(const std::unordered_map<std::string, unsigned> &units);
 

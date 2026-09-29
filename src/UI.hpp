@@ -64,6 +64,12 @@ public:
 		EVA_HARV_UNDER_ATTACK,
 		EVA_HAZARD_SPAWNED,
 		EVA_HAZARD_ATTACKED,
+		EVA_ORDER_PLACED,
+		EVA_ORDER_IN_1,
+		EVA_ORDER_IN_2,
+		EVA_ORDER_IN_3,
+		EVA_ORDER_IN_4,
+		EVA_ORDER_IN_5,
 		EVA_COUNT
 	};
 	std::string EVAToString(EVASound snd);
@@ -167,6 +173,14 @@ public:
 		unsigned index;
 	};
 
+	struct OpenQueueEvent {
+		std::string queue;
+	};
+
+	struct CloseQueueEvent {
+		std::string queue;
+	};
+
 	typedef std::variant<
 		StartBuildEvent,
 		PlaceBuildEvent,
@@ -179,7 +193,9 @@ public:
 		RepairEvent,
 		SellEvent,
 		AttackUnitEvent,
-		StopEvent
+		StopEvent,
+		OpenQueueEvent,
+		CloseQueueEvent
 	> Event;
 
 	UIState *state;

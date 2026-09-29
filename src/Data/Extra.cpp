@@ -92,10 +92,11 @@ Vector2f Position::getPosition(const Vector2f &target, const MapState &map, Vect
 {
 	Vector2f result = this->pos;
 	auto rxMode = *reinterpret_cast<unsigned *>(&result.x) & 0xFFFF;
+	bool valid = std::isnan(result.x);
 
 	result.x = this->_getPos(result.x, target.x, map.gridSize.x * map.tileSize.x, extraOffset.x);
 	result.y = this->_getPos(result.y, target.y, map.gridSize.y * map.tileSize.y, extraOffset.y);
-	if (!std::isnan(result.x))
+	if (!valid)
 		;
 	else if (rxMode >= POS_CLOSE_BORDER_FAR) {
 		Vector2f result2 = this->pos;

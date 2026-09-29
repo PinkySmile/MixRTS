@@ -23,8 +23,13 @@
 #define dumpTimer _gpTimerU[0]
 #define blockTimer _gpTimerU[3]
 #define currentAngle _gpTimerF[0]
+
+#define dropTimer _gpTimerU[4]
+#define dropLast _gpTimerU[5]
+#define currentDrop _gpTimerU[6]
 #define pickupState _gpTimerU[7]
 #define pickupOldAltitude _gpTimerF[7]
+
 #define waitRetracePath 300
 #define waitBlocked 60
 #define PATH_UNIT_PENALTY 1000
@@ -1130,7 +1135,7 @@ GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size, const 
 
 	this->manager->getObjectsInArea(absPos, size, objects);
 	for (auto *o : objects) {
-		if (o == this || o == ignoreObject)
+		if (o == this || o == ignoreObject || !o->isSolid())
 			continue;
 		if (o->canMove())
 			return o;
@@ -1348,7 +1353,7 @@ bool GameObject::_updateMove(Vector2i destination, MoveReason reason, bool force
 
 	switch (this->_boundToGrid ? this->_resolveGridCollision(force, ignoreObject) : this->_resolveFreeCollision(force, ignoreObject)) {
 	case COLLISION_ABORT:
-		return true;
+		//return true;
 	case COLLISION_WAIT:
 		return false;
 	case COLLISION_PROCEED:
@@ -1812,7 +1817,7 @@ bool GameObject::_updatePickup(GameObject *target, Vector2f destination)
 		return false;
 	}
 	case 2:
-		if (this->_altitude > 0)
+		if (this->_altitude > 4)
 			this->setAltitude(this->_altitude - 1);
 		else
 			this->pickupState = 3;
@@ -1820,7 +1825,7 @@ bool GameObject::_updatePickup(GameObject *target, Vector2f destination)
 	case 3:
 		if (this->_altitude < this->pickupOldAltitude) {
 			this->setAltitude(this->_altitude + 1);
-			target->setAltitude(this->_altitude);
+			target->setAltitude(this->_altitude - 4);
 		} else
 			this->pickupState = 4;
 		return false;
@@ -1851,9 +1856,9 @@ bool GameObject::_updatePickup(GameObject *target, Vector2f destination)
 		return false;
 	}
 	case 6:
-		if (this->_altitude > 0) {
+		if (this->_altitude > 4) {
 			this->setAltitude(this->_altitude - 1);
-			target->setAltitude(this->_altitude);
+			target->setAltitude(this->_altitude - 4);
 		} else {
 			this->pickupState = 7;
 			target->_pickup = nullptr;
@@ -1904,6 +1909,100 @@ bool GameObject::_updateFinishMovement()
 	this->_cachedDest = pos + diff;
 	this->_pathCache.front() = this->_cachedDest + this->map->tileSize / 2;
 	return this->_updateMove(this->_cachedDest, MOVEREASON_FINISH_MOVE, false, nullptr);
+}
+
+bool GameObject::_updateDelivery(const std::vector<std::string> &objects, const std::string &queue, const Position &destination, const MapState &state)
+{
+	GameObject *obj = this->owner->getSpawnBuilding(queue);
+	Vector2f dest = destination.getPosition(obj ? obj->getPosition() : Vector2i{0, 0}, state, {0, 0}) + state.tileSize / 2;
+
+	for (auto &b : this->owner->state.queueBuildings[queue])
+		b->producing(false);
+	switch (this->pickupState) {
+	case 1:
+		if (obj)
+			obj->producing(true);
+		if (this->_altitude < this->pickupOldAltitude)
+			this->setAltitude(this->_altitude + 1);
+		else
+			this->pickupState = 4;
+		return false;
+	case 0:
+		this->pickupOldAltitude = this->_altitude;
+		[[fallthrough]];
+	case 4: {
+		this->_pathCached = false;
+		this->_firstEvent = true;
+		this->pickupState = 5;
+		[[fallthrough]];
+	}
+	case 5: {
+		if (obj)
+			obj->producing(true);
+
+		bool arrived = this->_updateMove(dest - this->_getTileOffsetFromCenter(), MOVEREASON_DELIVERY, false, obj);
+
+		if (!arrived)
+			return false;
+		if (!obj)
+			return true;
+		if (this->_position - this->_getTileOffsetFromCenter() != dest) {
+			this->pickupState = 4;
+			return false;
+		}
+		this->pickupState = 6;
+		return false;
+	}
+	case 6:
+		if (obj)
+			obj->producing(true);
+		if (this->_altitude > 8)
+			this->setAltitude(this->_altitude - 1);
+		else
+			this->pickupState = 7;
+		return false;
+	case 7:
+		if (this->_position - this->_getTileOffsetFromCenter() != dest) {
+			this->pickupState = 1;
+			return false;
+		}
+		if (this->dropTimer != 0)
+			this->dropTimer--;
+		else if (this->currentDrop < objects.size()) {
+			std::vector<GameObject *> buffer;
+			Vector2f d;
+
+			// TODO: Hardcoded starport layout
+			if (this->dropLast == 0)
+				d = dest + state.tileSize;
+			else
+				d = dest + Vector2f{-static_cast<float>(state.tileSize.x), static_cast<float>(state.tileSize.y)};
+			this->manager->getObjectsInArea(dest - state.tileSize / 2, state.tileSize, buffer);
+
+			auto range = std::ranges::remove_if(buffer, [obj](GameObject *o){
+				return o == obj || !o->isSolid();
+			});
+
+			buffer.erase(range.begin(), range.end());
+			if (buffer.empty()) {
+				GameObject *object = this->manager->spawnObject(this->owner->state.index, dest, queue, objects[this->currentDrop]);
+
+				object->moveTo(d, MOVEREASON_DELIVERY);
+				this->dropTimer = 25;
+				this->currentDrop++;
+				this->dropLast = !this->dropLast;
+			}
+		} else if (this->currentDrop == objects.size())
+			this->pickupState = 8;
+		return false;
+	case 8:
+		if (this->_altitude >= this->pickupOldAltitude)
+			return true;
+		this->setAltitude(this->_altitude + 1);
+		return false;
+	default:
+		return true;
+	}
 }
 
 void GameObject::_reduceTimeControlTimer(unsigned dec)
@@ -1976,6 +2075,10 @@ bool GameObject::_handleOrder(const Order &o)
 		return this->_updatePickup(pickup->target, pickup->destination);
 	if (auto wpickup = std::get_if<WaitPickupOrder>(&o))
 		return this->_updateWaitPickup(wpickup->targets, wpickup->dist, &*wpickup->other);
+	if (auto delivery = std::get_if<DeliveryOrder>(&o))
+		return this->_updateDelivery(delivery->objects, delivery->queue, delivery->destination, *delivery->state);
+	if (auto exec = std::get_if<ExecCbOrder>(&o))
+		return exec->cb();
 	if (std::holds_alternative<DieOrder>(o))
 		this->_disposable = true;
 	return true;
@@ -2685,8 +2788,8 @@ bool GameObject::moveAside(GameObject *asker)
 	};
 	// Prefer moving away from whoever asked us to move (compare centers, which
 	// are valid regardless of whether either unit is grid-bound).
-	Vector2f selfCenter = this->_position + this->_size / 2;
-	Vector2f away = asker ? (selfCenter - (asker->_position + asker->_size / 2)) : Vector2f{0, 0};
+	Vector2f selfCenter = this->getMiddle();
+	Vector2f away = asker ? selfCenter - asker->getMiddle() : Vector2f{0, 0};
 	Vector2i destination;
 	float bestScore = 0;
 	bool found = false;
@@ -2789,10 +2892,15 @@ void GameObject::deliverTo(const std::vector<GameObject *> &objects, Vector2f de
 	assert_exp(objects.size() == 1);
 	this->_orderQueue.emplace_back(PickupOrder{objects.front(), destination});
 	objects.front()->_pickup = this;
-	objects.front()->setAltitude(this->_altitude);
+	objects.front()->setAltitude(this->_altitude - 4);
 	this->pickupState = 4;
 	this->pickupOldAltitude = this->_altitude;
 	this->_firstREvent = false;
+}
+
+void GameObject::deliverTo(const std::vector<std::string> &objects, const std::string &queue, const Position &destination, const MapState &state)
+{
+	this->_orderQueue.emplace_back(DeliveryOrder{objects, queue, destination, &state});
 }
 
 void GameObject::clearOrders()
@@ -3097,6 +3205,11 @@ void GameObject::built()
 	this->_built = true;
 	if (this->_buildAnim)
 		this->_buildAnim->reset();
+}
+
+void GameObject::execCb(const std::function<bool()> &cb)
+{
+	this->_orderQueue.emplace_back(ExecCbOrder{cb});
 }
 
 void GameObject::produced()

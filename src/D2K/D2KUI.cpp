@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 #include "D2KUI.hpp"
 #include "D2KCameo.hpp"
+#include "UI.hpp"
 #include "Resources/Assert.hpp"
 #include "../Data/Faction.hpp"
 #include "../Data/Mod.hpp"
@@ -13,6 +14,8 @@
 #include "Data/Animation.hpp"
 #include "Data/GameManager.hpp"
 
+
+#define MOD_NAME this->_faction.getBase().getName()
 
 static std::string __upgradeOrder[] = {
 	"cony.upgrade",
@@ -97,6 +100,12 @@ void D2KUI::_loadEvaSounds(const std::filesystem::path &base, const std::string 
 	this->_evaSounds[EVA_BUILDING_CAPTURED].load(base / "announcers" / game->locale / folder / "captured.ogg", false);
 	this->_evaSounds[EVA_HAZARD_SPAWNED]   .load(base / "announcers" / game->locale / folder / "worm_sign.ogg", false);
 	this->_evaSounds[EVA_HAZARD_ATTACKED]  .load(base / "announcers" / game->locale / folder / "worm_attack.ogg", false);
+	this->_evaSounds[EVA_ORDER_PLACED]     .load(base / "announcers" / game->locale / folder / "order_placed.ogg", false);
+	this->_evaSounds[EVA_ORDER_IN_1]       .load(base / "announcers" / game->locale / folder / "1min_left.ogg", false);
+	this->_evaSounds[EVA_ORDER_IN_2]       .load(base / "announcers" / game->locale / folder / "2min_left.ogg", false);
+	this->_evaSounds[EVA_ORDER_IN_3]       .load(base / "announcers" / game->locale / folder / "3min_left.ogg", false);
+	this->_evaSounds[EVA_ORDER_IN_4]       .load(base / "announcers" / game->locale / folder / "4min_left.ogg", false);
+	this->_evaSounds[EVA_ORDER_IN_5]       .load(base / "announcers" / game->locale / folder / "5min_left.ogg", false);
 	this->_evaSounds[EVA_CASH_DOWN]        .load(base / "sounds/CASHTIK1.ogg", false);
 	this->_evaSounds[EVA_CASH_UP]          .load(base / "sounds/CASHTIK1.ogg", false);
 	this->_evaSounds[EVA_POWER_OFF]        .load(base / "sounds/POWRDN1.ogg", false);
@@ -123,6 +132,7 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_options         = this->_panel->get<tgui::Button>("Options");
 	this->_main1           = this->_panel->get<tgui::Button>("Main1");
 	this->_main2           = this->_panel->get<tgui::Button>("Main2");
+	this->_buy             = this->_panel->get<tgui::Button>("Buy");
 	this->_upgrade         = this->_panel->get<tgui::Button>("Upgrade");
 	this->_starport        = this->_panel->get<tgui::Button>("Starport");
 	this->_blazon          = this->_panel->get<tgui::Picture>("Blazon");
@@ -166,6 +176,7 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 	this->_starport->setVisible(false);
 	this->_upgradeQueue->setVisible(false);
 	this->_starportQueue->setVisible(false);
+	this->_buy->setVisible(false);
 	this->_buildQueue->getVerticalScrollbar()->setScrollAmount(47);
 	this->_unitsQueue->getVerticalScrollbar()->setScrollAmount(47);
 
@@ -221,42 +232,14 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 		else
 			this->_soundMove.play();
 	});
-	this->_upgrade->onMousePress([this]{
-		this->_upgrade->setVisible(false);
-		this->_starport->setVisible(false);
-		this->_main1->setVisible(true);
-		this->_buildQueue->setVisible(false);
-		this->_unitsQueue->setVisible(false);
-		this->_upgradeQueue->setVisible(true);
-		this->_up1->setVisible(false);
-		this->_up2->setVisible(false);
-		this->_down1->setVisible(false);
-		this->_down2->setVisible(false);
+	this->_buy->onMousePress([this] {
+		this->_eventQueue.emplace_back(StartBuildEvent{"base:order", MOD_NAME + ":starport"});
+		this->_main2->onMousePress.emit(&*this->_main2, tgui::Vector2f{});
 	});
-	this->_main1->onMousePress([this]{
-		this->_upgrade->setVisible(this->_hasUpgrades());
-		this->_starport->setVisible(this->ownerState->queues.contains(this->_faction.getBase().getName() + ":starport"));
-		this->_main1->setVisible(false);
-		this->_buildQueue->setVisible(true);
-		this->_unitsQueue->setVisible(true);
-		this->_upgradeQueue->setVisible(false);
-		this->_up1->setVisible(true);
-		this->_up2->setVisible(true);
-		this->_down1->setVisible(true);
-		this->_down2->setVisible(true);
-	});
-	this->_main2->onMousePress([this]{
-		this->_upgrade->setVisible(this->_hasUpgrades());
-		this->_starport->setVisible(this->ownerState->queues.contains(this->_faction.getBase().getName() + ":starport"));
-		this->_main1->setVisible(false);
-		this->_buildQueue->setVisible(true);
-		this->_unitsQueue->setVisible(true);
-		this->_upgradeQueue->setVisible(false);
-		this->_up1->setVisible(true);
-		this->_up2->setVisible(true);
-		this->_down1->setVisible(true);
-		this->_down2->setVisible(true);
-	});
+	this->_upgrade->onMousePress(&D2KUI::_openUpgradeMenu, this);
+	this->_starport->onMousePress(&D2KUI::_openStarportMenu, this);
+	this->_main1->onMousePress(&D2KUI::_closeUpgradeMenu, this);
+	this->_main2->onMousePress(&D2KUI::_closeStarportMenu, this);
 	this->_options->onMousePress([this]{
 		this->_soundButton.play();
 	});
@@ -335,9 +318,73 @@ D2KUI::D2KUI(const Faction &faction, const std::filesystem::path &base, const nl
 
 D2KUI::~D2KUI() noexcept = default;
 
+void D2KUI::_openUpgradeMenu()
+{
+	this->_inMainMenu = false;
+	this->_upgrade->setVisible(false);
+	this->_starport->setVisible(false);
+	this->_main1->setVisible(true);
+	this->_buildQueue->setVisible(false);
+	this->_unitsQueue->setVisible(false);
+	this->_upgradeQueue->setVisible(true);
+	this->_up1->setVisible(false);
+	this->_up2->setVisible(false);
+	this->_down1->setVisible(false);
+	this->_down2->setVisible(false);
+}
+
+void D2KUI::_openStarportMenu()
+{
+	this->_inMainMenu = false;
+	this->_upgrade->setVisible(false);
+	this->_starport->setVisible(false);
+	this->_main2->setVisible(true);
+	this->_buildQueue->setVisible(false);
+	this->_unitsQueue->setVisible(false);
+	this->_starportQueue->setVisible(true);
+	this->_up1->setVisible(false);
+	this->_up2->setVisible(false);
+	this->_down1->setVisible(false);
+	this->_down2->setVisible(false);
+	this->_buy->setVisible(true);
+	this->_eventQueue.emplace_back(OpenQueueEvent{MOD_NAME + ":starport"});
+}
+
+void D2KUI::_closeUpgradeMenu()
+{
+	this->_inMainMenu = true;
+	this->_upgrade->setVisible(this->_hasUpgrades());
+	this->_starport->setVisible(this->ownerState->queues.at(MOD_NAME + ":starport").providers > 0);
+	this->_main1->setVisible(false);
+	this->_buildQueue->setVisible(true);
+	this->_unitsQueue->setVisible(true);
+	this->_upgradeQueue->setVisible(false);
+	this->_up1->setVisible(true);
+	this->_up2->setVisible(true);
+	this->_down1->setVisible(true);
+	this->_down2->setVisible(true);
+}
+
+void D2KUI::_closeStarportMenu()
+{
+	this->_inMainMenu = true;
+	this->_upgrade->setVisible(this->_hasUpgrades());
+	this->_starport->setVisible(this->ownerState->queues.at(MOD_NAME + ":starport").providers > 0);
+	this->_main2->setVisible(false);
+	this->_buildQueue->setVisible(true);
+	this->_unitsQueue->setVisible(true);
+	this->_starportQueue->setVisible(false);
+	this->_up1->setVisible(true);
+	this->_up2->setVisible(true);
+	this->_down1->setVisible(true);
+	this->_down2->setVisible(true);
+	this->_buy->setVisible(false);
+	this->_eventQueue.emplace_back(CloseQueueEvent{MOD_NAME + ":starport"});
+}
+
 bool D2KUI::_hasUpgrades()
 {
-	auto it = this->ownerState->queues.find(this->_faction.getBase().getName() + ":upgrade");
+	auto it = this->ownerState->queues.find(MOD_NAME + ":upgrade");
 
 	if (it == this->ownerState->queues.end())
 		return false;
@@ -346,7 +393,7 @@ bool D2KUI::_hasUpgrades()
 	});
 }
 
-static void updateList(
+static void updateListBuildings(
 	const std::string &prefix,
 	const std::string &modName,
 	const std::filesystem::path &base,
@@ -456,7 +503,7 @@ static void updateList(
 	}
 }
 
-static void updateList2(
+static void updateListUpgrade(
 	const std::filesystem::path &base,
 	const std::unordered_map<std::string, PlayerQueueEntry> &list,
 	const std::vector<std::string> &order,
@@ -480,7 +527,6 @@ static void updateList2(
 	}
 	if (needGenerate) {
 		unsigned scroll = panel->getVerticalScrollbar()->getValue();
-		std::string last;
 
 		panel->removeAllWidgets();
 		added.clear();
@@ -497,7 +543,6 @@ static void updateList2(
 			auto &cameo = cameos[pos == std::string::npos ? b : b.substr(0, pos)];
 
 			pic->setPosition({i % 2 * 60, i / 2 * 47});
-			last = b;
 			pic->setSize(60, 48);
 			pic->onMousePress([queueCb, b]{ queueCb(b, false); });
 			pic->onRightMousePress([queueCb, b]{ queueCb(b, true); });
@@ -520,9 +565,7 @@ static void updateList2(
 		if (!it->second.buildable) {
 			w->setFill(0);
 			w->setReady(false);
-			continue;
-		}
-		if (it->second.buildProgress == 0) {
+		} else if (it->second.buildProgress == 0) {
 			w->setFill(1);
 			w->setReady(false);
 		} else {
@@ -532,7 +575,7 @@ static void updateList2(
 	}
 }
 
-static void updateList3(
+static void updateListUnits(
 	const std::filesystem::path &base,
 	const std::vector<std::unordered_map<std::string, PlayerQueueEntry> *> &&list,
 	const std::vector<std::string> &order,
@@ -631,14 +674,59 @@ static void updateList3(
 		if (!it->second.buildable) {
 			w->setFill(0);
 			w->setReady(false);
-			continue;
-		}
-		if (it->second.buildProgress == 0) {
+		} else if (it->second.buildProgress == 0) {
 			w->setFill(1);
 			w->setReady(false);
 		} else {
 			w->setFill(it->second.buildProgress / static_cast<float>(it->second.buildTime));
 			w->setReady(it->second.buildProgress == it->second.buildTime);
+		}
+	}
+}
+
+static void updateListStarport(
+	const std::filesystem::path &base,
+	const PlayerQueue &queue,
+	tgui::ScrollablePanel::Ptr panel,
+	std::vector<std::string> &added,
+	std::unordered_map<std::string, tgui::Texture> &cameos,
+	const std::function<void (const std::string &id, bool rightClick)> &&queueCb
+)
+{
+	if (added.empty()) {
+		unsigned scroll = panel->getVerticalScrollbar()->getValue();
+
+		panel->removeAllWidgets();
+		added.clear();
+		for (size_t i = 0; i < queue.params->starportParams->units.size(); i++) {
+			auto &b = queue.params->starportParams->units[i];
+			auto pic = D2KCameo::create(base);
+			auto r = pic->getRenderer();
+			auto &cameo = cameos[b];
+
+			pic->setPosition({i % 2 * 60, i / 2 * 47});
+			pic->setSize(60, 48);
+			pic->onMousePress([queueCb, b]{ queueCb(b, false); });
+			pic->onRightMousePress([queueCb, b]{ queueCb(b, true); });
+			r->setTexture(cameo);
+			panel->add(pic, "cameo" + b);
+			added.push_back(b);
+		}
+		panel->getVerticalScrollbar()->setValue(scroll);
+	}
+
+	for (auto &b : queue.params->starportParams->units) {
+		auto w = panel->get<D2KCameo>("cameo" + std::string(b));
+
+		if (queue.busy) {
+			w->setFill(0);
+			w->setCount(0);
+		} else if (queue.stock.at(b) == 0 || queue.nb >= queue.params->starportParams->deliveryMax) {
+			w->setFill(0);
+			w->setCount(queue.basket.at(b));
+		} else {
+			w->setFill(1);
+			w->setCount(queue.basket.at(b));
 		}
 	}
 }
@@ -659,13 +747,22 @@ void D2KUI::update()
 		this->_blazon->getRenderer()->setOpacity(opacity);
 	}
 
+	assert_msg(this->ownerState->queues.contains(MOD_NAME + ":starport"), MOD_NAME + ":starport");
+	assert_msg(this->ownerState->queues.contains(MOD_NAME + ":building"), MOD_NAME + ":building");
+	assert_msg(this->ownerState->queues.contains(MOD_NAME + ":upgrade"), MOD_NAME + ":upgrade");
+	assert_msg(this->ownerState->queues.contains(MOD_NAME + ":infantry"), MOD_NAME + ":infantry");
+	assert_msg(this->ownerState->queues.contains(MOD_NAME + ":aircraft"), MOD_NAME + ":aircraft");
+	assert_msg(this->ownerState->queues.contains(MOD_NAME + ":light_vehicle"), MOD_NAME + ":light_vehicle");
+	assert_msg(this->ownerState->queues.contains(MOD_NAME + ":heavy_vehicle"), MOD_NAME + ":heavy_vehicle");
+
 	unsigned credits = std::min(99999999U, this->ownerState->getCombinedMoney("base:credits"));
-	auto &bQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":building"].entries;
-	auto &pQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":upgrade"].entries;
-	auto &iQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":infantry"].entries;
-	auto &aQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":aircraft"].entries;
-	auto &lvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":light_vehicle"].entries;
-	auto &hvQueue = this->ownerState->queues[this->_faction.getBase().getName() + ":heavy_vehicle"].entries;
+	PlayerQueue &sQueue = this->ownerState->queues.at(MOD_NAME + ":starport");
+	auto &bQueue = this->ownerState->queues.at(MOD_NAME + ":building").entries;
+	auto &pQueue = this->ownerState->queues.at(MOD_NAME + ":upgrade").entries;
+	auto &iQueue = this->ownerState->queues.at(MOD_NAME + ":infantry").entries;
+	auto &aQueue = this->ownerState->queues.at(MOD_NAME + ":aircraft").entries;
+	auto &lvQueue = this->ownerState->queues.at(MOD_NAME + ":light_vehicle").entries;
+	auto &hvQueue = this->ownerState->queues.at(MOD_NAME + ":heavy_vehicle").entries;
 
 	for (unsigned i = 0; i < 8; i++) {
 		if (credits != 0 || i == 0)
@@ -675,9 +772,9 @@ void D2KUI::update()
 		credits /= 10;
 	}
 
-	updateList(
+	updateListBuildings(
 		this->_prefix,
-		this->_faction.getBase().getName(),
+		MOD_NAME,
 		this->_faction.getBase().getBase(),
 		bQueue, this->_buildOrder,
 		this->_buildQueue, this->_buildQueueAdded,
@@ -685,18 +782,18 @@ void D2KUI::update()
 		[this, &bQueue](const std::string &id, bool rightClick){
 			if (rightClick) {
 				this->_eventQueue.emplace_back(CancelBuildEvent{
-					id, this->_faction.getBase().getName() + ":building"
+					id, MOD_NAME + ":building"
 				});
 				this->_placementBuilding = nullptr;
 			} else if (bQueue[id].buildProgress == bQueue[id].buildTime) {
 				this->selectBuildingForPlacement(id);
 			} else
 				this->_eventQueue.emplace_back(StartBuildEvent{
-					id, this->_faction.getBase().getName() + ":building"
+					id, MOD_NAME + ":building"
 				});
 		}
 	);
-	updateList2(
+	updateListUpgrade(
 		this->_faction.getBase().getBase(),
 		pQueue, this->_upgradeOrder,
 		this->_upgradeQueue, this->_upgradeQueueAdded,
@@ -704,27 +801,39 @@ void D2KUI::update()
 		[this](const std::string &id, bool rightClick){
 			if (rightClick)
 				this->_eventQueue.emplace_back(CancelBuildEvent{
-					id, this->_faction.getBase().getName() + ":upgrade"
+					id, MOD_NAME + ":upgrade"
 				});
 			else
 				this->_eventQueue.emplace_back(StartBuildEvent{
-					id, this->_faction.getBase().getName() + ":upgrade"
+					id, MOD_NAME + ":upgrade"
 				});
 		}
 	);
-	updateList3(
+	updateListUnits(
 		this->_faction.getBase().getBase(),
 		{&iQueue, &aQueue, &lvQueue, &hvQueue}, this->_unitsOrder,
 		this->_unitsQueue, this->_unitsQueueAdded,
 		this->_cameos,
 		[&iQueue, &aQueue, &lvQueue, &hvQueue, this](const std::string &id, size_t i, bool rightClick){
 			auto queue = i == 0 ? iQueue : i == 1 ? aQueue : i == 2 ? lvQueue : hvQueue;
-			auto queueId = this->_faction.getBase().getName() + (i == 0 ? ":infantry" : i == 1 ? ":aircraft" : i == 2 ? ":light_vehicle" : ":heavy_vehicle");
+			auto queueId = MOD_NAME + (i == 0 ? ":infantry" : i == 1 ? ":aircraft" : i == 2 ? ":light_vehicle" : ":heavy_vehicle");
 
 			if (rightClick)
 				this->_eventQueue.emplace_back(CancelBuildEvent{id, queueId});
 			else
 				this->_eventQueue.emplace_back(StartBuildEvent{id, queueId});
+		}
+	);
+	updateListStarport(
+		this->_faction.getBase().getBase(),
+		sQueue,
+		this->_starportQueue, this->_starportQueueAdded,
+		this->_cameos,
+		[this](const std::string &id, bool rightClick){
+			if (rightClick)
+				this->_eventQueue.emplace_back(CancelBuildEvent{id, MOD_NAME + ":starport"});
+			else
+				this->_eventQueue.emplace_back(StartBuildEvent{id, MOD_NAME + ":starport"});
 		}
 	);
 
@@ -735,7 +844,11 @@ void D2KUI::update()
 	this->_yellowPower->setVisible(percent > 50 && percent < 100);
 	this->_redPower->setVisible(percent <= 50);
 
-	this->_upgrade->setVisible(this->_hasUpgrades());
+	if (this->_inMainMenu) {
+		this->_upgrade->setVisible(this->_hasUpgrades());
+		this->_starport->setVisible(sQueue.providers > 0);
+	} else if (sQueue.providers == 0 && this->_starportQueue->isVisible())
+		this->_closeStarportMenu();
 }
 
 void D2KUI::playEVA(EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args)
@@ -758,15 +871,15 @@ void D2KUI::playEVA(EVASound sound, unsigned int expireIn, unsigned int priority
 	if (std::ranges::find(ignore, sound) != std::end(ignore))
 		return;
 	if (sound == EVA_BUILDING) {
-		if (args == this->_faction.getBase().getName() + ":upgrade")
+		if (args == MOD_NAME + ":upgrade")
 			sound = EVA_UPGRADING;
-		else if (args == this->_faction.getBase().getName() + ":infantry")
+		else if (args == MOD_NAME + ":infantry")
 			sound = EVA_TRAINING;
 	} else if (sound == EVA_BUILDING_DONE) {
-		if (args == this->_faction.getBase().getName() + ":upgrade")
+		if (args == MOD_NAME + ":upgrade")
 			// No built sound for upgrade queue
 			return;
-		else if (args != this->_faction.getBase().getName() + ":building")
+		else if (args != MOD_NAME + ":building")
 			sound = EVA_UNIT_READY;
 	}
 	UI::playEVA(sound, expireIn, priority, cooldown, args);

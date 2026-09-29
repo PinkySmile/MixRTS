@@ -20,6 +20,7 @@
 
 class D2KUI : public UI {
 private:
+	bool _inMainMenu = true;
 	std::string _prefix;
 
 	tgui::Button::Ptr _resumeGame;
@@ -36,6 +37,7 @@ private:
 	tgui::Button::Ptr _options;
 	tgui::Button::Ptr _main1;
 	tgui::Button::Ptr _main2;
+	tgui::Button::Ptr _buy;
 	tgui::Button::Ptr _upgrade;
 	tgui::Button::Ptr _starport;
 	tgui::Picture::Ptr _blazon;
@@ -66,6 +68,10 @@ private:
 
 	void _loadEvaSounds(const std::filesystem::path &base, const std::string &folder);
 	bool _hasUpgrades();
+	void _openUpgradeMenu();
+	void _openStarportMenu();
+	void _closeUpgradeMenu();
+	void _closeStarportMenu();
 
 protected:
 	void _displaySelectedObjectUI(const GameObject &object) override;

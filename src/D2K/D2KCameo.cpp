@@ -12,7 +12,8 @@
 #include "Resources/Game.hpp"
 
 D2KCameo::D2KCameo(const std::filesystem::path &base, const char *typeName, bool initRenderer) :
-	ClickableWidget{typeName, false}
+	ClickableWidget{typeName, false},
+	_text(game->font)
 {
 	if (initRenderer) {
 		this->m_renderer = aurora::makeCopied<Renderer>();
@@ -22,6 +23,11 @@ D2KCameo::D2KCameo(const std::filesystem::path &base, const char *typeName, bool
 	this->_spriteReady.load(base / "ui" / game->locale / "ready.png", nullptr, false, true);
 	this->_spriteReady.setPosition({1, 1});
 	this->_spriteHold.load(base / "ui" / game->locale / "hold.png", nullptr, false, true);
+
+	this->_text.setCharacterSize(10);
+	this->_text.setPosition({2, 2});
+	this->_text.setOutlineColor(sf::Color::Black);
+	this->_text.setOutlineThickness(1);
 }
 
 void D2KCameo::Renderer::setTexture(const tgui::Texture &texture)
@@ -90,6 +96,13 @@ const D2KCameo::Renderer *D2KCameo::getSharedRenderer() const
 D2KCameo::Renderer *D2KCameo::getRenderer()
 {
 	return aurora::downcast<Renderer *>(Widget::getRenderer());
+}
+
+void D2KCameo::setCount(std::optional<unsigned> count)
+{
+	this->_count = count;
+	if (count)
+		this->_text.setString(std::to_string(*this->_count));
 }
 
 float D2KCameo::getFill() const
@@ -196,6 +209,8 @@ void D2KCameo::draw(tgui::BackendRenderTarget &target, tgui::RenderStates states
 		realTarget->draw(this->_spriteHold, statesSFML);
 	else if (this->_ready)
 		realTarget->draw(this->_spriteReady, statesSFML);
+	if (this->_count)
+		realTarget->draw(this->_text, statesSFML);
 }
 
 bool D2KCameo::updateTime(tgui::Duration elapsedTime)
