@@ -328,7 +328,6 @@ protected:
 	int _power = 0;
 	float _speed = 0;
 	float _alpha = 1;
-	PFFreeMask _oldTilePosition;
 	PFFreeMask _currentTilePosition;
 	unsigned char _buildMaxDistance = 0;
 	mutable bool _cachedDebugTexLoaded = false;

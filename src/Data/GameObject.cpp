@@ -788,7 +788,6 @@ GameObject::GameObject(
 		this->_currentTilePosition = PFFREEMASK_TOP_LEFT;
 	else
 		this->_currentTilePosition = PFFREEMASK_NONE;
-	this->_oldTilePosition = this->_currentTilePosition;
 	assert_exp(!this->_stackable || this->_boundToGrid);
 
 	std::unordered_map<std::string, std::set<ObjectBarrel *>> barrelByTag;
@@ -1155,13 +1154,6 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 		return COLLISION_PROCEED;
 	}
 	if (this->_tileAvailableFor(nextTile)) {
-		if (this->_stackable && !PFGRIDMASK_IS_SLOT_FREE(this->map->pathFindingGrid, nextTile.x, nextTile.y, this->_currentTilePosition)) {
-			this->_oldTilePosition = this->_currentTilePosition;
-			this->deinitGlobalGrid();
-			this->_currentTilePosition = PFGRIDMASK_FIND_FREE_SLOT(this->map->pathFindingGrid, nextTile.x, nextTile.y);
-			// FIXME: We need to mark the slot we chose as used so another unit doesn't try to take it
-			assert_exp(this->_currentTilePosition);
-		}
 		this->blockTimer = 0;
 		return COLLISION_PROCEED;
 	}
@@ -2391,13 +2383,22 @@ void GameObject::setPosition(const Vector2f &pos)
 	// OPTIMIZE: Diff instead of undoing it and redoing it
 	if (this->_registered)
 		this->manager->deregisterObject(this);
+	this->_registered = false;
 	this->deinitGlobalGrid();
 	this->_position = pos;
 	if (this->_tiles)
 		this->_gridPos = this->map->absToTileCoord(pos);
-	else if (this->_stackable)
+	else if (this->_stackable) {
 		this->_gridPos = this->map->absToTileCoord(pos - this->_getTileOffsetFromCenter());
-	else
+		if (this->_stackable && !PFGRIDMASK_IS_SLOT_FREE(this->map->pathFindingGrid, this->_gridPos.x, this->_gridPos.y, this->_currentTilePosition)) {
+			auto old = this->_getTileOffsetFromCenter();
+
+			this->_currentTilePosition = PFGRIDMASK_FIND_FREE_SLOT(this->map->pathFindingGrid, this->_gridPos.x, this->_gridPos.y);
+			if (!this->_moving)
+				this->_position += this->_getTileOffsetFromCenter() - old;
+			assert_exp(this->_currentTilePosition);
+		}
+	} else
 		this->_gridPos = this->map->absToTileCoord(pos + this->_size / 2);
 	this->initGlobalGrid();
 	this->manager->registerObject(this);
@@ -2409,6 +2410,7 @@ void GameObject::setAltitude(int altitude)
 	// OPTIMIZE: Diff instead of undoing it and redoing it
 	if (this->_registered)
 		this->manager->deregisterObject(this);
+	this->_registered = false;
 	this->deinitGlobalGrid();
 	this->_altitude = altitude;
 	this->initGlobalGrid();
