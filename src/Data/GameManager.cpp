@@ -511,6 +511,11 @@ void GameManager::renderAbove()
 	}
 }
 
+void GameManager::setPaused(bool paused)
+{
+	this->_paused = paused;
+}
+
 void GameManager::renderMinimap(Vector2f pos, Vector2u size)
 {
 	Vector2f rsize;

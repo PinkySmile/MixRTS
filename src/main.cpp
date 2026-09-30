@@ -21,6 +21,9 @@
 #include <windows.h>
 #endif
 
+
+tgui::Font *traceFont = nullptr;
+
 struct Args {
 	bool loadingOnly = false;
 };
@@ -94,61 +97,20 @@ int parseArgs(int argc, char **argv, Args &args)
 	return EXIT_SUCCESS;
 }
 
-void handleCrash(cpptrace::stacktrace st, const std::exception &e)
+tgui::Panel::Ptr generateCrashPanel(cpptrace::stacktrace st, const std::exception &e)
 {
-	sf::RenderWindow *window;
-	tgui::Gui *gui;
-	tgui::ChildWindow::Ptr out;
-	tgui::Panel::Ptr panel;
-	sf::Texture *background;
-	sf::Sprite *sprite;
+	tgui::Panel::Ptr panel = tgui::Panel::create({"100%", "100%"});
+	tgui::Panel::Ptr out = tgui::Panel::create();
+	std::string exc = getLastExceptionName();
 
 	cleanStackTrace(st);
-	guiScale = 1;
-	if (game) {
-		std::stringstream ss;
-
-		st.print(ss, false);
-		game->logger.fatal(e.what());
-		game->logger.fatal(ss.str());
-		window = &*game->screen;
-		background = new sf::Texture(window->getSize());
-		background->update(*window);
-		sprite = new sf::Sprite{*background};
-		gui = &game->gui;
-		gui->removeAllWidgets();
-
-		auto pan = tgui::Panel::create({"100%", "100%"});
-
-		pan->getRenderer()->setBackgroundColor({0, 0, 0, 175});
-		pan->setUserData(false);
-		gui->add(pan);
-
-		out = tgui::ChildWindow::create();
-		out->setSize(1000, 600);
-		out->setPosition("(&.w - w) / 2", "(&.h - h) / 2");
-		gui->add(out);
-		out->setFocused(true);
-		out->setTitleButtons(0);
-	} else {
-		std::cerr << e.what() << std::endl;
-		st.print();
-		window = new sf::RenderWindow{sf::VideoMode{sf::Vector2u{1000, 600}}, "Game crashed!"};
-		gui = new tgui::Gui{*window};
-	}
-
-	reloadViews(*window, *gui, window->getSize(), {0, 0});
-	window->setMouseCursorGrabbed(false);
-	window->setMouseCursorVisible(true);
-	panel = tgui::Panel::create({"100%", "100%"});
-
-	std::string exc = getLastExceptionName();
 	if (exc == "_AssertionFailedException")
 		exc = "AssertionFailed";
 	std::string whatStr = e.what();
 	simplifySym(whatStr);
 
-	auto traceFont = new tgui::Font("mods/NotoSansMono-Regular.ttf");
+	if (!traceFont)
+		traceFont = new tgui::Font("mods/NotoSansMono-Regular.ttf");
 	auto title = tgui::Label::create("Game crashed !");
 	auto exception = tgui::RichTextLabel::create("Exception: <color=#ff0000>" + exc + "</color>");
 	auto what = tgui::Label::create(whatStr);
@@ -211,13 +173,63 @@ void handleCrash(cpptrace::stacktrace st, const std::exception &e)
 	crashPlaceLabel->setPosition({10, "100% - h - 10"});
 	crashPlaceLabel->getRenderer()->setTextStyle(tgui::TextStyle::Bold | tgui::TextStyle::Underlined);
 	panel->setSize({"100%", "bottom.y - 10"});
-	if (out) {
-		out->add(crashPlaceLabel, "bottom");
-		out->add(panel);
+
+	out->add(crashPlaceLabel, "bottom");
+	out->add(panel);
+	return out;
+}
+
+void handleCrash(cpptrace::stacktrace st, const std::exception &e)
+{
+	sf::RenderWindow *window;
+	tgui::Gui *gui;
+	tgui::ChildWindow::Ptr out;
+	sf::Texture *background;
+	sf::Sprite *sprite;
+
+	guiScale = 1;
+	if (game) {
+		std::stringstream ss;
+
+		st.print(ss, false);
+		game->logger.fatal(e.what());
+		game->logger.fatal(ss.str());
+		window = &*game->screen;
+		background = new sf::Texture(window->getSize());
+		background->update(*window);
+		sprite = new sf::Sprite{*background};
+		gui = &game->gui;
+		gui->removeAllWidgets();
+
+		auto pan = tgui::Panel::create({"100%", "100%"});
+
+		pan->getRenderer()->setBackgroundColor({0, 0, 0, 175});
+		pan->setUserData(false);
+		gui->add(pan);
+
+		out = tgui::ChildWindow::create();
+		out->setSize(1000, 600);
+		out->setPosition("(&.w - w) / 2", "(&.h - h) / 2");
+		gui->add(out);
+		out->setFocused(true);
+		out->setTitleButtons(0);
 	} else {
-		gui->add(crashPlaceLabel, "bottom");
-		gui->add(panel);
+		std::cerr << e.what() << std::endl;
+		st.print();
+		window = new sf::RenderWindow{sf::VideoMode{sf::Vector2u{1000, 600}}, "Game crashed!"};
+		gui = new tgui::Gui{*window};
 	}
+
+	reloadViews(*window, *gui, window->getSize(), {0, 0});
+	window->setMouseCursorGrabbed(false);
+	window->setMouseCursorVisible(true);
+
+	auto panel = generateCrashPanel(st, e);
+
+	if (out)
+		out->add(panel);
+	else
+		gui->add(panel);
 
 	window->setFramerateLimit(30);
 	while (window->isOpen()) {
@@ -288,7 +300,7 @@ int main(int argc, char **argv)
 			factions.at("d2k:ordos")
 		};
 		float timer = 0;
-		const float speed = 2.5;
+		float speed = 2.5;
 		GameManager manager{allFactions, 3};
 		auto &players = manager.getPlayers();
 		auto &map = manager.getLoadedMap();
@@ -359,10 +371,27 @@ int main(int argc, char **argv)
 				game->gui.handleEvent(*event);
 			}
 
-			timer += speed;
-			while (timer >= 1) {
-				manager.update();
-				timer -= 1;
+			TRY {
+				timer += speed;
+				while (timer >= 1) {
+					manager.update();
+					timer -= 1;
+				}
+			} CPPTRACE_CATCH(const std::exception &e) {
+				tgui::Panel::Ptr panel;
+				auto win = tgui::ChildWindow::create();
+
+				win->setSize(1000, 600);
+				win->setPosition("max((&.w - w) / 2, 0)", "max((&.h - h) / 2, 0)");
+				if (auto *ce = dynamic_cast<const cpptrace::exception *>(&e))
+					panel = generateCrashPanel(ce->trace(), *ce);
+				else
+					panel = generateCrashPanel(cpptrace::from_current_exception(), e);
+				panel->setSize("100%", "100%");
+				win->add(panel);
+				manager.setPaused();
+				game->gui.add(win);
+				timer = 0;
 			}
 			manager.updateRender();
 			game->screen->clear(sf::Color{0x80, 0xFF, 0x40});

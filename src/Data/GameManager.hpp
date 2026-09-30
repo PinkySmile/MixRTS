@@ -81,6 +81,7 @@ public:
 	void updateRender();
 	void render();
 	void renderAbove();
+	void setPaused(bool paused = true);
 	void renderMinimap(Vector2f pos, Vector2u size);
 	std::vector<Player> &getPlayers();
 	std::vector<Faction> &getFactions();
