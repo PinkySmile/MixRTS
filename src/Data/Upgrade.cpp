@@ -2,6 +2,7 @@
 // Created by PinkySmile on 11/04/2026.
 //
 
+#include <sol/sol.hpp>
 #include "Resources/Assert.hpp"
 #include "Upgrade.hpp"
 #include "Faction.hpp"
@@ -87,4 +88,21 @@ const std::unordered_map<std::string, unsigned> &Upgrade::getCost() const
 bool Upgrade::requiresQueueBuilding() const
 {
 	return this->_requiresQueueBuilding;
+}
+
+void Upgrade::pushUserType(sol::state &state)
+{
+	sol::usertype<Upgrade> type = state.new_usertype<Upgrade>("Upgrade");
+
+	type["build_queue"] = sol::property(&Upgrade::getBuildQueue);
+	type["given_queue"] = sol::property(&Upgrade::getGivenQueue);
+	type["id"] = sol::property(&Upgrade::getId);
+	type["group"] = sol::property(&Upgrade::getGroup);
+	type["build_speed"] = sol::property(&Upgrade::getBuildSpeed);
+	// TODO: getRequirements() is intentionally not exposed: ReqAndCombinator
+	//       owns a vector of non-copyable std::unique_ptr<IReq> and isn't itself
+	//       registered as a usertype, so sol2 can't push it by reference.
+	type["cost"] = sol::property(&Upgrade::getCost);
+	type["limit"] = sol::property(&Upgrade::getLimit);
+	type["requires_queue_building"] = sol::property(&Upgrade::requiresQueueBuilding);
 }

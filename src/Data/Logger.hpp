@@ -2,8 +2,8 @@
 // Created by PinkySmile on 15/01/2019.
 //
 
-#ifndef THFGAME_LOGGER_HPP
-#define THFGAME_LOGGER_HPP
+#ifndef MIXRTS_LOGGER_HPP
+#define MIXRTS_LOGGER_HPP
 
 
 #include <filesystem>
@@ -39,4 +39,4 @@ public:
 };
 
 
-#endif //THFGAME_LOGGER_HPP
+#endif //MIXRTS_LOGGER_HPP

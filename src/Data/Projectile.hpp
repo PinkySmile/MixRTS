@@ -7,6 +7,7 @@
 
 
 #include <vector>
+#include <sol/forward.hpp>
 #include "forward.hpp"
 
 class Projectile {
@@ -49,6 +50,8 @@ public:
 	void update();
 	void render(int layer);
 	[[nodiscard]] bool isDisposable() const;
+
+	static void pushUserType(sol::state &state);
 };
 
 

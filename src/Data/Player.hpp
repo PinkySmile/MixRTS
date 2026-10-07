@@ -13,11 +13,12 @@
 #include <deque>
 #include <memory>
 #include <SFML/Window/Event.hpp>
+#include <sol/forward.hpp>
 #include "forward.hpp"
 #include "Vector.hpp"
 #include "Color.hpp"
 #include "Utils.hpp"
-#include "UI.hpp"
+#include "UI/UI.hpp"
 
 struct PlayerQueue {
 	std::unordered_map<std::string, PlayerQueueEntry> entries;
@@ -31,8 +32,10 @@ struct PlayerQueue {
 	bool checkingMenu = false;
 	bool busy = false;
 
-	void init(const std::string *id, const FactionQueue *params, const std::unordered_map<std::string, const GameObject *> &objs);
+	void init(const std::string *id, const Faction &faction, const FactionQueue *params, const std::unordered_map<std::string, const Upgrade *> &upgrade, const std::unordered_map<std::string, const GameObject *> &objs);
 	void update();
+
+	static void pushUserType(sol::state &state);
 };
 
 struct PlayerQueueEntry {
@@ -49,6 +52,8 @@ struct PlayerQueueEntry {
 	bool unlocked;
 	bool buildable;
 	bool paused;
+
+	static void pushUserType(sol::state &state);
 };
 
 struct PlayerState {
@@ -70,10 +75,14 @@ struct PlayerState {
 	std::unordered_map<std::string, PlayerQueue> queues;
 
 	unsigned getCombinedMoney(const std::string &key);
+
+	static void pushUserType(sol::state &state);
 };
 
 struct UIState {
 	std::set<const GameObject *> selectedObjects;
+
+	static void pushUserType(sol::state &state);
 };
 
 class Player {
@@ -87,6 +96,7 @@ private:
 	const std::vector<Faction> &_factions;
 	std::vector<std::unique_ptr<UI>> _uis;
 	std::unordered_map<std::string, const GameObject *> _loadedObjects;
+	std::unordered_map<std::string, const Upgrade *> _loadedUpgrades;
 
 	void _handleUiEvent(const UI::StartBuildEvent &event);
 	void _handleUiEvent(const UI::PlaceBuildEvent &event);
@@ -138,7 +148,7 @@ public:
 	const std::unordered_map<std::string, const GameObject *> &getObjects() const;
 	void playEVA(UI::EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
 	void recomputeLocked();
-	void checkUnlocked(const Faction &faction);
+	void checkUnlocked();
 	void lockQueue(const std::string &queueId);
 	void resetQueue(const std::string &queueId);
 	std::vector<std::unique_ptr<UI>> &getUIs();
@@ -152,11 +162,15 @@ public:
 	void onObjectLost(GameObject *obj);
 	void onObjectGained(GameObject *obj);
 	std::vector<GameObject *> getObjects(const std::string &id);
+	const std::unordered_map<std::string, const GameObject *> &getLoadedObjects() const;
+	const std::unordered_map<std::string, const Upgrade *> &getLoadedUpgrades() const;
 
 	[[nodiscard]] bool isEnabled() const;
 
 	template<typename T>
-	void unlockObject(const Faction &f, const std::string &name, T &object, bool debugTime = false);
+	void unlockObject(const std::string &name, const T &object, bool debugTime = false);
+
+	static void pushUserType(sol::state &state);
 };
 
 

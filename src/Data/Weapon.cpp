@@ -2,8 +2,8 @@
 // Created by PinkySmile on 03/08/2026.
 //
 
-#include <cpptrace/from_current.hpp>
 #include <nlohmann/json.hpp>
+#include <sol/sol.hpp>
 #include "Animation.hpp"
 #include "ConditionalAnim.hpp"
 #include "Weapon.hpp"
@@ -153,7 +153,7 @@ const std::optional<WeaponProjectile> &Weapon::getProjectileData() const
 	return this->_projectile;
 }
 
-bool Weapon::sendForward() const
+bool Weapon::sendsForward() const
 {
 	return this->_sendForward;
 }
@@ -258,4 +258,60 @@ WeaponProjectile::WeaponProjectile(
 			this->anims.emplace_back(base, nullptr, animList, data["anim"], i);
 	} else
 		this->anims.emplace_back(base, nullptr, animList, data["anim"]);
+}
+
+void Weapon::pushUserType(sol::state &state)
+{
+	state.new_enum<WeaponType>("Weapon_WeaponType", {
+		{"HITSCAN",    WEAPONTYPE_HITSCAN},
+		{"PROJECTILE", WEAPONTYPE_PROJECTILE},
+		{"ENTER",      WEAPONTYPE_ENTER},
+	});
+	state.new_enum<WeaponNeeds>("Weapon_WeaponNeeds", {
+		{"NONE",    WEAPONNEED_NONE},
+		{"CAPTURE", WEAPONNEED_CAPTURE},
+	});
+
+	sol::usertype<WeaponTakeControl> takeControlType = state.new_usertype<WeaponTakeControl>("Weapon_WeaponTakeControl");
+
+	takeControlType["targets"] = &WeaponTakeControl::targets;
+	takeControlType["base_time"] = &WeaponTakeControl::baseTime;
+	takeControlType["time_loss_hit"] = &WeaponTakeControl::timeLossHit;
+
+	sol::usertype<WeaponProjectile> projectileType = state.new_usertype<WeaponProjectile>("WWeapon_eaponProjectile");
+
+	projectileType["bounce"] = &WeaponProjectile::bounce;
+	projectileType["trail"] = &WeaponProjectile::trail;
+	projectileType["trail_interval"] = &WeaponProjectile::trailInterval;
+	projectileType["range"] = &WeaponProjectile::range;
+	projectileType["damage_ramp"] = &WeaponProjectile::damageRamp;
+	projectileType["ramp_delay"] = &WeaponProjectile::rampDelay;
+	projectileType["speed"] = &WeaponProjectile::speed;
+	projectileType["velocity"] = &WeaponProjectile::velocity;
+	projectileType["gravity"] = &WeaponProjectile::gravity;
+	projectileType["start_y"] = &WeaponProjectile::startY;
+	projectileType["ramping_damage"] = &WeaponProjectile::rampingDamage;
+	projectileType["hit_travel"] = &WeaponProjectile::hitTravel;
+	projectileType["homing"] = &WeaponProjectile::homing;
+	projectileType["arc"] = &WeaponProjectile::arc;
+	projectileType["shadow"] = &WeaponProjectile::shadow;
+	projectileType["falling"] = &WeaponProjectile::falling;
+
+	sol::usertype<Weapon> type = state.new_usertype<Weapon>("Weapon");
+
+	type["type"] = sol::property(&Weapon::getType);
+	type["effect"] = sol::property(&Weapon::getEffect);
+	type["sound"] = sol::property(&Weapon::getSound);
+	type["hit_effect"] = sol::property(&Weapon::getHitEffect);
+	type["damage"] = sol::property(&Weapon::getDamage);
+	type["range"] = sol::property(&Weapon::getRange);
+	type["warhead"] = sol::property(&Weapon::getWarhead);
+	type["hit_tags"] = sol::property(&Weapon::canHitTags);
+	type["inaccuracy"] = sol::property(&Weapon::getInaccuracy);
+	type["take_control"] = sol::property(&Weapon::getTakeControl);
+	type["projectile_data"] = sol::property(&Weapon::getProjectileData);
+	type["needs"] = sol::property(&Weapon::getNeeds);
+	type["sends_forward"] = sol::property(&Weapon::sendsForward);
+	type["hits_ground"] = sol::property(&Weapon::hitsGround);
+	type["hits_air"] = sol::property(&Weapon::hitsAir);
 }

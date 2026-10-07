@@ -3,7 +3,7 @@
 //
 
 #include <cmath>
-#include <cpptrace/from_current.hpp>
+#include <sol/sol.hpp>
 #include "Faction.hpp"
 #include "Effect.hpp"
 #include "GameObject.hpp"
@@ -12,6 +12,7 @@
 #include "Player.hpp"
 #include "ConditionalAnim.hpp"
 #include "Weapon.hpp"
+#include "Upgrade.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
 
@@ -1683,7 +1684,7 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 
 	spawnPos.y -= this->_altitude;
 	barrel.shootTimer = weapon->cooldown;
-	if (weapon->weapon->sendForward()) {
+	if (weapon->weapon->sendsForward()) {
 		double dist = (targetPos - spawnPos).magnitude();
 		double myAngle = this->getFacingAngle();
 
@@ -3792,3 +3793,167 @@ GameObjectData::GameObjectData(const Faction &base) :
 }
 
 GameObjectData::GameObjectData(const GameObjectData &) = default;
+
+void GameObjectData::AnimationState::pushUserType(sol::state &state)
+{
+	sol::usertype<AnimationState> type = state.new_usertype<AnimationState>("GameObject_AnimationState");
+
+	type["health"] = &AnimationState::health;
+	type["storage_key"] = &AnimationState::storageKey;
+}
+
+void UnitDeployParams::SpawnBuilding::pushUserType(sol::state &state)
+{
+	sol::usertype<SpawnBuilding> type = state.new_usertype<SpawnBuilding>("UnitDeployParams_SpawnBuilding");
+
+	type["building"] = &SpawnBuilding::building;
+	type["queue"] = &SpawnBuilding::queue;
+	type["offset"] = &SpawnBuilding::offset;
+}
+
+void UnitDeployParams::pushUserType(sol::state &state)
+{
+	SpawnBuilding::pushUserType(state);
+
+	sol::usertype<UnitDeployParams> type = state.new_usertype<UnitDeployParams>("UnitDeployParams");
+
+	type["direction"] = &UnitDeployParams::direction;
+	type["spawnBuilding"] = &UnitDeployParams::spawnBuilding;
+}
+
+void GameObject::pushUserType(sol::state &state)
+{
+	state.new_enum<MoveReason>("GameObject_MoveReason", {
+		{"MOVE_COMMAND",         MOVEREASON_MOVE_COMMAND},
+		{"FORCE_MOVE_COMMAND",   MOVEREASON_FORCE_MOVE_COMMAND},
+		{"ATTACK_COMMAND",       MOVEREASON_ATTACK_COMMAND},
+		{"FORCE_ATTACK_COMMAND", MOVEREASON_FORCE_ATTACK_COMMAND},
+		{"HARVEST_COMMAND",      MOVEREASON_HARVEST_COMMAND},
+		{"HARVEST",              MOVEREASON_HARVEST},
+		{"DUMP_COMMAND",         MOVEREASON_DUMP_COMMAND},
+		{"DUMP",                 MOVEREASON_DUMP},
+		{"AUTO_AGRO",            MOVEREASON_AUTO_AGRO},
+		{"REPAIR",               MOVEREASON_REPAIR},
+		{"MOVE_ASIDE",           MOVEREASON_MOVE_ASIDE},
+		{"MOVE_SPAWN",           MOVEREASON_MOVE_SPAWN},
+		{"FINISH_MOVE",          MOVEREASON_FINISH_MOVE},
+		{"DELIVERY",             MOVEREASON_DELIVERY},
+	});
+
+	AnimationState::pushUserType(state);
+	UnitDeployParams::pushUserType(state);
+
+	sol::usertype<GameObject> type = state.new_usertype<GameObject>("GameObject");
+
+	type["update"] = &GameObject::update;
+	type["render"] = &GameObject::render;
+	type["deploy"] = &GameObject::deploy;
+	type["built"] = &GameObject::built;
+	type["exec_cb"] = &GameObject::execCb;
+	type["crushedBy"] = &GameObject::crushedBy;
+	type["bottom"] = sol::property(&GameObject::getBottom);
+	type["draw_skirt"] = &GameObject::drawSkirt;
+	type["heal"] = &GameObject::heal;
+	type["damage"] = &GameObject::damage;
+	type["harvest"] = sol::overload(
+		sol::resolve<void(const Vector2i &, bool, bool)>(&GameObject::harvest),
+		sol::resolve<void()>(&GameObject::harvest)
+	);
+	type["attack"] = &GameObject::attack;
+	type["move_out"] = &GameObject::moveOut;
+	type["move_to"] = &GameObject::moveTo;
+	type["move_aside"] = &GameObject::moveAside;
+	type["dump_resources_to"] = &GameObject::dumpResourcesTo;
+	type["pickup"] = &GameObject::pickup;
+	type["deliver_to"] = sol::overload(
+		sol::resolve<void(const std::vector<GameObject *> &, Vector2f)>(&GameObject::deliverTo),
+		sol::resolve<void(const std::vector<std::string> &, const std::string &, const Position &, const MapState &)>(&GameObject::deliverTo)
+	);
+	type["select"] = &GameObject::select;
+	type["play_built_sound"] = &GameObject::playBuiltSound;
+	type["clear_orders"] = &GameObject::clearOrders;
+	type["render_path_finding_path"] = &GameObject::renderPathFindingPath;
+	type["play_do_sound"] = &GameObject::playDoSound;
+	type["clear_primary_dump"] = &GameObject::clearPrimaryDump;
+	type["produced"] = &GameObject::produced;
+	type["set_primary"] = &GameObject::setPrimary;
+	type["toggle_repair"] = &GameObject::toggleRepair;
+	type["sell"] = &GameObject::sell;
+	type["next_direction"] = &GameObject::nextDirection;
+	type["set_owner"] = &GameObject::setOwner;
+	type["spawn"] = &GameObject::spawn;
+
+	// setColor() has no matching getColor(), so this is write-only (not a
+	// get/set pair like the other properties below).
+	type["color"] = sol::writeonly_property(&GameObject::setColor);
+	type["can_move"] = sol::property(&GameObject::canMove);
+	type["storage_display"] = sol::property(&GameObject::getStorageDisplay);
+	type["health"] = sol::property(&GameObject::getHealth, &GameObject::setHealth);
+	type["can_deploy"] = sol::property(&GameObject::canDeploy);
+	type["deployable"] = sol::property(&GameObject::isDeployable);
+	type["middle"] = sol::property(&GameObject::getMiddle);
+	type["being_picked_up"] = sol::property(&GameObject::isBeingPickedUp);
+	type["can_pickup"] = sol::property(&GameObject::canPickup);
+	type["altitude"] = sol::property(&GameObject::getAltitude, &GameObject::setAltitude);
+	type["ignores_terrain"] = sol::property(&GameObject::ignoresTerrain);
+	type["directions"] = sol::property(&GameObject::getDirections);
+	type["facing_angle"] = sol::property(&GameObject::getFacingAngle);
+	type["direction"] = sol::property(&GameObject::getDirection, &GameObject::setDirection);
+	type["in_object"] = sol::property(&GameObject::isInObject);
+	type["hitbox_center"] = sol::property(&GameObject::getHitboxCenter);
+	type["can_attack"] = sol::property(&GameObject::canAttack);
+	type["tags"] = sol::property(&GameObject::getTags);
+	type["on_deploy"] = sol::property(&GameObject::getOnDeploy);
+	type["speed"] = sol::property(&GameObject::getSpeed);
+	type["power"] = sol::property(&GameObject::getPower);
+	type["build_max_distance"] = sol::property(&GameObject::getBuildMaxDistance);
+	type["radar"] = sol::property(&GameObject::isRadar);
+	type["crushable"] = sol::property(&GameObject::isCrushable);
+	type["selectable"] = sol::property(&GameObject::isSelectable);
+	type["sellable"] = sol::property(&GameObject::isSellable);
+	type["repairable"] = sol::property(&GameObject::isRepairable);
+	type["primary"] = sol::property(&GameObject::isPrimary);
+	type["producing"] = sol::property(&GameObject::isProducing, &GameObject::producing);
+	type["given_queue"] = sol::property(&GameObject::getGivenQueue);
+	type["storage"] = sol::property(&GameObject::getStorage);
+	type["central"] = sol::property(&GameObject::isCentral);
+	type["extra_spawn"] = sol::property(&GameObject::getExtraSpawn);
+	type["point"] = sol::property(&GameObject::getPoint);
+	type["spawn_orders"] = sol::property(&GameObject::getSpawnOrders);
+	type["accept_resources"] = sol::property(&GameObject::getAcceptResources);
+	type["resource_storage"] = sol::property(&GameObject::getResourceStorage);
+	type["fake"] = sol::property(&GameObject::isFake);
+	type["requires_queue_building"] = sol::property(&GameObject::requiresQueueBuilding);
+	type["requires_placement"] = sol::property(&GameObject::requiresPlacement);
+	type["proxy"] = sol::property(&GameObject::getProxy);
+	type["id"] = sol::property(&GameObject::getId);
+	type["max_health"] = sol::property(&GameObject::getMaxHealth);
+	type["dead"] = sol::property(&GameObject::isDead);
+	type["disposable"] = sol::property(&GameObject::isDisposable);
+	type["select_box"] = sol::property(&GameObject::getSelectBox);
+	type["size"] = sol::property(&GameObject::getSize);
+	type["position"] = sol::property(&GameObject::getPosition, &GameObject::setPosition);
+	type["spawn_offset"] = sol::property(&GameObject::getSpawnOffset);
+	type["exit_offset"] = sol::property(&GameObject::getExitOffset);
+	type["base_anims"] = sol::property(&GameObject::getBaseAnims);
+	type["base"] = sol::property(&GameObject::getBase);
+	type["faction"] = sol::property(&GameObject::getFaction);
+	type["build_speed"] = sol::property(&GameObject::getBuildSpeed);
+	type["group"] = sol::property(&GameObject::getGroup);
+	type["armor"] = sol::property(&GameObject::getArmor);
+	type["obstructed"] = sol::property(&GameObject::isObstructed);
+	type["limit"] = sol::property(&GameObject::getLimit);
+	type["pass_flags"] = sol::property(&GameObject::getPassFlags);
+	type["solid"] = sol::property(&GameObject::isSolid);
+	type["stackable"] = sol::property(&GameObject::isStackable);
+	type["cost"] = sol::property(&GameObject::getCost);
+	type["check_tiles"] = sol::property(&GameObject::getCheckTiles);
+	type["build_queue"] = sol::property(&GameObject::getBuildQueue);
+	type["animation_state"] = &GameObject::animationState;
+	// TODO: getRequirements() (ReqAndCombinator holds non-copyable
+	//       std::unique_ptr<IReq> and isn't itself registered, same reason as
+	//       Upgrade::getRequirements), getTileData() (raw BuildingMask bit-grid,
+	//       internal collision data) and initGlobalGrid()/deinitGlobalGrid()
+	//       (internal engine lifecycle, not meant to be called from scripts) are
+	//       intentionally not exposed.
+}

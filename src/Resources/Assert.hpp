@@ -7,7 +7,6 @@
 
 
 #include <string>
-#include <cpptrace/cpptrace.hpp>
 
 #ifdef __GNUC__
 #define FCT_NAME __PRETTY_FUNCTION__
@@ -63,6 +62,10 @@
 	"\n\tin " + FCT_NAME + ":\n\t" + msg                              \
 )
 
+#ifndef NO_TRACE
+#include <cpptrace/cpptrace.hpp>
+#include <cpptrace/from_current.hpp>
+
 class _AssertionFailedException : public cpptrace::lazy_exception {
 private:
 	std::string _msg;
@@ -82,6 +85,23 @@ public:
 	auto trace = cpptrace::raw_trace_from_current_exception();\
 	throw _AssertionFailedException(std::string(msg) + e.what(), std::move(trace));\
 }
+#else
+#define TRY try
+#define CPPTRACE_CATCH catch
+
+#define CATCH_AND_RETHROW(msg) catch (std::exception &e) {\
+	throw _AssertionFailedException(std::string(msg) + e.what());\
+}
+
+class _AssertionFailedException : public std::exception {
+private:
+	std::string _msg;
+
+public:
+	_AssertionFailedException(const std::string &&msg);
+	const char *what() const noexcept override;
+};
+#endif
 
 
 #endif //MIXRTS_ASSERT_HPP

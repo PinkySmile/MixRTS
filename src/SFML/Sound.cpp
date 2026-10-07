@@ -2,6 +2,7 @@
 // Created by PinkySmile on 10/01/2026.
 //
 
+#include <sol/sol.hpp>
 #include "Resources/Game.hpp"
 #include "Sound.hpp"
 
@@ -59,4 +60,22 @@ bool Sound::isLoaded() const
 void Sound::setVolume(float volume)
 {
 	this->_volume = volume;
+}
+
+void Sound::pushUserType(sol::state &state)
+{
+	sol::usertype<Sound> type = state.new_usertype<Sound>("Sound",
+		sol::constructors<Sound(), Sound(unsigned), Sound(const Sound &)>()
+	);
+
+	type["load"] = [](Sound &sound, const std::string &file, bool relativeToCamera) {
+		sound.load(file, relativeToCamera);
+	};
+	type["play"] = sol::overload(
+		[](const Sound &sound) { sound.play(); },
+		sol::resolve<void(Vector2f) const>(&Sound::play)
+	);
+	type["is_playing"] = sol::property(&Sound::isPlaying);
+	type["is_loaded"] = sol::property(&Sound::isLoaded);
+	type["volume"] = sol::writeonly_property(&Sound::setVolume);
 }

@@ -2,6 +2,7 @@
 // Created by PinkySmile on 13/08/2026.
 //
 
+#include <sol/sol.hpp>
 #include "nlohmann/json.hpp"
 #include "Warhead.hpp"
 #include "Resources/Assert.hpp"
@@ -68,4 +69,23 @@ float Warhead::getMultiplier(const std::string &armor) const
 const std::unordered_map<std::string, float> &Warhead::getArmorMultipliers() const
 {
 	return this->_armor;
+}
+
+void Warhead::pushUserType(sol::state &state)
+{
+	state.new_enum<DamageType>("Warhead_DamageType", {
+		{"VOID",    DMGTYPE_VOID},
+		{"GENERIC", DMGTYPE_GENERIC},
+		{"BULLET",  DMGTYPE_BULLET},
+		{"MISSILE", DMGTYPE_MISSILE},
+		{"BLAST",   DMGTYPE_BLAST},
+		{"SONIC",   DMGTYPE_SONIC},
+	});
+
+	sol::usertype<Warhead> type = state.new_usertype<Warhead>("Warhead");
+
+	type["radius"] = sol::property(&Warhead::getRadius);
+	type["dmgType"] = sol::property(&Warhead::getDmgType);
+	type["multiplier"] = sol::property(&Warhead::getMultiplier);
+	type["armor_multipliers"] = sol::property(&Warhead::getArmorMultipliers);
 }

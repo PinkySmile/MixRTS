@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <SFML/Graphics/Sprite.hpp>
 #include <SFML/Graphics/RenderTexture.hpp>
+#include <sol/forward.hpp>
 #include "Vector.hpp"
 #include "FindPath.hpp"
 #include "forward.hpp"
@@ -33,6 +34,8 @@ struct MapState {
 		Vector2f pt2;
 		Vector2f pt3;
 		Vector2f pt4;
+
+		static void pushUserType(sol::state &state);
 	};
 
 	void clampedPosition(const Quad &abs, Vector2i &topLeft, Vector2i &bottomRight) const;
@@ -59,6 +62,8 @@ struct MapState {
 	[[nodiscard]] Vector2i indexToRelPos(size_t index) const;
 	[[nodiscard]] Quad tileCoordToAbs(const Vector2i &) const;
 	[[nodiscard]] Quad tileCoordToAbs(size_t index) const;
+
+	static void pushUserType(sol::state &state);
 };
 
 struct MapResource {
@@ -77,6 +82,8 @@ struct MapResource {
 	std::vector<unsigned> onlyAdjCollectible;
 
 	MapResource(const std::filesystem::path &folder, const nlohmann::json &json);
+
+	static void pushUserType(sol::state &state);
 };
 
 struct MapMetadata {

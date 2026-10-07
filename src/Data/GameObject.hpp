@@ -11,6 +11,7 @@
 #include <deque>
 #include <set>
 #include <unordered_map>
+#include <sol/forward.hpp>
 #include "Vector.hpp"
 #include "forward.hpp"
 #include "Data/Requirements/ReqAndCombinator.hpp"
@@ -141,10 +142,14 @@ struct UnitDeployParams {
 		std::string building;
 		std::string queue;
 		Vector2i offset;
+
+		static void pushUserType(sol::state &state);
 	};
 
 	std::optional<unsigned> direction;
 	std::optional<SpawnBuilding> spawnBuilding;
+
+	static void pushUserType(sol::state &state);
 };
 
 struct ObjectWeapon {
@@ -235,6 +240,8 @@ public:
 	struct AnimationState {
 		std::string storageKey;
 		float health;
+
+		static void pushUserType(sol::state &state);
 	};
 
 	unsigned index;
@@ -493,6 +500,8 @@ public:
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getCost() const;
 	[[nodiscard]] const std::set<Vector2i> &getCheckTiles() const;
 	[[nodiscard]] const std::optional<std::string> &getBuildQueue() const;
+
+	static void pushUserType(sol::state &state);
 
 protected:
 	// Fields here (and not in GameObjectData) require a special copy procedure

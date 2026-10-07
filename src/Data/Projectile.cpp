@@ -2,6 +2,7 @@
 // Created by PinkySmile on 15/08/2026.
 //
 
+#include <sol/sol.hpp>
 #include "ConditionalAnim.hpp"
 #include "Animation.hpp"
 #include "Weapon.hpp"
@@ -200,4 +201,14 @@ void Projectile::render(int layer)
 bool Projectile::isDisposable() const
 {
 	return this->_disposable;
+}
+
+void Projectile::pushUserType(sol::state &state)
+{
+	sol::usertype<Projectile> type = state.new_usertype<Projectile>("Projectile");
+
+	type["manager"] = &Projectile::manager;
+	type["update"] = &Projectile::update;
+	type["render"] = &Projectile::render;
+	type["disposable"] = sol::property(&Projectile::isDisposable);
 }

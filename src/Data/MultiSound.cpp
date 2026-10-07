@@ -3,8 +3,6 @@
 //
 
 #include "MultiSound.hpp"
-
-#include <cpptrace/from_current.hpp>
 #include "Resources/Game.hpp"
 #include "Resources/Assert.hpp"
 

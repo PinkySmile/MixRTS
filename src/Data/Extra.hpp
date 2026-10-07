@@ -7,6 +7,7 @@
 
 
 #include <nlohmann/json_fwd.hpp>
+#include <sol/forward.hpp>
 #include "forward.hpp"
 #include "Data/Vector.hpp"
 
@@ -32,6 +33,8 @@ struct Position {
 	Position(const nlohmann::json &json);
 	[[nodiscard]] Vector2f getPosition(const Vector2f &target, const MapState &map, Vector2f extraOffset) const;
 
+	static void pushUserType(sol::state &state);
+
 private:
 	[[nodiscard]] float _getPos(const nlohmann::json &json) const;
 	[[nodiscard]] float _getPos(float base, float target, float border, float extraOffset) const;
@@ -46,6 +49,8 @@ struct ExtraSpawn {
 	std::vector<ExtraSpawn> carry;
 
 	ExtraSpawn(const Mod &base, const nlohmann::json &json);
+
+	static void pushUserType(sol::state &state);
 };
 
 

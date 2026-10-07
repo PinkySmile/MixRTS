@@ -1,3 +1,6 @@
 [submodule "mods/dune2000"]
 	path = mods/dune2000
 	url = https://github.com/PinkySmile/MixRTS-Dune2000.git
+[submodule "sol2"]
+	path = sol2
+	url = https://github.com/Nerixyz/sol2

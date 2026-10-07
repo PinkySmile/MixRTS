@@ -10,6 +10,7 @@
 #include <vector>
 #include <unordered_map>
 #include <nlohmann/json_fwd.hpp>
+#include <sol/forward.hpp>
 #include "forward.hpp"
 #include "Utils.hpp"
 #include "Vector.hpp"
@@ -38,7 +39,10 @@ public:
 	void playSound() const;
 	void setPosition(Vector2f pos);
 	void setColor(HSLColor color);
+	[[nodiscard]] Vector2f getPosition() const;
 	[[nodiscard]] int getLayer() const;
+
+	static void pushUserType(sol::state &state);
 };
 
 

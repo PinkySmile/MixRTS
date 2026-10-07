@@ -3,7 +3,6 @@
 //
 
 #include <TGUI/Widgets/Label.hpp>
-
 #include "Crash.hpp"
 #include "Resources/Game.hpp"
 

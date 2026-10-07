@@ -11,6 +11,7 @@
 #include <list>
 #include <map>
 #include <SFML/Window/Event.hpp>
+#include <sol/forward.hpp>
 #include "forward.hpp"
 #include "Vector.hpp"
 #include "Utils.hpp"
@@ -28,6 +29,8 @@ struct ShakeParams {
 
 	ShakeParams() = default;
 	ShakeParams(const nlohmann::json &j);
+
+	static void pushUserType(sol::state &state);
 };
 
 class GameManager {
@@ -47,6 +50,7 @@ private:
 	unsigned _lastObjectId = 0;
 	std::unordered_map<unsigned, GameObject *> _objectMap;
 	std::map<int64_t, std::list<GameObject *>> _renderObjects;
+	std::vector<unsigned> _preloadedSprites;
 
 	// DEBUG
 	unsigned char _debugGrid = 255;
@@ -75,6 +79,7 @@ private:
 
 public:
 	GameManager(const std::vector<Faction> &factions, size_t nbPlayers);
+	~GameManager();
 	void loadMap(Mod &mod, const std::filesystem::path &path);
 	void addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea, unsigned team);
 	void update();
@@ -114,11 +119,15 @@ public:
 	void weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f position, size_t owner);
 	void weaponUsedOn(unsigned damage, const Weapon *weapon, double dist, size_t owner, GameObject &obj);
 	void shakeScreen(const ShakeParams &params);
+	void preloadAllSprites();
+	void preloadSprites();
 
 	inline void centerCameraOn(const GameObject &object)
 	{
 		this->centerCameraOn(object.getPosition() + object.getSize() / 2.f);
 	}
+
+	static void pushUserType(sol::state &state);
 };
 
 #include "MapState.inl"

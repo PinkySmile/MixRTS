@@ -3,6 +3,7 @@
 //
 
 #include <nlohmann/json.hpp>
+#include <sol/sol.hpp>
 #include "Extra.hpp"
 #include "Mod.hpp"
 #include "Map.hpp"
@@ -114,6 +115,41 @@ Vector2f Position::getPosition(const Vector2f &target, const MapState &map, Vect
 			return result2;
 	}
 	return result;
+}
+
+void Position::pushUserType(sol::state &state)
+{
+	state.new_enum<Position::Pos>("Position_Anchor", {
+		{"CLOSE_BORDER",       POS_CLOSE_BORDER},
+		{"FAR_BORDER",         POS_FAR_BORDER},
+		{"MIN_BORDER",         POS_MIN_BORDER},
+		{"MAX_BORDER",         POS_MAX_BORDER},
+		{"CLOSE_BORDER_CLOSE", POS_CLOSE_BORDER_CLOSE},
+		{"FAR_BORDER_CLOSE",   POS_FAR_BORDER_CLOSE},
+		{"MIN_BORDER_CLOSE",   POS_MIN_BORDER_CLOSE},
+		{"MAX_BORDER_CLOSE",   POS_MAX_BORDER_CLOSE},
+		{"CLOSE_BORDER_FAR",   POS_CLOSE_BORDER_FAR},
+		{"FAR_BORDER_FAR",     POS_FAR_BORDER_FAR},
+		{"MIN_BORDER_FAR",     POS_MIN_BORDER_FAR},
+		{"MAX_BORDER_FAR",     POS_MAX_BORDER_FAR},
+	});
+
+	sol::usertype<Position> type = state.new_usertype<Position>("Position");
+
+	type["pos"] = &Position::pos;
+	type["get"] = &Position::getPosition;
+}
+
+void ExtraSpawn::pushUserType(sol::state &state)
+{
+	sol::usertype<ExtraSpawn> type = state.new_usertype<ExtraSpawn>("ExtraSpawn");
+
+	type["unit"] = &ExtraSpawn::unit;
+	type["pos"] = &ExtraSpawn::pos;
+	type["invincible"] = &ExtraSpawn::invincible;
+	type["dest"] = &ExtraSpawn::dest;
+	type["out"] = &ExtraSpawn::out;
+	type["carry"] = &ExtraSpawn::carry;
 }
 
 ExtraSpawn::ExtraSpawn(const Mod &base, const nlohmann::json &json)

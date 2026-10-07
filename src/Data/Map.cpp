@@ -4,10 +4,11 @@
 
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <cpptrace/from_current.hpp>
+#include <sol/sol.hpp>
 #include "Resources/Game.hpp"
 #include "Mod.hpp"
 #include "Map.hpp"
+#include "GameManager.hpp"
 
 MapResource::MapResource(const std::filesystem::path &folder, const nlohmann::json &json)
 {
@@ -353,4 +354,88 @@ void LoadedMap::refreshTile(unsigned int x, unsigned int y, bool commit, bool re
 	}
 	if (commit)
 		this->renderCache.display();
+}
+
+void MapResource::pushUserType(sol::state &state)
+{
+	state.new_enum<Strategy>("MapResource_Strategy", {
+		{"RANDOM",    STRAT_RANDOM},
+		{"CONNECTED", STRAT_CONNECTED},
+	});
+
+	sol::usertype<MapResource> type = state.new_usertype<MapResource>("MapResource");
+
+	type["strategy"] = &MapResource::strategy;
+	type["tiles"] = &MapResource::tiles;
+	type["lots"] = &MapResource::lots;
+	type["storage"] = &MapResource::storage;
+	type["id"] = &MapResource::id;
+	type["deplete"] = &MapResource::deplete;
+	type["value"] = &MapResource::value;
+	type["only_adj_collectible"] = &MapResource::onlyAdjCollectible;
+}
+
+void MapState::Quad::pushUserType(sol::state &state)
+{
+	sol::usertype<Quad> type = state.new_usertype<Quad>("MapState_Quad");
+
+	type["pt1"] = &Quad::pt1;
+	type["pt2"] = &Quad::pt2;
+	type["pt3"] = &Quad::pt3;
+	type["pt4"] = &Quad::pt4;
+}
+
+void MapState::pushUserType(sol::state &state)
+{
+	Quad::pushUserType(state);
+
+	sol::usertype<MapState> type = state.new_usertype<MapState>("MapState");
+
+	type["tile_size"] = &MapState::tileSize;
+	type["grid_size"] = &MapState::gridSize;
+	type["translate"] = &MapState::translate;
+	type["start_areas"] = &MapState::startAreas;
+	type["clamped_position"] = [](const MapState &self, const Quad &abs) {
+		Vector2i topLeft;
+		Vector2i bottomRight;
+
+		self.clampedPosition(abs, topLeft, bottomRight);
+		return std::make_tuple(topLeft, bottomRight);
+	};
+	type["update_placement_grid"] = sol::overload(
+		sol::resolve<void(const Vector2i &, unsigned, int)>(&MapState::updatePlacementGrid),
+		sol::resolve<void(const Quad &, unsigned, int)>(&MapState::updatePlacementGrid)
+	);
+	type["reset_grid_bits"] = sol::overload(
+		sol::resolve<void(const Vector2i &, uint32_t)>(&MapState::resetGridBits),
+		sol::resolve<void(const Quad &, uint32_t)>(&MapState::resetGridBits)
+	);
+	type["set_grid_bits"] = sol::overload(
+		sol::resolve<void(const Vector2i &, uint32_t)>(&MapState::setGridBits),
+		sol::resolve<void(const Quad &, uint32_t)>(&MapState::setGridBits)
+	);
+	type["has_any_grid_bits"] = &MapState::hasAnyGridBits;
+	type["has_all_grid_bits"] = &MapState::hasAllGridBits;
+	type["has_exactly_some_grid_bits"] = &MapState::hasExactlySomeGridBits;
+	type["any_has_any_grid_bits"] = &MapState::anyHasAnyGridBits;
+	type["any_has_all_grid_bits"] = &MapState::anyHasAllGridBits;
+	type["any_has_exactly_some_grid_bits"] = &MapState::anyHasExactlySomeGridBits;
+	type["all_has_any_grid_bits"] = &MapState::allHasAnyGridBits;
+	type["all_has_all_grid_bits"] = &MapState::allHasAllGridBits;
+	type["all_has_exactly_some_grid_bits"] = &MapState::allHasExactlySomeGridBits;
+	type["abs_to_tile_coord"] = &MapState::absToTileCoord;
+	type["abs_to_rel_coord"] = &MapState::absToRelCoord;
+	type["rel_coord_to_abs"] = &MapState::relCoordToAbs;
+	type["index_to_rel_pos"] = &MapState::indexToRelPos;
+	type["top_left_coord_to_abs"] = sol::overload(
+		sol::resolve<Vector2i(const Vector2i &) const>(&MapState::topLeftCoordToAbs),
+		sol::resolve<Vector2i(size_t) const>(&MapState::topLeftCoordToAbs)
+	);
+	type["tile_coord_to_abs"] = sol::overload(
+		sol::resolve<MapState::Quad(const Vector2i &) const>(&MapState::tileCoordToAbs),
+		sol::resolve<MapState::Quad(size_t) const>(&MapState::tileCoordToAbs)
+	);
+	// NOTE: grid, pathFindingGrid and placementGrid are raw internal bit
+	// arrays (packed collision/placement data) that aren't exposed directly,
+	// same reasoning as GameObject::getTileData().
 }

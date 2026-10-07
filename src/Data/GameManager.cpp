@@ -4,7 +4,7 @@
 
 #include <set>
 #include <fstream>
-#include <cpptrace/from_current.hpp>
+#include <sol/sol.hpp>
 #include "GameManager.hpp"
 #include "Faction.hpp"
 #include "Animation.hpp"
@@ -15,7 +15,7 @@
 #include "Projectile.hpp"
 #include "Player.hpp"
 #include "Mod.hpp"
-#include "UI.hpp"
+#include "UI/UI.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
 
@@ -70,6 +70,12 @@ GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers)
 	}
 	this->_validateArmors();
 	this->_players.reserve(nbPlayers);
+}
+
+GameManager::~GameManager()
+{
+	for (unsigned handle : this->_preloadedSprites)
+		game->textureMgr.remove(handle);
 }
 
 void GameManager::_validateArmors() const
@@ -562,12 +568,10 @@ std::vector<Player> &GameManager::getPlayers()
 void GameManager::_unlockAll()
 {
 	for (auto &player : this->_players) {
-		for (auto &f : this->_factions) {
-			for (auto &[name, b] : f.getObjects())
-				player.unlockObject(f, name, b, true);
-			for (auto &[name, u] : f.getUpgrades())
-				player.unlockObject(f, name, u, true);
-		}
+		for (auto &[name, b] : player.getLoadedObjects())
+			player.unlockObject(name, *b, true);
+		for (auto &[name, u] : player.getLoadedUpgrades())
+			player.unlockObject(name, *u, true);
 		for (auto &[name, q] : player.state.buildQueues)
 			player.resetQueue(name);
 	}
@@ -1422,6 +1426,26 @@ void GameManager::shakeScreen(const ShakeParams &params)
 	}
 }
 
+void GameManager::preloadAllSprites()
+{
+	for (auto &faction : this->_factions)
+		for (auto &vec : faction.getAnimations() | std::ranges::views::values)
+			for (auto &sprite : vec) {
+				for (auto &player : this->_players)
+					this->_preloadedSprites.push_back(sprite.preload(player.getColor()));
+				// Neutral units are white
+				this->_preloadedSprites.push_back(sprite.preload(HSLColor{0, 0, 1000}));
+			}
+}
+
+void GameManager::preloadSprites()
+{
+	for (auto &player : this->_players)
+		for (auto &vec : player.getPrimaryFaction().getAnimations() | std::ranges::views::values)
+			for (auto &sprite : vec)
+				this->_preloadedSprites.push_back(sprite.preload(player.getColor()));
+}
+
 void GameManager::centerCameraOn(Vector2f target)
 {
 	Vector2u size = game->screen->getSize();
@@ -1443,4 +1467,74 @@ void GameManager::centerCameraOn(Vector2f target)
 	if (this->_cameraTranslate.y >= this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y)
 		this->_cameraTranslate.y = 0;
 	game->soundMgr.setCamera(this->_cameraTranslate + size / 2, size);
+}
+
+void ShakeParams::pushUserType(sol::state &state)
+{
+	sol::usertype<ShakeParams> type = state.new_usertype<ShakeParams>("ShakeParams");
+
+	type["time"] = &ShakeParams::time;
+	type["power"] = &ShakeParams::power;
+	type["interval"] = &ShakeParams::interval;
+	type["freeze_time"] = &ShakeParams::freezeTime;
+}
+
+void GameManager::pushUserType(sol::state &state)
+{
+	ShakeParams::pushUserType(state);
+	MapResource::pushUserType(state);
+	MapState::pushUserType(state);
+
+	sol::usertype<GameManager> type = state.new_usertype<GameManager>("GameManager");
+
+	type["load_map"] = &GameManager::loadMap;
+	type["add_player"] = &GameManager::addPlayer;
+	type["update"] = &GameManager::update;
+	type["update_render"] = &GameManager::updateRender;
+	type["render"] = &GameManager::render;
+	type["render_above"] = &GameManager::renderAbove;
+	type["paused"] = sol::property(&GameManager::setPaused);
+	type["render_minimap"] = &GameManager::renderMinimap;
+	type["get_object_by_id"] = &GameManager::getObjectById;
+	type["find_pickup"] = &GameManager::findPickup;
+	type["spawn_object"] = &GameManager::spawnObject;
+	type["can_spawn_building"] = &GameManager::canSpawnBuilding;
+	type["is_area_free"] = &GameManager::isAreaFree;
+	type["get_objects_in_area"] = [](GameManager &self, const Vector2i &pos, const Vector2u &size) {
+		std::vector<GameObject *> objects;
+
+		self.getObjectsInArea(pos, size, objects);
+		return objects;
+	};
+	type["mod_unit_in_area"] = sol::overload(
+		sol::resolve<void(const MapState::Quad &, size_t, int, pfGridType, char, bool, bool)>(&GameManager::modUnitInArea),
+		sol::resolve<void(Vector2i, Vector2u, size_t, int, pfGridType, char, bool, bool)>(&GameManager::modUnitInArea)
+	);
+	type["get_first_harvestable_tile"] = &GameManager::getFirstHarvestableTile;
+	type["get_closest_harvestable_tile"] = &GameManager::getClosestHarvestableTile;
+	type["get_closest_resource_dump"] = &GameManager::getClosestResourceDump;
+	type["get_resource"] = &GameManager::getResource;
+	type["consume_resource"] = &GameManager::consumeResource;
+	type["center_camera_on"] = sol::overload(
+		sol::resolve<void(Vector2f)>(&GameManager::centerCameraOn),
+		sol::resolve<void(const GameObject &)>(&GameManager::centerCameraOn)
+	);
+	type["convert_resource"] = &GameManager::convertResource;
+	type["spawn_effect"] = &GameManager::spawnEffect;
+	type["spawn_projectile"] = &GameManager::spawnProjectile;
+	type["weapon_used_at"] = &GameManager::weaponUsedAt;
+	type["weapon_used_on"] = &GameManager::weaponUsedOn;
+	type["shake_screen"] = &GameManager::shakeScreen;
+	// NOTE: consumeEvent()/consumeGeneralEvent() (raw sf::Event, not wrapped
+	// for Lua), registerObject()/deregisterObject() (internal bookkeeping of
+	// raw non-owning pointers into engine-managed lists) and
+	// initUnitTiles()/deinitUnitTiles() (raw BuildingMask bit-grid, same
+	// reasoning as GameObject::getTileData()) are intentionally not exposed.
+	// getPlayers()/getFactions() (std::vector<Player>/std::vector<Faction>)
+	// and getLoadedMap() (LoadedMap, which owns an sf::RenderTexture) are
+	// also not exposed: Player and Faction both hold non-static reference
+	// members (so std::vector<T> of them isn't move/copy-assignable, which
+	// sol2's container support needs even just to register the usertype),
+	// and LoadedMap isn't copyable either, same reasoning as
+	// Upgrade::getRequirements()/Player::getUIs().
 }

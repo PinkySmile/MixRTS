@@ -9,6 +9,7 @@
 #include <mutex>
 #include <memory>
 #include <random>
+#include <sol/sol.hpp>
 #include <TGUI/Backend/SFML-Graphics.hpp>
 #include "SoundManager.hpp"
 #include "SceneManager.hpp"
@@ -52,12 +53,16 @@ struct Game {
 	SceneManager scene;
 	ModManager modManager;
 	Vector2u mousePos;
+	sol::state lua;
+
+	static void pushUserType(sol::state &state);
 
 #ifdef MOCK
 	Game(const std::filesystem::path &fontPath, MockMode mode, const std::filesystem::path &video, Vector2u size = {1280, 1024}, const std::filesystem::path &loggerPath = "./latest.log");
 #else
 	Game(const std::filesystem::path &fontPath, const std::filesystem::path &loggerPath = "./latest.log");
 #endif
+	void init();
 };
 
 #ifdef _DEBUG

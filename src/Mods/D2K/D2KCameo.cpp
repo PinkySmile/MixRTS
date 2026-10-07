@@ -7,6 +7,8 @@
 #include <SFML/Graphics/VertexArray.hpp>
 #include <SFML/Graphics/RenderTarget.hpp>
 #include <TGUI/Backend/Renderer/SFML-Graphics/BackendRenderTargetSFML.hpp>
+#include <TGUI/Container.hpp>
+#include <sol/sol.hpp>
 #include "D2KCameo.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"

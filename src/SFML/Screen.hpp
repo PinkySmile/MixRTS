@@ -2,8 +2,8 @@
 // Created by PinkySmile on 15/01/2019.
 //
 
-#ifndef THFGAME_RESSOURCES_HPP
-#define THFGAME_RESSOURCES_HPP
+#ifndef MIXRTS_RESSOURCES_HPP
+#define MIXRTS_RESSOURCES_HPP
 
 
 #include <memory>
@@ -29,6 +29,48 @@ struct IntRect : public sf::IntRect {
 	IntRect(Vector2i pos, Vector2i size);
 	IntRect(int x, int y, int w, int h);
 };
+
+#include <sol/sol.hpp>
+// --- Lua conversion handlers for IntRect ---
+// Represented in Lua as a plain table { position = {x, y}, size = {x, y} }.
+
+template <typename Handler>
+bool sol_lua_check(sol::types<IntRect>, lua_State *L, int index, Handler &&handler, sol::stack::record &tracking)
+{
+	if (lua_type(L, index) == LUA_TTABLE) {
+		sol::stack_table table(L, index);
+		sol::object position = table["position"];
+		sol::object size = table["size"];
+
+		if (position.is<Vector2i>() && size.is<Vector2i>()) {
+			tracking.use(1);
+			return true;
+		}
+	}
+
+	handler(L, index, sol::type_of(L, index), sol::type::table, "expected table {position, size}");
+	return false;
+}
+
+inline IntRect sol_lua_get(sol::types<IntRect>, lua_State *L, int index, sol::stack::record &tracking)
+{
+	sol::stack_table table(L, index);
+	Vector2i position = table.get<Vector2i>("position");
+	Vector2i size = table.get<Vector2i>("size");
+
+	tracking.use(1);
+	return IntRect(position, size);
+}
+
+inline int sol_lua_push(lua_State *L, const IntRect &rect)
+{
+	lua_createtable(L, 0, 2);
+	sol::stack::push(L, Vector2i(rect.position));
+	lua_setfield(L, -2, "position");
+	sol::stack::push(L, Vector2i(rect.size));
+	lua_setfield(L, -2, "size");
+	return 1;
+}
 
 //! Pure helper shared by Screen and MockedScreen: width in pixels that txt would
 //! take when rendered with text's current font/character size.
@@ -87,4 +129,4 @@ public:
 void libraryInit();
 #define libraryUnInit()
 
-#endif //THFGAME_RESSOURCES_HPP
+#endif //MIXRTS_RESSOURCES_HPP

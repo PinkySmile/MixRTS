@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <nlohmann/json_fwd.hpp>
+#include <sol/forward.hpp>
 #include "../forward.hpp"
 #include "Color.hpp"
 #include "Utils.hpp"
@@ -37,6 +38,8 @@ public:
 	size_t size() const;
 	unsigned current() const;
 	void setColor(const HSLColor &color);
+
+	static void pushUserType(sol::state &state);
 };
 
 

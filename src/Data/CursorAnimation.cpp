@@ -5,6 +5,7 @@
 #include <vector>
 #include <filesystem>
 #include <nlohmann/json.hpp>
+#include <sol/sol.hpp>
 #include "CursorAnimation.hpp"
 #include "Utils.hpp"
 #include "../Resources/Game.hpp"
@@ -48,4 +49,12 @@ void CursorAnimation::render() const
 	game->screen->setView(v);
 	game->screen->draw(cursor);
 	game->screen->setView(old);
+}
+
+void CursorAnimation::pushUserType(sol::state &state)
+{
+	sol::usertype<CursorAnimation> type = state.new_usertype<CursorAnimation>("CursorAnimation");
+
+	type["update"] = &CursorAnimation::update;
+	type["render"] = &CursorAnimation::render;
 }

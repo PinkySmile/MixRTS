@@ -8,6 +8,7 @@
 
 #include <map>
 #include <string>
+#include <sol/forward.hpp>
 #include "CursorAnimation.hpp"
 #include "Faction.hpp"
 
@@ -74,6 +75,8 @@ public:
 	) const;
 	const std::filesystem::path &getBase() const;
 	const std::string &getName() const;
+
+	static void pushUserType(sol::state &state);
 };
 
 

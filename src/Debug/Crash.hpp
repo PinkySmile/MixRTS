@@ -10,7 +10,15 @@
 
 #include <filesystem>
 #include <TGUI/Widgets/Panel.hpp>
+#ifdef NO_TRACE
+struct Stacktrace {
+	void print(std::ostream & = std::cout, bool = false) {}
+};
+#else
 #include <cpptrace/cpptrace.hpp>
+
+typedef cpptrace::stacktrace Stacktrace;
+#endif
 
 struct CrashPacket;
 
@@ -22,8 +30,8 @@ bool createCoreDump(const CrashPacket *packet, const std::filesystem::path &path
 void readCrashPacket(CrashPacket *packet);
 tgui::Panel::Ptr crashPacketPanel(const CrashPacket &packet);
 std::string crashPacketToString(const CrashPacket &packet);
-std::string stacktraceToRichString(cpptrace::stacktrace st);
-void cleanStackTrace(cpptrace::stacktrace &st);
+std::string stacktraceToRichString(Stacktrace st);
+void cleanStackTrace(Stacktrace &st);
 // bool fillReplayStruct(const CrashPacket &packet, ReplayData &data);
 // bool fillStateVector(const CrashPacket &packet, std::vector<byte> &data);
 

@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <nlohmann/json_fwd.hpp>
+#include <sol/forward.hpp>
 #include "Screen.hpp"
 #include "Sprite.hpp"
 #include "Vector.hpp"
@@ -24,9 +25,13 @@ public:
 	Animation(const std::filesystem::path &base, const nlohmann::json &json);
 	Sprite &getSprite();
 	void setColor(const HSLColor &color);
+	HSLColor getColor() const;
 	Blending getBlending() const;
 	Vector2f getOffset() const;
 	Vector2u getSize() const;
+	[[nodiscard]] unsigned preload(HSLColor color) const;
+
+	static void pushUserType(sol::state &state);
 
 private:
 	enum Paletting {

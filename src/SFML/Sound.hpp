@@ -7,6 +7,7 @@
 
 
 #include <string>
+#include <sol/forward.hpp>
 #include "Data/Vector.hpp"
 #include "forward.hpp"
 
@@ -31,6 +32,8 @@ public:
 	//! Whether load() has ever actually been given a valid, non-zero handle.
 	[[nodiscard]] bool isLoaded() const;
 	void setVolume(float volume);
+
+	static void pushUserType(sol::state &state);
 };
 
 

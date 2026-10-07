@@ -6,6 +6,7 @@
 #define MIXRTS_CURSORANIMATION_HPP
 
 
+#include <sol/forward.hpp>
 #include "Cursor.hpp"
 
 class CursorAnimation {
@@ -18,6 +19,8 @@ public:
 	CursorAnimation(const std::filesystem::path &base, const nlohmann::json &json, const nlohmann::json &gen);
 	void update();
 	void render() const;
+
+	static void pushUserType(sol::state &state);
 };
 
 

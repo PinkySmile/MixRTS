@@ -7,7 +7,7 @@
 
 
 #include <memory>
-#include "../src/UI.hpp"
+#include "../UI/UI.hpp"
 
 //! UI implementation used by tests. It owns another, real UI implementation
 //! (e.g. D2KUI) given to its constructor and forwards every call to it, so

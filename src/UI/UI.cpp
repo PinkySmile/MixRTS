@@ -2,10 +2,20 @@
 // Created by PinkySmile on 01/04/2026.
 //
 
+#include <sol/sol.hpp>
 #include "UI.hpp"
-#include "../Data/GameManager.hpp"
-#include "../Data/Player.hpp"
-#include "../Resources/Game.hpp"
+#include "Data/GameManager.hpp"
+#include "Data/Faction.hpp"
+#include "Data/Cursor.hpp"
+#include "Data/CursorAnimation.hpp"
+#include "Data/Animation.hpp"
+#include "Data/Upgrade.hpp"
+#include "Data/Effect.hpp"
+#include "Data/Weapon.hpp"
+#include "Data/Warhead.hpp"
+#include "Data/GameObject.hpp"
+#include "Data/Player.hpp"
+#include "Resources/Game.hpp"
 #include "Resources/Assert.hpp"
 
 
@@ -103,7 +113,255 @@ std::string UI::EVAToString(EVASound snd)
 	}
 }
 
-UI::UI(const Faction &faction) :
+std::string UI::cursorToString(Cursor cur)
+{
+	switch (cur) {
+	case CURSOR_NORMAL:
+		return "CURSOR_NORMAL";
+	case CURSOR_MOVE:
+		return "CURSOR_MOVE";
+	case CURSOR_MOVE_RESTRICT:
+		return "CURSOR_MOVE_RESTRICT";
+	case CURSOR_NO_MOVE:
+		return "CURSOR_NO_MOVE";
+	case CURSOR_SELECT:
+		return "CURSOR_SELECT";
+	case CURSOR_HARVEST:
+		return "CURSOR_HARVEST";
+	case CURSOR_ATTACK:
+		return "CURSOR_ATTACK";
+	case CURSOR_ATTACK_MOVE:
+		return "CURSOR_ATTACK_MOVE";
+	case CURSOR_ENTER:
+		return "CURSOR_ENTER";
+	case CURSOR_DUMP:
+		return "CURSOR_DUMP";
+	case CURSOR_SCROLL_ALL_DIRS:
+		return "CURSOR_SCROLL_ALL_DIRS";
+	case CURSOR_SCROLL_RIGHT:
+		return "CURSOR_SCROLL_RIGHT";
+	case CURSOR_SCROLL_LEFT:
+		return "CURSOR_SCROLL_LEFT";
+	case CURSOR_SCROLL_TOP:
+		return "CURSOR_SCROLL_TOP";
+	case CURSOR_SCROLL_TOP_RIGHT:
+		return "CURSOR_SCROLL_TOP_RIGHT";
+	case CURSOR_SCROLL_TOP_LEFT:
+		return "CURSOR_SCROLL_TOP_LEFT";
+	case CURSOR_SCROLL_BOTTOM:
+		return "CURSOR_SCROLL_BOTTOM";
+	case CURSOR_SCROLL_BOTTOM_RIGHT:
+		return "CURSOR_SCROLL_BOTTOM_RIGHT";
+	case CURSOR_SCROLL_BOTTOM_LEFT:
+		return "CURSOR_SCROLL_BOTTOM_LEFT";
+	case CURSOR_NO_SCROLL_RIGHT:
+		return "CURSOR_NO_SCROLL_RIGHT";
+	case CURSOR_NO_SCROLL_LEFT:
+		return "CURSOR_NO_SCROLL_LEFT";
+	case CURSOR_NO_SCROLL_TOP:
+		return "CURSOR_NO_SCROLL_TOP";
+	case CURSOR_NO_SCROLL_TOP_RIGHT:
+		return "CURSOR_NO_SCROLL_TOP_RIGHT";
+	case CURSOR_NO_SCROLL_TOP_LEFT:
+		return "CURSOR_NO_SCROLL_TOP_LEFT";
+	case CURSOR_NO_SCROLL_BOTTOM:
+		return "CURSOR_NO_SCROLL_BOTTOM";
+	case CURSOR_NO_SCROLL_BOTTOM_RIGHT:
+		return "CURSOR_NO_SCROLL_BOTTOM_RIGHT";
+	case CURSOR_NO_SCROLL_BOTTOM_LEFT:
+		return "CURSOR_NO_SCROLL_BOTTOM_LEFT";
+	case CURSOR_DEPLOY:
+		return "CURSOR_DEPLOY";
+	case CURSOR_NO_DEPLOY:
+		return "CURSOR_NO_DEPLOY";
+	case CURSOR_PRIMARY:
+		return "CURSOR_PRIMARY";
+	case CURSOR_NO_REPAIR:
+		return "CURSOR_NO_REPAIR";
+	case CURSOR_REPAIR:
+		return "CURSOR_REPAIR";
+	case CURSOR_NO_SELL:
+		return "CURSOR_NO_SELL";
+	case CURSOR_SELL:
+		return "CURSOR_SELL";
+	case CURSOR_COUNT:
+		return "CURSOR_COUNT";
+	default:
+		return "Invalid cursor " + std::to_string(cur);
+	}
+}
+
+void UI::pushUserType(sol::state &state)
+{
+	sol::usertype<UI> type = state.new_usertype<UI>("UI");
+
+	type["state"] = &UI::state;
+	type["manager"] = &UI::manager;
+	type["owner_state"] = &UI::ownerState;
+	type["map"] = &UI::map;
+	type["forced_cursor"] = &UI::forcedCursor;
+	type["panel"] = sol::property(&UI::getPanel);
+	type["faction"] = sol::property(&UI::getFaction);
+	type["select_building_for_placement"] = &UI::selectBuildingForPlacement;
+	type["enabled"] = sol::property(&UI::isEnabled, [](UI &ui, bool b) { ui.UI::setEnabled(b); });
+	type["play_eva"] = [](UI &ui, EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args) {
+		ui.UI::playEVA(sound, expireIn, priority, cooldown, args);
+	};
+	type["poll_event"] = [](UI &ui) { ui.UI::pollEvent(); };
+	type["render_above"] = [](UI &ui) { ui.UI::renderAbove(); };
+	type["update_render"] = [](UI &ui) { ui.UI::updateRender(); };
+	type["mouse_on_ui"] = [](UI &ui) { ui.UI::mouseOnUi(); };
+	type["on_cancel"] = [](UI &ui, Vector2i absPos) { ui.UI::onCancel(absPos); };
+	type["tile_clicked"] = [](UI &ui, Vector2i absPos) { ui.UI::tileClicked(absPos); };
+	type["mouse_moved_to_tile"] = [](UI &ui, Vector2i absPos) { ui.UI::mouseMovedToTile(absPos); };
+	type["on_key_pressed"] = [](UI &ui, sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta) {
+		ui.UI::onKeyPressed(key, ctrl, shift, alt, meta);
+	};
+	type["update"] = [](UI &ui) { ui.UI::update(); };
+	type["render"] = [](UI &ui) { ui.UI::render(); };
+
+	type["_current_cursor"] = sol::property(&UI::_getCurrentCursor);
+	type["_queue_start_build"] = &UI::_queueStartBuild;
+	type["_queue_cancel_build"] = &UI::_queueCancelBuild;
+	type["_queue_open_queue"] = &UI::_queueOpenQueue;
+	type["_queue_close_queue"] = &UI::_queueCloseQueue;
+	type["_load_eva_sound"] = &UI::_loadEvaSound;
+	type["_load_select_corner"] = &UI::_loadSelectCorner;
+	type["_set_cursor_mapping"] = &UI::_setCursorMapping;
+	type["_tile_clicked_normal"] = &UI::_tileClickedNormal;
+	type["_tile_clicked_repair"] = &UI::_tileClickedRepair;
+	type["_tile_clicked_sell"] = &UI::_tileClickedSell;
+	type["_update_cursor"] = &UI::_updateCursor;
+	type["_update_cursor_normal"] = &UI::_updateCursorNormal;
+	type["_update_cursor_repair"] = &UI::_updateCursorRepair;
+	type["_update_cursor_sell"] = &UI::_updateCursorSell;
+	type["_handle_try_place"] = &UI::_handleTryPlace;
+	type["_display_placement_preview"] = &UI::_displayPlacementPreview;
+	type["_selection_too_far"] = sol::property(&UI::_isSelectionTooFar);
+	type["_display_select_box"] = &UI::_displaySelectBox;
+	type["_select_corners"] = &UI::_selectCorners;
+	type["_placement_animation"] = &UI::_placementAnimation;
+	type["_placement_pos"] = &UI::_placementPos;
+	type["_placement_building"] = &UI::_placementBuilding;
+	type["_global_eva_cooldown"] = &UI::_globalEvaCooldown;
+	type["_eva_queue"] = &UI::_evaQueue;
+	type["_eva_cooldown"] = &UI::_evaCooldown;
+	type["_eva_sounds"] = &UI::_evaSounds;
+	type["_object_buffer"] = &UI::_objectBuffer;
+	type["_current_eva_sound"] = &UI::_currentEvaSound;
+	type["_event_queue"] = &UI::_eventQueue;
+	type["_settings"] = &UI::_settings;
+	type["_panel"] = &UI::_panel;
+	type["_cursor_mapping"] = &UI::_cursorMapping;
+	type["_cursors"] = &UI::_cursors;
+	type["_cursor"] = &UI::_cursor;
+	type["_minimap_pos"] = &UI::_minimapPos;
+	type["_minimap_size"] = &UI::_minimapSize;
+	type["_enabled"] = &UI::_enabled;
+	type["_has_low_power"] = &UI::_hasLowPower;
+	type["_has_radar"] = &UI::_hasRadar;
+	type["_repairing"] = &UI::_repairing;
+	type["_selling"] = &UI::_selling;
+
+	state.new_enum<EVASound>("UI_EVASound", {
+		{ "EVA_BUILDING",                    EVA_BUILDING },
+		{ "EVA_BUILDING_DONE",               EVA_BUILDING_DONE },
+		{ "EVA_CANCEL",                      EVA_CANCEL },
+		{ "EVA_CANNOT_DEPLOY",               EVA_CANNOT_DEPLOY },
+		{ "EVA_CANNOT_BUILD",                EVA_CANNOT_BUILD },
+		{ "EVA_GUARDING",                    EVA_GUARDING },
+		{ "EVA_HOLD_QUEUE",                  EVA_HOLD_QUEUE },
+		{ "EVA_LOST",                        EVA_LOST },
+		{ "EVA_WON",                         EVA_WON },
+		{ "EVA_LOW_POWER",                   EVA_LOW_POWER },
+		{ "EVA_UNLOCKED",                    EVA_UNLOCKED },
+		{ "EVA_NO_CREDITS",                  EVA_NO_CREDITS },
+		{ "EVA_PRIMARY_SELECTED",            EVA_PRIMARY_SELECTED },
+		{ "EVA_RETREAT",                     EVA_RETREAT },
+		{ "EVA_SELL",                        EVA_SELL },
+		{ "EVA_TRAINING",                    EVA_TRAINING },
+		{ "EVA_UNIT_READY",                  EVA_UNIT_READY },
+		{ "EVA_UPGRADING",                   EVA_UPGRADING },
+		{ "EVA_CASH_UP",                     EVA_CASH_UP },
+		{ "EVA_CASH_DOWN",                   EVA_CASH_DOWN },
+		{ "EVA_REQUIRE_STORAGE",             EVA_REQUIRE_STORAGE },
+		{ "EVA_ALREADY_BUILDING",            EVA_ALREADY_BUILDING },
+		{ "EVA_POWER_OFF",                   EVA_POWER_OFF },
+		{ "EVA_POWER_ON",                    EVA_POWER_ON },
+		{ "EVA_RADAR_UP",                    EVA_RADAR_UP },
+		{ "EVA_MY_BUILDING_CAPTURED",        EVA_MY_BUILDING_CAPTURED },
+		{ "EVA_BUILDING_CAPTURED",           EVA_BUILDING_CAPTURED },
+		{ "EVA_BUILDING_ATTACKED",           EVA_BUILDING_ATTACKED },
+		{ "EVA_BUILDING_LOST",               EVA_BUILDING_LOST },
+		{ "EVA_MY_UNIT_CAPTURED",            EVA_MY_UNIT_CAPTURED },
+		{ "EVA_UNIT_CAPTURED",               EVA_UNIT_CAPTURED },
+		{ "EVA_UNIT_ATTACKED",               EVA_UNIT_ATTACKED },
+		{ "EVA_ALLIED_MY_BUILDING_CAPTURED", EVA_ALLIED_MY_BUILDING_CAPTURED },
+		{ "EVA_ALLIED_BUILDING_CAPTURED",    EVA_ALLIED_BUILDING_CAPTURED },
+		{ "EVA_ALLIED_BUILDING_ATTACKED",    EVA_ALLIED_BUILDING_ATTACKED },
+		{ "EVA_ALLIED_BUILDING_LOST",        EVA_ALLIED_BUILDING_LOST },
+		{ "EVA_ALLIED_MY_UNIT_CAPTURED",     EVA_ALLIED_MY_UNIT_CAPTURED },
+		{ "EVA_ALLIED_UNIT_CAPTURED",        EVA_ALLIED_UNIT_CAPTURED },
+		{ "EVA_ALLIED_UNIT_ATTACKED",        EVA_ALLIED_UNIT_ATTACKED },
+		{ "EVA_UNIT_LOST",                   EVA_UNIT_LOST },
+		{ "EVA_HARV_UNDER_ATTACK",           EVA_HARV_UNDER_ATTACK },
+		{ "EVA_HAZARD_SPAWNED",              EVA_HAZARD_SPAWNED },
+		{ "EVA_HAZARD_ATTACKED",             EVA_HAZARD_ATTACKED },
+		{ "EVA_ORDER_PLACED",                EVA_ORDER_PLACED },
+		{ "EVA_ORDER_IN_1",                  EVA_ORDER_IN_1 },
+		{ "EVA_ORDER_IN_2",                  EVA_ORDER_IN_2 },
+		{ "EVA_ORDER_IN_3",                  EVA_ORDER_IN_3 },
+		{ "EVA_ORDER_IN_4",                  EVA_ORDER_IN_4 },
+		{ "EVA_ORDER_IN_5",                  EVA_ORDER_IN_5 },
+	});
+	state.new_enum<Cursor>("UI_Cursor", {
+		{ "CURSOR_HORZ_NONE",              CURSOR_HORZ_NONE },
+		{ "CURSOR_HORZ_RIGHT",             CURSOR_HORZ_RIGHT },
+		{ "CURSOR_HORZ_LEFT",              CURSOR_HORZ_LEFT },
+		{ "CURSOR_NORMAL",                 CURSOR_NORMAL },
+		{ "CURSOR_MOVE",                   CURSOR_MOVE },
+		{ "CURSOR_MOVE_RESTRICT",          CURSOR_MOVE_RESTRICT },
+		{ "CURSOR_NO_MOVE",                CURSOR_NO_MOVE },
+		{ "CURSOR_SELECT",                 CURSOR_SELECT },
+		{ "CURSOR_HARVEST",                CURSOR_HARVEST },
+		{ "CURSOR_ATTACK",                 CURSOR_ATTACK },
+		{ "CURSOR_ATTACK_MOVE",            CURSOR_ATTACK_MOVE },
+		{ "CURSOR_ENTER",                  CURSOR_ENTER },
+		{ "CURSOR_DUMP",                   CURSOR_DUMP },
+		{ "CURSOR_SCROLL_ALL_DIRS",        CURSOR_SCROLL_ALL_DIRS },
+		{ "CURSOR_SCROLL_RIGHT",           CURSOR_SCROLL_RIGHT },
+		{ "CURSOR_SCROLL_LEFT",            CURSOR_SCROLL_LEFT },
+		{ "CURSOR_SCROLL_TOP",             CURSOR_SCROLL_TOP },
+		{ "CURSOR_SCROLL_TOP_RIGHT",       CURSOR_SCROLL_TOP_RIGHT },
+		{ "CURSOR_SCROLL_TOP_LEFT",        CURSOR_SCROLL_TOP_LEFT },
+		{ "CURSOR_SCROLL_BOTTOM",          CURSOR_SCROLL_BOTTOM },
+		{ "CURSOR_SCROLL_BOTTOM_RIGHT",    CURSOR_SCROLL_BOTTOM_RIGHT },
+		{ "CURSOR_SCROLL_BOTTOM_LEFT",     CURSOR_SCROLL_BOTTOM_LEFT },
+		{ "CURSOR_NO_SCROLL_RIGHT",        CURSOR_NO_SCROLL_RIGHT },
+		{ "CURSOR_NO_SCROLL_LEFT",         CURSOR_NO_SCROLL_LEFT },
+		{ "CURSOR_NO_SCROLL_TOP",          CURSOR_NO_SCROLL_TOP },
+		{ "CURSOR_NO_SCROLL_TOP_RIGHT",    CURSOR_NO_SCROLL_TOP_RIGHT },
+		{ "CURSOR_NO_SCROLL_TOP_LEFT",     CURSOR_NO_SCROLL_TOP_LEFT },
+		{ "CURSOR_NO_SCROLL_BOTTOM",       CURSOR_NO_SCROLL_BOTTOM },
+		{ "CURSOR_NO_SCROLL_BOTTOM_RIGHT", CURSOR_NO_SCROLL_BOTTOM_RIGHT },
+		{ "CURSOR_NO_SCROLL_BOTTOM_LEFT",  CURSOR_NO_SCROLL_BOTTOM_LEFT },
+		{ "CURSOR_DEPLOY",                 CURSOR_DEPLOY },
+		{ "CURSOR_NO_DEPLOY",              CURSOR_NO_DEPLOY },
+		{ "CURSOR_PRIMARY",                CURSOR_PRIMARY },
+		{ "CURSOR_NO_REPAIR",              CURSOR_NO_REPAIR },
+		{ "CURSOR_REPAIR",                 CURSOR_REPAIR },
+		{ "CURSOR_NO_SELL",                CURSOR_NO_SELL },
+		{ "CURSOR_SELL",                   CURSOR_SELL },
+		{ "CURSOR_COUNT",                  CURSOR_COUNT },
+		{ "CURSOR_SCROLL_DIFF",            CURSOR_SCROLL_DIFF }
+	});
+}
+
+UI::UI(const Faction &faction, UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map) :
+	state(state),
+	manager(manager),
+	ownerState(ownerState),
+	map(map),
 	_faction(faction)
 {
 	this->_hasRadar = faction.hasRadar();
@@ -257,7 +515,43 @@ void UI::render()
 		this->_displaySelectedObjectUI(*b);
 }
 
-CursorAnimation &UI::getCurrentCursor()
+void UI::_queueStartBuild(const std::string &id, const std::string &queue)
+{
+	this->_eventQueue.emplace_back(StartBuildEvent{id, queue});
+}
+
+void UI::_queueCancelBuild(const std::string &id, const std::string &queue)
+{
+	this->_eventQueue.emplace_back(CancelBuildEvent{id, queue});
+}
+
+void UI::_queueOpenQueue(const std::string &queue)
+{
+	this->_eventQueue.emplace_back(OpenQueueEvent{queue});
+}
+
+void UI::_queueCloseQueue(const std::string &queue)
+{
+	this->_eventQueue.emplace_back(CloseQueueEvent{queue});
+}
+
+void UI::_loadEvaSound(EVASound sound, const std::string &path, bool relativeToCamera)
+{
+	this->_evaSounds[sound].load(path, relativeToCamera);
+}
+
+void UI::_loadSelectCorner(unsigned index, const std::string &path)
+{
+	assert_exp(index < this->_selectCorners.size());
+	assert_exp(this->_selectCorners[index].loadFromFile(path));
+}
+
+void UI::_setCursorMapping(Cursor cursor, const std::string &name)
+{
+	this->_cursorMapping[cursor] = name;
+}
+
+CursorAnimation &UI::_getCurrentCursor()
 {
 	Cursor cursor = !game->paused && this->forcedCursor ? *this->forcedCursor : this->_cursor;
 
@@ -272,7 +566,7 @@ CursorAnimation &UI::getCurrentCursor()
 
 void UI::renderAbove()
 {
-	this->getCurrentCursor().render();
+	this->_getCurrentCursor().render();
 
 	if (this->ownerState->hasRadar) {
 		sf::View oldView = game->screen->getView();

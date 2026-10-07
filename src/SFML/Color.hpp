@@ -18,8 +18,8 @@ union Color {
 	unsigned value;
 
 	Color() {};
-	Color(const sf::Color &c) : r(c.r), g(c.g), b(c.b), a(c.a) {};
-	Color(unsigned v) : value(v) {}
+	explicit Color(const sf::Color &c) : r(c.r), g(c.g), b(c.b), a(c.a) {};
+	explicit Color(unsigned v) : value(v) {}
 	Color(unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) : r(r), g(g), b(b), a(a) {}
 
 	bool operator==(const Color &other) const
@@ -55,6 +55,58 @@ union Color {
 	static const Color Cyan;
 	static const Color Transparent;
 };
+
+
+#include <sol/sol.hpp>
+// --- Lua conversion handlers for Color ---
+// Found through ADL from sol2. Color is represented in Lua as a plain
+// table of the form { r = ..., g = ..., b = ..., a = ... } (alpha optional,
+// defaults to 255 on get).
+
+template <typename Handler>
+bool sol_lua_check(sol::types<Color>, lua_State *L, int index, Handler &&handler, sol::stack::record &tracking)
+{
+	if (lua_type(L, index) == LUA_TTABLE) {
+		sol::stack_table table(L, index);
+		sol::object r = table["r"];
+		sol::object g = table["g"];
+		sol::object b = table["b"];
+
+		if (r.is<unsigned>() && g.is<unsigned>() && b.is<unsigned>()) {
+			tracking.use(1);
+			return true;
+		}
+	}
+
+	handler(L, index, sol::type_of(L, index), sol::type::table, "expected table {r, g, b, a}");
+	return false;
+}
+
+inline Color sol_lua_get(sol::types<Color>, lua_State *L, int index, sol::stack::record &tracking)
+{
+	sol::stack_table table(L, index);
+	unsigned char r = table.get<unsigned char>("r");
+	unsigned char g = table.get<unsigned char>("g");
+	unsigned char b = table.get<unsigned char>("b");
+	unsigned char a = table.get_or<unsigned char>("a", 255);
+
+	tracking.use(1);
+	return Color(r, g, b, a);
+}
+
+inline int sol_lua_push(lua_State *L, const Color &color)
+{
+	lua_createtable(L, 0, 4);
+	sol::stack::push(L, color.r);
+	lua_setfield(L, -2, "r");
+	sol::stack::push(L, color.g);
+	lua_setfield(L, -2, "g");
+	sol::stack::push(L, color.b);
+	lua_setfield(L, -2, "b");
+	sol::stack::push(L, color.a);
+	lua_setfield(L, -2, "a");
+	return 1;
+}
 
 
 #endif //MIXRTS_COLOR_HPP

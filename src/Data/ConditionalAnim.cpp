@@ -3,6 +3,7 @@
 //
 
 #include "nlohmann/json.hpp"
+#include <sol/sol.hpp>
 #include "GameObject.hpp"
 #include "Animation.hpp"
 #include "Mod.hpp"
@@ -151,4 +152,19 @@ void ConditionalAnim::setColor(const HSLColor &color)
 {
 	for (auto &anim : this->_anim)
 		anim.setColor(color);
+}
+
+void ConditionalAnim::pushUserType(sol::state &state)
+{
+	sol::usertype<ConditionalAnim> type = state.new_usertype<ConditionalAnim>("ConditionalAnim");
+
+	type[sol::meta_function::call] = &ConditionalAnim::operator();
+	type["update"] = &ConditionalAnim::update;
+	type["reset"] = &ConditionalAnim::reset;
+	type["anim"] = sol::property(sol::resolve<const Animation &() const>(&ConditionalAnim::getAnim));
+	type["anims"] = sol::property(&ConditionalAnim::getAnims);
+	type["layer"] = sol::property(&ConditionalAnim::getLayer);
+	type["size"] = sol::property(&ConditionalAnim::size);
+	type["current"] = sol::property(&ConditionalAnim::current);
+	type["color"] = sol::property(&ConditionalAnim::setColor);
 }

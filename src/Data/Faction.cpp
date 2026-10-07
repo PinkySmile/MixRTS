@@ -2,10 +2,10 @@
 // Created by PinkySmile on 29/03/2026.
 //
 
-#include <cpptrace/cpptrace.hpp>
-#include <cpptrace/from_current.hpp>
+#include <sol/sol.hpp>
 #include "Resources/Assert.hpp"
 #include "Faction.hpp"
+#include "JsonLua.hpp"
 #include "Mod.hpp"
 #include "Animation.hpp"
 #include "Upgrade.hpp"
@@ -13,7 +13,9 @@
 #include "Weapon.hpp"
 #include "Warhead.hpp"
 #include "GameObject.hpp"
-#include "D2K/D2KUI.hpp"
+#include "Mods/D2K/D2KUI.hpp"
+#include "UI/LuaUI.hpp"
+#include "Resources/Game.hpp"
 
 FactionQueue::FactionQueue(const Mod &base, const nlohmann::json &data)
 {
@@ -311,12 +313,12 @@ const std::vector<StartObject> &Faction::getStartingObjects() const
 	return this->_startingObjects;
 }
 
-UI *Faction::createUI() const
+UI *Faction::createUI(UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map) const
 {
 	// TODO:
 	if (this->_base.getName() == "d2k")
-		return new D2KUI(*this, this->_base.getBase(), this->_uiData);
-	return nullptr;
+		return new D2KUI(*this, state, manager, ownerState, map, this->_base.getBase(), this->_uiData);
+	return new LuaUI(*this, state, manager, ownerState, map, game->lua, (this->_base.getBase() / "ui" / "ui.lua").string());
 }
 
 const Mod &Faction::getBase() const
@@ -364,6 +366,11 @@ const std::optional<nlohmann::json> &Faction::getRepairAnim() const
 	return this->_repairAnim;
 }
 
+const nlohmann::json &Faction::getUIData() const
+{
+	return this->_uiData;
+}
+
 const std::unordered_map<std::string, FactionQueue> & Faction::getQueues() const
 {
 	return this->_queues;
@@ -372,5 +379,88 @@ const std::unordered_map<std::string, FactionQueue> & Faction::getQueues() const
 const std::optional<std::string> &Faction::getPrimaryQueue() const
 {
 	return this->_primaryQueue;
+}
+
+void StartObject::pushUserType(sol::state &state)
+{
+	sol::usertype<StartObject> type = state.new_usertype<StartObject>("StartObject");
+
+	type["offset"] = &StartObject::offset;
+	type["name"] = &StartObject::name;
+	type["queue"] = &StartObject::queue;
+}
+
+void FactionQueue::pushUserType(sol::state &state)
+{
+	state.new_enum<Type>("FactionQueue_Type", {
+		{"SINGLE_QUEUE", TYPE_SINGLE_QUEUE},
+		{"MULTI_QUEUE",  TYPE_MULTI_QUEUE},
+		{"STARPORT",     TYPE_STARPORT},
+	});
+	state.new_enum<Spawn>("FactionQueue_Spawn", {
+		{"NONE",      SPAWN_NONE},
+		{"INSIDE",    SPAWN_INSIDE},
+		{"PLACEMENT", SPAWN_PLACEMENT},
+		{"DELIVERY",  SPAWN_DELIVERY},
+	});
+
+	sol::usertype<StarportParams> starportType = state.new_usertype<StarportParams>("FactionQueue_StarportParams");
+
+	starportType["stock_increase_delay"] = &StarportParams::stockIncreaseDelay;
+	starportType["stock_increase_proba"] = &StarportParams::stockIncreaseProba;
+	starportType["stock_max"] = &StarportParams::stockMax;
+	starportType["discount_min"] = &StarportParams::discountMin;
+	starportType["discount_max"] = &StarportParams::discountMax;
+	starportType["delivery_delay"] = &StarportParams::deliveryDelay;
+	starportType["delivery_max"] = &StarportParams::deliveryMax;
+	starportType["delivery_eva_times"] = &StarportParams::deliveryEvaTimes;
+	starportType["single_max"] = &StarportParams::singleMax;
+	starportType["units"] = &StarportParams::units;
+
+	sol::usertype<FactionQueue> type = state.new_usertype<FactionQueue>("FactionQueue");
+
+	type["behavior"] = &FactionQueue::behavior;
+	type["requires_producer"] = &FactionQueue::requiresProducer;
+	type["unit_spawn"] = &FactionQueue::unitSpawn;
+	type["starport_params"] = &FactionQueue::starportParams;
+	type["delivery"] = &FactionQueue::delivery;
+}
+
+void Faction::pushUserType(sol::state &state)
+{
+	StartObject::pushUserType(state);
+	FactionQueue::pushUserType(state);
+
+	state.new_enum<Faction::CursorIndex>("FactionCursorIndex", {
+		{"BEST", Faction::CURSORINDEX_BEST},
+		{"OK",   Faction::CURSORINDEX_OK},
+		{"BAD",  Faction::CURSORINDEX_BAD},
+	});
+
+	sol::usertype<Faction> type = state.new_usertype<Faction>("Faction");
+
+	type["primary_queue"] = sol::property(&Faction::getPrimaryQueue);
+	type["sounds"] = sol::property(static_cast<const std::unordered_map<std::string, MultiSound> &(Faction::*)() const>(&Faction::getSounds));
+	type["upgrades"] = sol::property(static_cast<const std::unordered_map<std::string, Upgrade> &(Faction::*)() const>(&Faction::getUpgrades));
+	type["objects"] = sol::property(static_cast<const std::unordered_map<std::string, GameObject> &(Faction::*)() const>(&Faction::getObjects));
+	type["effects"] = sol::property(static_cast<const std::unordered_map<std::string, Effect> &(Faction::*)() const>(&Faction::getEffects));
+	type["weapons"] = sol::property(static_cast<const std::unordered_map<std::string, Weapon> &(Faction::*)() const>(&Faction::getWeapons));
+	type["warheads"] = sol::property(static_cast<const std::unordered_map<std::string, Warhead> &(Faction::*)() const>(&Faction::getWarheads));
+	type["animations"] = sol::property(static_cast<const std::unordered_map<std::string, std::vector<Animation>> &(Faction::*)() const>(&Faction::getAnimations));
+	type["starting_money"] = sol::property(&Faction::getStartingMoney);
+	type["starting_objects"] = sol::property(&Faction::getStartingObjects);
+	type["base"] = sol::property(&Faction::getBase);
+	type["can_sell"] = sol::property(&Faction::canSell);
+	type["can_repair"] = sol::property(&Faction::canRepair);
+	type["regresses_tech"] = sol::property(&Faction::regressesTech);
+	type["has_radar"] = sol::property(&Faction::hasRadar);
+	type["is_radar_powered"] = sol::property(&Faction::isRadarPowered);
+	type["name"] = sol::property(&Faction::getName);
+	type["queues"] = sol::property(&Faction::getQueues);
+	type["repair_anim"] = sol::property(&Faction::getRepairAnim);
+	type["ui_data"] = sol::property(&Faction::getUIData);
+	// NOTE: createUI() (owning raw pointer, lifecycle managed by the engine)
+	// and getPlacementCursors() (internal rendering state) are intentionally
+	// not exposed.
 }
 

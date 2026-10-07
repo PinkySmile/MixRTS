@@ -2,12 +2,18 @@
 // Created by PinkySmile on 06/04/2026.
 //
 
+#include <sol/sol.hpp>
 #include "Player.hpp"
 #include "Faction.hpp"
 #include "Upgrade.hpp"
+#include "Animation.hpp"
+#include "Effect.hpp"
+#include "Weapon.hpp"
+#include "Warhead.hpp"
+#include "GameObject.hpp"
 #include "GameManager.hpp"
 #include "../Resources/Game.hpp"
-#include "../UI.hpp"
+#include "../UI/UI.hpp"
 #include "Resources/Assert.hpp"
 
 #define PRIORITY_BUILD 3
@@ -16,7 +22,7 @@
 #define EXPIRE_POWER 1800
 #define COOLDOWN_POWER 1800
 
-void PlayerQueue::init(const std::string *id, const FactionQueue *params, const std::unordered_map<std::string, const GameObject *> &objs)
+void PlayerQueue::init(const std::string *id, const Faction &faction, const FactionQueue *params, const std::unordered_map<std::string, const Upgrade *> &upgrade, const std::unordered_map<std::string, const GameObject *> &objs)
 {
 	this->params = params;
 	if (params->behavior == FactionQueue::TYPE_STARPORT) {
@@ -32,6 +38,41 @@ void PlayerQueue::init(const std::string *id, const FactionQueue *params, const 
 			this->stock[u] = 0;
 			this->prices[u] = obj->getCost();
 			this->basket[u] = 0;
+		}
+	} else {
+		for (auto &[nid, obj] : objs) {
+			auto q = obj->getBuildQueue();
+			if (!q || *q != *id) continue;
+			auto &entry = this->entries[nid];
+
+			entry.unlocked = false;
+			entry.queue = this;
+			entry.queueId = id;
+			entry.elementId = &nid;
+			entry.limit = obj->getLimit();
+			entry.buildable = false;
+			entry.paused = false;
+			entry.buildProgress = 0;
+			entry.faction = &faction;
+			entry.object = obj;
+			entry.upgrade = nullptr;
+		}
+		for (auto &[nid, obj] : upgrade) {
+			auto q = obj->getBuildQueue();
+			if (!q || *q != *id) continue;
+			auto &entry = this->entries[nid];
+
+			entry.unlocked = false;
+			entry.queue = this;
+			entry.queueId = id;
+			entry.elementId = &nid;
+			entry.limit = obj->getLimit();
+			entry.buildable = false;
+			entry.paused = false;
+			entry.buildProgress = 0;
+			entry.faction = &faction;
+			entry.object = nullptr;
+			entry.upgrade = obj;
 		}
 	}
 }
@@ -82,21 +123,17 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 	for (size_t i = 0; i < factions.size(); i++) {
 		auto &f = factions[i];
 
-		this->_uis.emplace_back(f.createUI());
-		if (this->_uis.back()) {
-			this->_uis.back()->manager = &parent;
-			this->_uis.back()->state = &this->uiState;
-			this->_uis.back()->ownerState = &this->state;
-			this->_uis.back()->map = &mapState[i];
-			game->gui.add(this->_uis.back()->getPanel());
-		}
 		if (i == index)
 			continue;
 		for (auto &[key, val] : f.getObjects())
 			this->_loadedObjects[key] = &val;
+		for (auto &[key, val] : f.getUpgrades())
+			this->_loadedUpgrades[key] = &val;
 	}
 	for (auto &[key, val] : this->_primaryFaction.getObjects())
 		this->_loadedObjects[key] = &val;
+	for (auto &[key, val] : this->_primaryFaction.getUpgrades())
+		this->_loadedUpgrades[key] = &val;
 
 	for (size_t i = 0; i < factions.size(); i++) {
 		auto &f = factions[i];
@@ -104,10 +141,18 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 		if (i == index)
 			continue;
 		for (auto &[key, params] : f.getQueues())
-			this->state.queues[key].init(&key, &params, this->_loadedObjects);
+			this->state.queues[key].init(&key, f, &params, this->_loadedUpgrades, this->_loadedObjects);
 	}
 	for (auto &[key, params] : this->_primaryFaction.getQueues())
-		this->state.queues[key].init(&key, &params, this->_loadedObjects);
+		this->state.queues[key].init(&key, this->_primaryFaction, &params, this->_loadedUpgrades, this->_loadedObjects);
+
+	for (size_t i = 0; i < factions.size(); i++) {
+		const Faction &f = factions[i];
+		UI *ui = f.createUI(&this->uiState, &parent, &this->state, &mapState[i]);
+
+		this->_uis.emplace_back(ui);
+		game->gui.add(ui->getPanel());
+	}
 }
 
 void Player::_clean()
@@ -270,13 +315,13 @@ void Player::_tryEndBuildSingle(PlayerQueueEntry &entry)
 		this->state.elementsOwned[*entry.elementId]++;
 		entry.spent.clear();
 		this->resetQueue(*entry.queueId);
-		this->checkUnlocked(*entry.faction);
+		this->checkUnlocked();
 		break;
 	case FactionQueue::SPAWN_INSIDE:
 		this->_parent.spawnObject(this->state.index, defaultPos, *entry.queueId, *entry.elementId);
 		entry.spent.clear();
 		this->resetQueue(*entry.queueId);
-		this->checkUnlocked(*entry.faction);
+		this->checkUnlocked();
 		break;
 	case FactionQueue::SPAWN_DELIVERY: {
 		GameObject *s = this->getSpawnBuilding(*entry.queueId);
@@ -689,12 +734,12 @@ void Player::recomputeLocked()
 	}
 }
 
-void Player::checkUnlocked(const Faction &faction)
+void Player::checkUnlocked()
 {
-	for (auto &[name, object] : faction.getObjects())
-		this->unlockObject(faction, name, object);
-	for (auto &[name, upgrade] : faction.getUpgrades())
-		this->unlockObject(faction, name, upgrade);
+	for (auto &[name, object] : this->_loadedObjects)
+		this->unlockObject(name, *object);
+	for (auto &[name, upgrade] : this->_loadedUpgrades)
+		this->unlockObject(name, *upgrade);
 }
 
 void Player::lockQueue(const std::string &queueId)
@@ -909,7 +954,7 @@ void Player::onObjectGained(GameObject *obj)
 	if (group != id)
 		++this->state.elementsOwned[id];
 
-	this->checkUnlocked(obj->getFaction());
+	this->checkUnlocked();
 }
 
 std::vector<GameObject *> Player::getObjects(const std::string &id)
@@ -922,8 +967,18 @@ std::vector<GameObject *> Player::getObjects(const std::string &id)
 	return obj;
 }
 
+const std::unordered_map<std::string, const GameObject *> & Player::getLoadedObjects() const
+{
+	return this->_loadedObjects;
+}
+
+const std::unordered_map<std::string, const Upgrade *> & Player::getLoadedUpgrades() const
+{
+	return this->_loadedUpgrades;
+}
+
 template<typename T>
-void Player::unlockObject(const Faction &f, const std::string &name, T &object, bool debugTime)
+void Player::unlockObject(const std::string &name, const T &object, bool debugTime)
 {
 	auto &bqueue = object.getBuildQueue();
 
@@ -939,6 +994,7 @@ void Player::unlockObject(const Faction &f, const std::string &name, T &object, 
 
 	assert_msg(this->state.queues.contains(*bqueue), *bqueue);
 	auto &queue = this->state.queues.at(*bqueue);
+	assert_msg(queue.entries.contains(name), name);
 	auto &entry = queue.entries[name];
 
 	if (!debugTime && entry.unlocked)
@@ -950,7 +1006,6 @@ void Player::unlockObject(const Faction &f, const std::string &name, T &object, 
 	entry.paused = false;
 	entry.buildProgress = 0;
 	entry.buildTime = debugTime ? 1 : object.getBuildSpeed() * 8;
-	entry.faction = &f;
 	entry.queue = &queue;
 	if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*entry.object)>>) {
 		entry.object = &object;
@@ -966,5 +1021,127 @@ void Player::unlockObject(const Faction &f, const std::string &name, T &object, 
 }
 
 // Only these 2 types are valid for that template
-template void Player::unlockObject(const Faction &f, const std::string &name, Upgrade &object, bool debugTime);
-template void Player::unlockObject(const Faction &f, const std::string &name, GameObject &object, bool debugTime);
+template void Player::unlockObject(const std::string &name, const Upgrade &object, bool debugTime);
+template void Player::unlockObject(const std::string &name, const GameObject &object, bool debugTime);
+
+void PlayerQueueEntry::pushUserType(sol::state &state)
+{
+	sol::usertype<PlayerQueueEntry> type = state.new_usertype<PlayerQueueEntry>("PlayerQueueEntry");
+
+	type["queue"] = &PlayerQueueEntry::queue;
+	type["faction"] = &PlayerQueueEntry::faction;
+	type["upgrade"] = &PlayerQueueEntry::upgrade;
+	type["object"] = &PlayerQueueEntry::object;
+	type["queue_id"] = &PlayerQueueEntry::queueId;
+	type["element_id"] = &PlayerQueueEntry::elementId;
+	type["spent"] = &PlayerQueueEntry::spent;
+	type["build_time"] = &PlayerQueueEntry::buildTime;
+	type["build_progress"] = &PlayerQueueEntry::buildProgress;
+	type["limit"] = &PlayerQueueEntry::limit;
+	type["unlocked"] = &PlayerQueueEntry::unlocked;
+	type["buildable"] = &PlayerQueueEntry::buildable;
+	type["paused"] = &PlayerQueueEntry::paused;
+}
+
+void PlayerQueue::pushUserType(sol::state &state)
+{
+	PlayerQueueEntry::pushUserType(state);
+
+	sol::usertype<PlayerQueue> type = state.new_usertype<PlayerQueue>("PlayerQueue");
+
+	type["entries"] = &PlayerQueue::entries;
+	type["params"] = &PlayerQueue::params;
+	type["providers"] = &PlayerQueue::providers;
+	type["timer"] = &PlayerQueue::timer;
+	type["nb"] = &PlayerQueue::nb;
+	type["stock"] = &PlayerQueue::stock;
+	type["basket"] = &PlayerQueue::basket;
+	type["prices"] = &PlayerQueue::prices;
+	type["checking_menu"] = &PlayerQueue::checkingMenu;
+	type["busy"] = &PlayerQueue::busy;
+	type["update"] = &PlayerQueue::update;
+	// NOTE: init() is intentionally not exposed, it's an internal setup
+	// routine called by the engine while loading a Player, not meant to be
+	// called from scripts.
+}
+
+void PlayerState::pushUserType(sol::state &state)
+{
+	PlayerQueue::pushUserType(state);
+
+	sol::usertype<PlayerState> type = state.new_usertype<PlayerState>("PlayerState");
+
+	type["team"] = &PlayerState::team;
+	type["index"] = &PlayerState::index;
+	type["action_index"] = &PlayerState::factionIndex;
+	type["has_radar"] = &PlayerState::hasRadar;
+	type["consumed_power"] = &PlayerState::consumedPower;
+	type["produced_power"] = &PlayerState::producedPower;
+	type["money"] = &PlayerState::money;
+	type["system_money"] = &PlayerState::systemMoney;
+	type["total_storage"] = &PlayerState::totalStorage;
+	type["elements_owned"] = &PlayerState::elementsOwned;
+	type["queue_buildings"] = &PlayerState::queueBuildings;
+	type["primary_buildings"] = &PlayerState::primaryBuildings;
+	type["my_objects"] = &PlayerState::myObjects;
+	type["radars"] = &PlayerState::radars;
+	type["build_queues"] = &PlayerState::buildQueues;
+	type["queues"] = &PlayerState::queues;
+	type["get_combined_money"] = &PlayerState::getCombinedMoney;
+}
+
+void UIState::pushUserType(sol::state &state)
+{
+	sol::usertype<UIState> type = state.new_usertype<UIState>("UIState");
+
+	type["selected_objects"] = &UIState::selectedObjects;
+}
+
+void Player::pushUserType(sol::state &state)
+{
+	state.new_enum<Player::CreditStrategy>("CreditStrategy", {
+		{"SYSTEM", Player::CREDIT_SYSTEM},
+		{"SPILL",  Player::CREDIT_SPILL},
+		{"STRICT", Player::CREDIT_STRICT},
+	});
+
+	PlayerState::pushUserType(state);
+	UIState::pushUserType(state);
+
+	sol::usertype<Player> type = state.new_usertype<Player>("Player");
+
+	type["state"] = &Player::state;
+	type["ui_state"] = &Player::uiState;
+	type["debug_unlock"] = &Player::debugUnlock;
+	type["update"] = &Player::update;
+	type["update_render"] = &Player::updateRender;
+	type["render"] = &Player::render;
+	type["render_above"] = &Player::renderAbove;
+	type["handle_ui_events"] = &Player::handleUiEvents;
+	type["color"] = sol::property(&Player::getColor);
+	type["mouse_on_ui"] = &Player::mouseOnUi;
+	type["primary_faction"] = sol::property(&Player::getPrimaryFaction);
+	type["play_eva"] = &Player::playEVA;
+	type["recompute_locked"] = &Player::recomputeLocked;
+	type["check_unlocked"] = &Player::checkUnlocked;
+	type["lock_queue"] = &Player::lockQueue;
+	type["reset_queue"] = &Player::resetQueue;
+	type["on_mouse_moved"] = &Player::onMouseMoved;
+	type["on_left_mouse_clicked"] = &Player::onLeftMouseClicked;
+	type["on_right_mouse_clicked"] = &Player::onRightMouseClicked;
+	type["credit"] = &Player::credit;
+	type["consume"] = &Player::consume;
+	type["get_primary_building"] = &Player::getPrimaryBuilding;
+	type["get_spawn_building"] = &Player::getSpawnBuilding;
+	type["on_object_lost"] = &Player::onObjectLost;
+	type["on_object_gained"] = &Player::onObjectGained;
+	type["get_objects"] = sol::overload(
+		sol::resolve<const std::unordered_map<std::string, const GameObject *> &() const>(&Player::getObjects),
+		sol::resolve<std::vector<GameObject *>(const std::string &)>(&Player::getObjects)
+	);
+	type["enabled"] = sol::property(&Player::isEnabled, &Player::setEnabled);
+	// NOTE: keyPressed() (raw sf::Event::KeyPressed, not wrapped for Lua),
+	// unlockObject() (template, can't be bound generically) and getUIs()
+	// (vector<unique_ptr<UI>>, ownership not meant to be handed to scripts)
+	// are intentionally not exposed.
+}

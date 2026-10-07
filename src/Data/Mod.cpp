@@ -9,7 +9,7 @@
 #include <vector>
 #include <filesystem>
 #include <nlohmann/json.hpp>
-#include <cpptrace/from_current.hpp>
+#include <sol/sol.hpp>
 #include "Resources/Assert.hpp"
 #include "Animation.hpp"
 #include "CursorAnimation.hpp"
@@ -358,4 +358,24 @@ const std::filesystem::path &Mod::getBase() const
 const std::string &Mod::getName() const
 {
 	return this->_name;
+}
+
+void Mod::pushUserType(sol::state &state)
+{
+	sol::usertype<Mod> type = state.new_usertype<Mod>("Mod");
+
+	type["name"] = sol::property(&Mod::getName);
+	// Exposed as a plain string rather than std::filesystem::path (which has
+	// no Lua conversion registered); scripts should treat it as an opaque
+	// base path to join with '/' using string concatenation.
+	type["path"] = sol::property([](const Mod &mod) { return mod.getBase().string(); });
+	// NOTE: Only loadCursors() is exposed here: it is the only Mod load*()
+	// method ever called outside of the engine's own asset-loading pass (it
+	// is called directly from UI constructors to load a UI-local cursor set,
+	// e.g. D2KUI). The other load*() methods are internal mod-loading
+	// machinery invoked once by the engine itself and are not meant to be
+	// (re)called from scripts.
+	type["load_cursors"] = [](const Mod &mod, const std::string &path, std::unordered_map<std::string, CursorAnimation> &cursors) {
+		mod.loadCursors(path, cursors);
+	};
 }

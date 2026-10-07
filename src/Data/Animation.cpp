@@ -3,6 +3,7 @@
 //
 
 #include "nlohmann/json.hpp"
+#include <sol/sol.hpp>
 #include "Animation.hpp"
 #include "../Resources/Assert.hpp"
 #include "../Resources/Game.hpp"
@@ -93,6 +94,11 @@ void Animation::setColor(const HSLColor &color)
 	this->_requiresPaletteReload = true;
 }
 
+HSLColor Animation::getColor() const
+{
+	return this->_color;
+}
+
 Animation::Blending Animation::getBlending() const
 {
 	return this->_blending;
@@ -112,6 +118,23 @@ Vector2u Animation::getSize() const
 	if (result.y == 0)
 		result.y = this->_sprite.getTextureSize().y;
 	return result;
+}
+
+void Animation::pushUserType(sol::state &state)
+{
+	state.new_enum<Animation::Blending>("Animation_Blending", {
+		{"ALPHA", BLEND_ALPHA},
+		{"ADD",   BLEND_ADD},
+		{"SUB",   BLEND_SUB},
+	});
+
+	sol::usertype<Animation> type = state.new_usertype<Animation>("Animation");
+
+	type["sprite"] = sol::property(&Animation::getSprite);
+	type["color"] = sol::property(&Animation::getColor, &Animation::setColor);
+	type["blending"] = sol::property(&Animation::getBlending);
+	type["offset"] = sol::property(&Animation::getOffset);
+	type["size"] = sol::property(&Animation::getSize);
 }
 
 void Animation::_reloadPalette()
@@ -134,4 +157,27 @@ void Animation::_reloadPalette()
 		this->_sprite.load(*this->_file, *this->_cache);
 	} else
 		assert_not_reached();
+}
+
+unsigned Animation::preload(HSLColor color) const
+{
+	if (!this->_file)
+		return 0;
+	if (this->_pal == PAL_NONE)
+		return game->textureMgr.load(*this->_file, nullptr, false, false);
+	if (this->_pal == PAL_PALETTE) {
+		const auto size = this->_palIndices.size();
+		short base = color.l;
+		std::array<Color, 256> palette = *this->_cache;
+
+		assert_exp(this->_cache);
+		for (size_t i = 0; i < size; i++) {
+			auto &result = palette[this->_palIndices[i]];
+
+			color.l = base * (i + 1) / (size + 1);
+			result = color.toRGB();
+		}
+		return game->textureMgr.load(*this->_file, palette, nullptr, false, false);
+	}
+	assert_not_reached();
 }

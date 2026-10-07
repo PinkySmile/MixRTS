@@ -9,6 +9,7 @@
 #include <string>
 #include <unordered_map>
 #include <nlohmann/json_fwd.hpp>
+#include <sol/forward.hpp>
 #include "forward.hpp"
 
 enum WeaponNeeds {
@@ -96,10 +97,12 @@ public:
 	[[nodiscard]] double getInaccuracy(double dist) const;
 	[[nodiscard]] const std::optional<WeaponTakeControl> &getTakeControl() const;
 	[[nodiscard]] const std::optional<WeaponProjectile> &getProjectileData() const;
-	[[nodiscard]] bool sendForward() const;
+	[[nodiscard]] bool sendsForward() const;
 	[[nodiscard]] WeaponNeeds getNeeds() const;
 	[[nodiscard]] bool hitsGround() const;
 	[[nodiscard]] bool hitsAir() const;
+
+	static void pushUserType(sol::state &state);
 };
 
 

@@ -9,6 +9,7 @@
 #include <string>
 #include <unordered_map>
 #include <nlohmann/json_fwd.hpp>
+#include <sol/forward.hpp>
 #include "forward.hpp"
 
 enum DamageType {
@@ -38,6 +39,8 @@ public:
 	[[nodiscard]] DamageType getDmgType() const;
 	[[nodiscard]] float getMultiplier(const std::string &armor) const;
 	[[nodiscard]] const std::unordered_map<std::string, float> &getArmorMultipliers() const;
+
+	static void pushUserType(sol::state &state);
 };
 
 

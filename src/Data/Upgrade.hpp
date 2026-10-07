@@ -9,6 +9,7 @@
 #include <string>
 #include <optional>
 #include <nlohmann/json_fwd.hpp>
+#include <sol/forward.hpp>
 #include "forward.hpp"
 #include "Data/Requirements/ReqAndCombinator.hpp"
 
@@ -36,6 +37,8 @@ public:
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getCost() const;
 	[[nodiscard]] unsigned getLimit() const;
 	[[nodiscard]] bool requiresQueueBuilding() const;
+
+	static void pushUserType(sol::state &state);
 };
 
 

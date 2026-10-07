@@ -277,4 +277,64 @@ std::istream &operator>>(std::istream &s, Vector2<T> &v)
 }
 
 
-#endif //THFGAME_VECTOR_HPP
+#include <sol/sol.hpp>
+// --- Generic Lua conversion handlers for Vector2<T> ---
+// These are picked up by sol2 through argument-dependent lookup (ADL), since
+// Vector2<T> lives in the global namespace. Vector2<T> is accepted from Lua
+// either as a registered Vector2<T> usertype, or as a plain table of the
+// form { x = ..., y = ... }, and is always pushed back as the latter.
+
+template <typename T, typename Handler>
+bool sol_lua_check(sol::types<Vector2<T>>, lua_State *L, int index, Handler &&handler, sol::stack::record &tracking)
+{
+	// Accept if registered as a Vector2<T> usertype
+	if (sol::stack::check_usertype<Vector2<T>>(L, index)) {
+		tracking.use(1);
+		return true;
+	}
+
+	// Accept if it's a Lua table containing 'x' and 'y' convertible to T
+	if (lua_type(L, index) == LUA_TTABLE) {
+		sol::stack_table table(L, index);
+		sol::object x = table["x"];
+		sol::object y = table["y"];
+
+		if (x.is<T>() && y.is<T>()) {
+			tracking.use(1);
+			return true;
+		}
+	}
+
+	handler(L, index, sol::type_of(L, index), sol::type::table, "expected table {x, y}");
+	return false;
+}
+
+template <typename T>
+Vector2<T> sol_lua_get(sol::types<Vector2<T>>, lua_State *L, int index, sol::stack::record &tracking)
+{
+	// If passed as a registered Vector2<T> usertype
+	if (sol::stack::check_usertype<Vector2<T>>(L, index))
+		return sol::stack::get_usertype<Vector2<T>>(L, index, tracking);
+
+	// Otherwise treat it as a plain table { x = ..., y = ... }
+	sol::stack_table table(L, index);
+	T x = table.get<T>("x");
+	T y = table.get<T>("y");
+
+	tracking.use(1);
+	return Vector2<T>(x, y);
+}
+
+template <typename T>
+int sol_lua_push(lua_State *L, const Vector2<T> &vec)
+{
+	lua_createtable(L, 0, 2);
+	sol::stack::push(L, vec.x);
+	lua_setfield(L, -2, "x");
+	sol::stack::push(L, vec.y);
+	lua_setfield(L, -2, "y");
+	return 1;
+}
+
+
+#endif //MIXRTS_VECTOR_HPP

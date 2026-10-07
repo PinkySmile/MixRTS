@@ -32,6 +32,7 @@ struct MapMetadata;
 struct LoadedMap;
 struct PlayerState;
 struct UIState;
+struct PlayerQueue;
 struct PlayerQueueEntry;
 struct Game;
 struct WeaponProjectile;

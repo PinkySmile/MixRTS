@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <nlohmann/json.hpp>
+#include <sol/forward.hpp>
 #include "forward.hpp"
 #include "Extra.hpp"
 #include "Sprite.hpp"
@@ -17,6 +18,8 @@ struct StartObject {
 	Vector2i offset = {0, 0};
 	std::string name;
 	std::string queue;
+
+	static void pushUserType(sol::state &state);
 };
 
 struct FactionQueue {
@@ -54,6 +57,8 @@ struct FactionQueue {
 	std::optional<ExtraSpawn> delivery;
 
 	FactionQueue(const Mod &base, const nlohmann::json &data);
+
+	static void pushUserType(sol::state &state);
 };
 
 class Faction {
@@ -108,7 +113,7 @@ public:
 	[[nodiscard]] const std::unordered_map<std::string, std::vector<Animation>> &getAnimations() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getStartingMoney() const;
 	[[nodiscard]] const std::vector<StartObject> &getStartingObjects() const;
-	[[nodiscard]] UI *createUI() const;
+	[[nodiscard]] UI *createUI(UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map) const;
 	[[nodiscard]] const Mod &getBase() const;
 	[[nodiscard]] std::array<std::vector<Sprite>, 3> &getPlacementCursors() const;
 	[[nodiscard]] bool canSell() const;
@@ -118,6 +123,7 @@ public:
 	[[nodiscard]] bool isRadarPowered() const;
 	[[nodiscard]] const std::string &getName() const;
 	[[nodiscard]] const std::optional<nlohmann::json> &getRepairAnim() const;
+	[[nodiscard]] const nlohmann::json &getUIData() const;
 	[[nodiscard]] const std::unordered_map<std::string, FactionQueue> &getQueues() const;
 
 	[[nodiscard]] std::unordered_map<std::string, MultiSound> &getSounds();
@@ -127,6 +133,8 @@ public:
 	[[nodiscard]] std::unordered_map<std::string, Weapon> &getWeapons();
 	[[nodiscard]] std::unordered_map<std::string, Warhead> &getWarheads();
 	[[nodiscard]] std::unordered_map<std::string, std::vector<Animation>> &getAnimations();
+
+	static void pushUserType(sol::state &state);
 };
 
 

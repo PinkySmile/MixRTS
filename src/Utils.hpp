@@ -53,6 +53,57 @@ struct HSLColor {
 	Color toRGB() const;
 };
 
+#include <sol/sol.hpp>
+// --- Lua conversion handlers for HSLColor ---
+// Found through ADL from sol2. HSLColor is represented in Lua as a plain
+// table of the form { h = ..., s = ..., l = ..., a = ... } (alpha optional,
+// defaults to 255 on get).
+
+template <typename Handler>
+bool sol_lua_check(sol::types<HSLColor>, lua_State *L, int index, Handler &&handler, sol::stack::record &tracking)
+{
+	if (lua_type(L, index) == LUA_TTABLE) {
+		sol::stack_table table(L, index);
+		sol::object h = table["h"];
+		sol::object s = table["s"];
+		sol::object l = table["l"];
+
+		if (h.is<short>() && s.is<short>() && l.is<short>()) {
+			tracking.use(1);
+			return true;
+		}
+	}
+
+	handler(L, index, sol::type_of(L, index), sol::type::table, "expected table {h, s, l, a}");
+	return false;
+}
+
+inline HSLColor sol_lua_get(sol::types<HSLColor>, lua_State *L, int index, sol::stack::record &tracking)
+{
+	sol::stack_table table(L, index);
+	short h = table.get<short>("h");
+	short s = table.get<short>("s");
+	short l = table.get<short>("l");
+	unsigned char a = table.get_or<unsigned char>("a", 255);
+
+	tracking.use(1);
+	return HSLColor(h, s, l, a);
+}
+
+inline int sol_lua_push(lua_State *L, const HSLColor &color)
+{
+	lua_createtable(L, 0, 4);
+	sol::stack::push(L, color.h);
+	lua_setfield(L, -2, "h");
+	sol::stack::push(L, color.s);
+	lua_setfield(L, -2, "s");
+	sol::stack::push(L, color.l);
+	lua_setfield(L, -2, "l");
+	sol::stack::push(L, color.a);
+	lua_setfield(L, -2, "a");
+	return 1;
+}
+
 
 //! @brief Display a focused window.
 //! @param gui The gui handling the window.

@@ -133,19 +133,31 @@ endif ()
 # When set, GoogleTest is not downloaded/built and the MixRTS-tests target is not
 # built at all.
 option(NO_TEST "Disable fetching GoogleTest and building the test target" OFF)
+option(NO_TRACE "Disable fetching cpptrace" OFF)
 
-include(FetchContent)
-FetchContent_Declare(
-	cpptrace
-	GIT_REPOSITORY https://github.com/jeremy-rifkin/cpptrace.git
-	GIT_TAG        v1.0.4
-)
-set(CPPTRACE_DISABLE_CXX_20_MODULES ON)
-if (WIN32)
-	set(CPPTRACE_GET_SYMBOLS_WITH_LIBBACKTRACE ON CACHE BOOL "" FORCE)
-endif ()
-set(CPPTRACE_UNWIND_WITH_LIBUNWIND ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(cpptrace)
+if (NOT NO_TRACE)
+	include(FetchContent)
+	FetchContent_Declare(
+		cpptrace
+		GIT_REPOSITORY https://github.com/jeremy-rifkin/cpptrace.git
+		GIT_TAG        v1.0.4
+	)
+	set(CPPTRACE_DISABLE_CXX_20_MODULES ON)
+	if (WIN32)
+		set(CPPTRACE_GET_SYMBOLS_WITH_LIBBACKTRACE ON CACHE BOOL "" FORCE)
+	endif ()
+	set(CPPTRACE_UNWIND_WITH_LIBUNWIND ON CACHE BOOL "" FORCE)
+	FetchContent_MakeAvailable(cpptrace)
+	set(EXTRA_LIBS cpptrace::cpptrace)
+else (NOT NO_TRACE)
+	add_compile_definitions(NO_TRACE)
+	set(EXTRA_SOURCES src/Debug/CrashNone.cpp)
+endif (NOT NO_TRACE)
+
+find_package(Lua 5.4 EXACT REQUIRED)
+include_directories(${LUA_INCLUDE_DIR})
+add_compile_definitions(LUA_VERSION_STRING="${LUA_VERSION_STRING}")
+add_subdirectory(sol2)
 
 if (NOT NO_TEST)
 	FetchContent_Declare(
@@ -162,11 +174,14 @@ endif ()
 
 
 if (WIN32)
-	set(EXTRA_LIBS ntdll dbghelp)
-	set(EXTRA_SOURCES src/Debug/CrashWindows.cpp)
+	set(EXTRA_LIBS ${EXTRA_LIBS} ntdll dbghelp)
+	if (NOT NO_TRACE)
+		set(EXTRA_SOURCES src/Debug/CrashWindows.cpp src/Debug/CrashHandlerMain.cpp)
+	endif (NOT NO_TRACE)
 else ()
-	set(EXTRA_SOURCES src/Debug/CrashUnix.cpp
-		src/Debug/CrashHandlerMain.cpp)
+	if (NOT NO_TRACE)
+		set(EXTRA_SOURCES src/Debug/CrashUnix.cpp src/Debug/CrashHandlerMain.cpp)
+	endif (NOT NO_TRACE)
 endif()
 
 # Game engine sources, shared between the MixRTS executable and the MixRTSTests
@@ -174,6 +189,10 @@ endif()
 # exact same engine code.
 set(
 	MIXRTS_ENGINE_SOURCES
+	src/Mods/D2K/D2KCameo.cpp
+	src/Mods/D2K/D2KCameo.hpp
+	src/Mods/D2K/D2KUI.cpp
+	src/Mods/D2K/D2KUI.hpp
 	src/Data/Animation.cpp
 	src/Data/Animation.hpp
 	src/Data/ConditionalAnim.cpp
@@ -182,12 +201,53 @@ set(
 	src/Data/CursorAnimation.hpp
 	src/Data/Cursor.cpp
 	src/Data/Cursor.hpp
+	src/Data/Effect.cpp
+	src/Data/Effect.hpp
+	src/Data/Extra.cpp
+	src/Data/Extra.hpp
+	src/Data/Faction.cpp
+	src/Data/Faction.hpp
+	src/Data/FindPathAStar.cpp
+	src/Data/FindPathCrashAndTurn.cpp
+	src/Data/FindPath.hpp
+	src/Data/GameManager.cpp
+	src/Data/GameManager.hpp
+	src/Data/GameObject.cpp
+	src/Data/GameObject.hpp
+	src/Data/GridMask.hpp
+	src/Data/JsonLua.cpp
+	src/Data/JsonLua.hpp
 	src/Data/Logger.cpp
 	src/Data/Logger.hpp
+	src/Data/Map.cpp
+	src/Data/Map.hpp
+	src/Data/MapState.inl
 	src/Data/Mod.cpp
 	src/Data/Mod.hpp
 	src/Data/ModManager.cpp
 	src/Data/ModManager.hpp
+	src/Data/MultiSound.cpp
+	src/Data/MultiSound.hpp
+	src/Data/Player.cpp
+	src/Data/Player.hpp
+	src/Data/Projectile.cpp
+	src/Data/Projectile.hpp
+	src/Data/Requirements/IReq.hpp
+	src/Data/Requirements/ReqAndCombinator.cpp
+	src/Data/Requirements/ReqAndCombinator.hpp
+	src/Data/Requirements/ReqConst.cpp
+	src/Data/Requirements/ReqConst.hpp
+	src/Data/Requirements/Req.cpp
+	src/Data/Requirements/Req.hpp
+	src/Data/Requirements/ReqOrCombinator.cpp
+	src/Data/Requirements/ReqOrCombinator.hpp
+	src/Data/Upgrade.cpp
+	src/Data/Upgrade.hpp
+	src/Data/Warhead.cpp
+	src/Data/Warhead.hpp
+	src/Data/Weapon.cpp
+	src/Data/Weapon.hpp
+	src/forward.hpp
 	src/Resources/Assert.cpp
 	src/Resources/Assert.hpp
 	src/Resources/Game.cpp
@@ -210,53 +270,14 @@ set(
 	src/SFML/Sprite.hpp
 	src/SFML/TextureManager.cpp
 	src/SFML/TextureManager.hpp
+	src/UI/LuaUI.cpp
+	src/UI/LuaUI.hpp
+	src/UI/TGUILua.cpp
+	src/UI/TGUILua.hpp
+	src/UI/UI.cpp
+	src/UI/UI.hpp
 	src/Utils.cpp
 	src/Utils.hpp
-	src/forward.hpp
-	src/D2K/D2KUI.cpp
-	src/D2K/D2KUI.hpp
-	src/UI.hpp
-	src/Data/Faction.cpp
-	src/Data/Faction.hpp
-	src/D2K/D2KCameo.cpp
-	src/D2K/D2KCameo.hpp
-	src/UI.cpp
-	src/Data/Player.cpp
-	src/Data/Player.hpp
-	src/Data/GameManager.cpp
-	src/Data/GameManager.hpp
-	src/Data/Requirements/ReqAndCombinator.cpp
-	src/Data/Requirements/ReqAndCombinator.hpp
-	src/Data/Requirements/ReqOrCombinator.cpp
-	src/Data/Requirements/ReqOrCombinator.hpp
-	src/Data/Requirements/Req.cpp
-	src/Data/Requirements/Req.hpp
-	src/Data/Requirements/IReq.hpp
-	src/Data/Upgrade.cpp
-	src/Data/Upgrade.hpp
-	src/Data/Requirements/ReqConst.cpp
-	src/Data/Requirements/ReqConst.hpp
-	src/Data/GameObject.cpp
-	src/Data/GameObject.hpp
-	src/Data/MultiSound.cpp
-	src/Data/MultiSound.hpp
-	src/Data/FindPathAStar.cpp
-	src/Data/FindPathCrashAndTurn.cpp
-	src/Data/FindPath.hpp
-	src/Data/MapState.inl
-	src/Data/GridMask.hpp
-	src/Data/Map.cpp
-	src/Data/Map.hpp
-	src/Data/Weapon.cpp
-	src/Data/Weapon.hpp
-	src/Data/Warhead.cpp
-	src/Data/Warhead.hpp
-	src/Data/Effect.cpp
-	src/Data/Effect.hpp
-	src/Data/Projectile.cpp
-	src/Data/Projectile.hpp
-	src/Data/Extra.cpp
-	src/Data/Extra.hpp
 )
 
 add_executable(
@@ -264,7 +285,6 @@ add_executable(
 	${MIXRTS_ENGINE_SOURCES}
 	src/main.cpp
 	src/Debug/Crash.hpp
-	src/Debug/CrashHandlerMain.cpp
 	${EXTRA_SOURCES}
 )
 
@@ -274,7 +294,8 @@ target_link_libraries(
 	SFML::Audio
 	SFML::Network
 	TGUI::TGUI
-	cpptrace::cpptrace
+	sol2::sol2
+	${LUA_LIBRARIES}
 	${EXTRA_LIBS}
 )
 
@@ -328,7 +349,8 @@ if (NOT NO_TEST)
 		SFML::Audio
 		SFML::Network
 		TGUI::TGUI
-		cpptrace::cpptrace
+		sol2::sol2
+		${LUA_LIBRARIES}
 		GTest::gtest
 		${EXTRA_LIBS}
 	)

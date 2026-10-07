@@ -2,6 +2,7 @@
 // Created by PinkySmile on 03/08/2026.
 //
 
+#include <sol/sol.hpp>
 #include "nlohmann/json.hpp"
 #include "Effect.hpp"
 #include "Animation.hpp"
@@ -98,6 +99,11 @@ void Effect::setPosition(Vector2f pos)
 	this->_position = pos;
 }
 
+Vector2f Effect::getPosition() const
+{
+	return this->_position;
+}
+
 void Effect::setColor(HSLColor color)
 {
 	for (auto &anim : this->_anim)
@@ -113,4 +119,16 @@ void Effect::playSound() const
 {
 	if (this->_sound)
 		this->_sound->play(this->_position);
+}
+
+void Effect::pushUserType(sol::state &state)
+{
+	sol::usertype<Effect> type = state.new_usertype<Effect>("Effect");
+
+	type["update"] = sol::property(&Effect::update);
+	type["render"] = sol::property(&Effect::render);
+	type["play_sound"] = sol::property(&Effect::playSound);
+	type["position"] = sol::property(&Effect::getPosition, &Effect::setPosition);
+	type["color"] = sol::property(&Effect::setColor);
+	type["layer"] = sol::property(&Effect::getLayer);
 }

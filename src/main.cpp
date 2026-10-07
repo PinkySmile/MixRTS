@@ -2,7 +2,6 @@
 #include <cfenv>
 #include <SFML/Graphics.hpp>
 #include <nlohmann/json.hpp>
-#include <cpptrace/from_current.hpp>
 #include "Data/Animation.hpp"
 #include "Data/Projectile.hpp"
 #include "Data/Upgrade.hpp"
@@ -13,7 +12,7 @@
 #include "Resources/Assert.hpp"
 #include "Data/Player.hpp"
 #include "Data/GameManager.hpp"
-#include "UI.hpp"
+#include "UI/UI.hpp"
 #include "Debug/Crash.hpp"
 #include "Utils.hpp"
 
@@ -26,6 +25,9 @@ tgui::Font *traceFont = nullptr;
 
 struct Args {
 	bool loadingOnly = false;
+	float speed = 1;
+	bool preload = false;
+	bool noLazyLoad = false;
 };
 
 void reloadViews(sf::RenderWindow &win, tgui::Gui &gui, Vector2u size, Vector2f offset)
@@ -67,10 +69,38 @@ void dispFPS(float frameTime)
 int parseArgs(int argc, char **argv, Args &args)
 {
 	std::map<std::string, char> longToShort = {
-		{"load-only", 'l'}
+		{"load-only", 'l'},
+		{"speed", 's'},
+		{"no-lazy-load", 'L'},
+		{"preload", 'p'}
 	};
-	std::map<char, std::function<void ()>> cbs = {
-		{'l', [&args] { args.loadingOnly = true; }}
+	std::map<char, std::function<bool (int &i)>> cbs = {
+		{'l', [&args](int &) {
+			args.loadingOnly = true;
+			return true;
+		}},
+		{'L', [&args](int &) {
+			args.noLazyLoad = true;
+			return true;
+		}},
+		{'p', [&args](int &) {
+			args.preload = true;
+			return true;
+		}},
+		{'s', [&argc, &argv, &args](int &i) {
+			i++;
+			if (i == argc) {
+				fprintf(stderr, "Required param to --speed\n");
+				return false;
+			}
+			try {
+				args.speed = std::stof(argv[i]);
+			} catch (...) {
+				fprintf(stderr, "Invalid number sent to --speed\n");
+				return false;
+			}
+			return true;
+		}}
 	};
 
 	for (int i = 1; i < argc; i++) {
@@ -82,7 +112,8 @@ int parseArgs(int argc, char **argv, Args &args)
 					fprintf(stderr, "Unknown format %s\n", &argv[i][2]);
 					return EXIT_FAILURE;
 				}
-				cbs[it->second]();
+				if (!cbs[it->second](i))
+					return EXIT_FAILURE;
 			} else for (size_t j = 1; argv[i][j]; j++) {
 				auto it = cbs.find(argv[i][j]);
 
@@ -90,14 +121,15 @@ int parseArgs(int argc, char **argv, Args &args)
 					fprintf(stderr, "Unknown format %c\n", argv[i][j]);
 					return EXIT_FAILURE;
 				}
-				it->second();
+				if (!it->second(i))
+					return EXIT_FAILURE;
 			}
 		}
 	}
 	return EXIT_SUCCESS;
 }
 
-tgui::Panel::Ptr generateCrashPanel(cpptrace::stacktrace st, const std::exception &e)
+tgui::Panel::Ptr generateCrashPanel(Stacktrace st, const std::exception &e)
 {
 	tgui::Panel::Ptr panel = tgui::Panel::create({"100%", "100%"});
 	tgui::Panel::Ptr out = tgui::Panel::create();
@@ -170,6 +202,10 @@ tgui::Panel::Ptr generateCrashPanel(cpptrace::stacktrace st, const std::exceptio
 	st.print(stream, false);
 	stream.close();
 
+	std::cerr << "Exception: " << exc << std::endl;
+	std::cerr << whatStr << std::endl << std::endl;
+	st.print(std::cerr, false);
+
 	crashPlaceLabel->setPosition({10, "100% - h - 10"});
 	crashPlaceLabel->getRenderer()->setTextStyle(tgui::TextStyle::Bold | tgui::TextStyle::Underlined);
 	panel->setSize({"100%", "bottom.y - 10"});
@@ -179,7 +215,7 @@ tgui::Panel::Ptr generateCrashPanel(cpptrace::stacktrace st, const std::exceptio
 	return out;
 }
 
-void handleCrash(cpptrace::stacktrace st, const std::exception &e)
+void handleCrash(Stacktrace st, const std::exception &e)
 {
 	sf::RenderWindow *window;
 	tgui::Gui *gui;
@@ -214,8 +250,6 @@ void handleCrash(cpptrace::stacktrace st, const std::exception &e)
 		out->setFocused(true);
 		out->setTitleButtons(0);
 	} else {
-		std::cerr << e.what() << std::endl;
-		st.print();
 		window = new sf::RenderWindow{sf::VideoMode{sf::Vector2u{1000, 600}}, "Game crashed!"};
 		gui = new tgui::Gui{*window};
 	}
@@ -300,7 +334,6 @@ int main(int argc, char **argv)
 			factions.at("d2k:ordos")
 		};
 		float timer = 0;
-		float speed = 2.5;
 		GameManager manager{allFactions, 3};
 		auto &players = manager.getPlayers();
 		auto &map = manager.getLoadedMap();
@@ -345,6 +378,10 @@ int main(int argc, char **argv)
 		players[0].setEnabled(true);
 		players[1].setEnabled(false);
 		players[2].setEnabled(false);
+		if (args.noLazyLoad)
+			manager.preloadAllSprites();
+		else if (args.preload)
+			manager.preloadSprites();
 
 		music.play();
 		music.setLooping(true);
@@ -372,7 +409,7 @@ int main(int argc, char **argv)
 			}
 
 			TRY {
-				timer += speed;
+				timer += args.speed;
 				while (timer >= 1) {
 					manager.update();
 					timer -= 1;
@@ -383,10 +420,14 @@ int main(int argc, char **argv)
 
 				win->setSize(1000, 600);
 				win->setPosition("max((&.w - w) / 2, 0)", "max((&.h - h) / 2, 0)");
+			#ifdef NO_TRACE
+				panel = generateCrashPanel({}, e);
+			#else
 				if (auto *ce = dynamic_cast<const cpptrace::exception *>(&e))
 					panel = generateCrashPanel(ce->trace(), *ce);
 				else
 					panel = generateCrashPanel(cpptrace::from_current_exception(), e);
+			#endif
 				panel->setSize("100%", "100%");
 				win->add(panel);
 				manager.setPaused();
@@ -405,10 +446,14 @@ int main(int argc, char **argv)
 		}
 		return 0;
 	} CPPTRACE_CATCH(const std::exception &e) {
+	#ifdef NO_TRACE
+		handleCrash({}, e);
+	#else
 		if (auto *ce = dynamic_cast<const cpptrace::exception *>(&e))
 			handleCrash(ce->trace(), *ce);
 		else
 			handleCrash(cpptrace::from_current_exception(), e);
 		delete game;
+	#endif
 	}
 }

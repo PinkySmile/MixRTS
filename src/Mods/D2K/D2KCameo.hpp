@@ -9,6 +9,7 @@
 #include <SFML/Graphics/Sprite.hpp>
 #include <SFML/Graphics/VertexArray.hpp>
 #include <SFML/Graphics/Texture.hpp>
+#include <sol/forward.hpp>
 #include <TGUI/Renderers/WidgetRenderer.hpp>
 #include <TGUI/Widgets/ClickableWidget.hpp>
 #include "Sprite.hpp"

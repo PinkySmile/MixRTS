@@ -8,8 +8,12 @@
 _AssertionFailedException::_AssertionFailedException(const std::string &&msg) :
 	_msg(msg)
 {
+	std::string f = game->lua["debug"]["traceback"]();
+
+	std::cout << f << std::endl;
 }
 
+#ifndef NO_TRACE
 _AssertionFailedException::_AssertionFailedException(const std::string &&msg, cpptrace::raw_trace &&trace) :
 	lazy_exception(std::move(trace)),
 	_msg(msg)
@@ -21,6 +25,7 @@ _AssertionFailedException::_AssertionFailedException(const std::string &&msg, co
 	_msg(msg)
 {
 }
+#endif
 
 const char *_AssertionFailedException::what() const noexcept
 {
