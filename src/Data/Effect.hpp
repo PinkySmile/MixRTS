@@ -15,7 +15,7 @@
 #include "Utils.hpp"
 #include "Vector.hpp"
 
-class Effect {
+class MYDLL_API Effect {
 private:
 	std::vector<Animation> _anim;
 	const MultiSound *_sound = nullptr;

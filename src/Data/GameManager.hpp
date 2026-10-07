@@ -21,7 +21,7 @@
 // #define QUADRANT_SIZE_X 128
 // #define QUADRANT_SIZE_Y 128
 
-struct ShakeParams {
+struct MYDLL_API ShakeParams {
 	unsigned time = 0;
 	unsigned power = 0;
 	unsigned interval = 1;
@@ -33,7 +33,7 @@ struct ShakeParams {
 	static void pushUserType(sol::state &state);
 };
 
-class GameManager {
+class MYDLL_API GameManager {
 private:
 	sf::Text _text;
 	ShakeParams _shake;
@@ -94,7 +94,7 @@ public:
 	GameObject *getObjectById(unsigned index);
 	GameObject *findPickup(size_t owner, MoveReason reason, double dist, GameObject *ignore);
 	GameObject *spawnObject(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id);
-	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePos, const std::vector<unsigned> &exclusionList) const;
+	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const std::vector<unsigned> &exclusionList) const;
 	const LoadedMap &getLoadedMap() const;
 	void consumeEvent(const sf::Event &event);
 	void consumeGeneralEvent(const sf::Event &event);

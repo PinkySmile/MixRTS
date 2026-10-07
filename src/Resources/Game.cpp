@@ -31,9 +31,9 @@
 #include "SFML/Sound.hpp"
 
 MYDLL_API Game *game = nullptr;
-float guiScale = 1.5f;
+MYDLL_API float guiScale = 1.5f;
 #ifdef _DEBUG
-bool DEBUG_MODE = false;
+MYDLL_API bool DEBUG_MODE = false;
 #endif
 
 void Game::pushUserType(sol::state &state)

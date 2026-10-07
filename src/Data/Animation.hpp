@@ -14,7 +14,7 @@
 #include "Vector.hpp"
 #include "Utils.hpp"
 
-class Animation {
+class MYDLL_API Animation {
 public:
 	enum Blending {
 		BLEND_ALPHA,

@@ -11,7 +11,7 @@
 #include "forward.hpp"
 #include "Data/Vector.hpp"
 
-struct Position {
+struct MYDLL_API Position {
 	enum Pos {
 		POS_CLOSE_BORDER,
 		POS_FAR_BORDER,
@@ -40,7 +40,7 @@ private:
 	[[nodiscard]] float _getPos(float base, float target, float border, float extraOffset) const;
 };
 
-struct ExtraSpawn {
+struct MYDLL_API ExtraSpawn {
 	std::string unit;
 	Position pos;
 	bool invincible;

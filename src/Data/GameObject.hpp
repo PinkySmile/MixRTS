@@ -39,46 +39,46 @@ enum MoveReason {
 	MOVEREASON_FINISH_MOVE,
 	MOVEREASON_DELIVERY,
 };
-MoveReason moveReasonFromString(const std::string &);
+MYDLL_API MoveReason moveReasonFromString(const std::string &);
 
-struct ExecCbOrder {
+struct MYDLL_API ExecCbOrder {
 	std::function<bool()> cb;
 };
-struct DeliveryOrder {
+struct MYDLL_API DeliveryOrder {
 	std::vector<std::string> objects;
 	std::string queue;
 	Position destination;
 	const MapState *state;
 };
-struct PickupOrder {
+struct MYDLL_API PickupOrder {
 	GameObject *target;
 	Vector2f destination;
 };
-struct WaitPickupOrder;
-struct SpinOrder {
+struct MYDLL_API WaitPickupOrder;
+struct MYDLL_API SpinOrder {
 	float angle;
 };
-struct TurnOrder {
+struct MYDLL_API TurnOrder {
 	unsigned resultDir;
 };
-struct MoveOrder {
+struct MYDLL_API MoveOrder {
 	Vector2i destination;
 	MoveReason reason;
 	bool force;
 };
-struct FinishMovementOrder {};
-struct HarvestOrder {};
-struct HarvestCloseOrder {};
-struct DeployOrder {};
-struct DieOrder {};
-struct DumpOrder {
+struct MYDLL_API FinishMovementOrder {};
+struct MYDLL_API HarvestOrder {};
+struct MYDLL_API HarvestCloseOrder {};
+struct MYDLL_API DeployOrder {};
+struct MYDLL_API DieOrder {};
+struct MYDLL_API DumpOrder {
 	GameObject *target;
 };
-struct MoveCheckOrder {
+struct MYDLL_API MoveCheckOrder {
 	void (GameObject::*fail)();
 	Vector2i destination;
 };
-struct AttackUnitOrder {
+struct MYDLL_API AttackUnitOrder {
 	GameObject *target;
 	bool automatic;
 	bool force;
@@ -101,7 +101,7 @@ typedef std::variant<
 	ExecCbOrder
 > Order;
 
-struct WaitPickupOrder {
+struct MYDLL_API WaitPickupOrder {
 	std::vector<MoveReason> targets;
 	double dist;
 	std::shared_ptr<Order> other;
@@ -115,7 +115,7 @@ enum CollisionResolution {
 	COLLISION_ABORT    // Nothing can be done; the unit must stop here.
 };
 
-struct DumpInfo {
+struct MYDLL_API DumpInfo {
 	unsigned dir;
 	unsigned delay;
 	unsigned delayAfter;
@@ -124,11 +124,11 @@ struct DumpInfo {
 	std::unique_ptr<ConditionalAnim> stop;
 };
 
-struct ResourceLot {
+struct MYDLL_API ResourceLot {
 	std::unordered_map<std::string, unsigned> value;
 };
 
-union BuildingMask {
+union MYDLL_API BuildingMask {
 	struct {
 		bool placementConcrete: 1; // 1
 		bool solid: 1;             // 2
@@ -137,7 +137,7 @@ union BuildingMask {
 	uint8_t value;
 };
 
-struct UnitDeployParams {
+struct MYDLL_API UnitDeployParams {
 	struct SpawnBuilding {
 		std::string building;
 		std::string queue;
@@ -152,7 +152,7 @@ struct UnitDeployParams {
 	static void pushUserType(sol::state &state);
 };
 
-struct ObjectWeapon {
+struct MYDLL_API ObjectWeapon {
 	const Weapon *weapon;
 	unsigned priority;
 	unsigned barrel;
@@ -161,7 +161,7 @@ struct ObjectWeapon {
 	ObjectWeapon(unsigned short extraPrio, unsigned barrel, const Mod &base, const std::unordered_map<std::string, Weapon> &wList, const nlohmann::json &j);
 };
 
-struct ObjectBarrel {
+struct MYDLL_API ObjectBarrel {
 	std::vector<ObjectWeapon> weapons;
 	struct ObjectTurret *turret = nullptr;
 	unsigned shootTimer = 0;
@@ -171,7 +171,7 @@ struct ObjectBarrel {
 	void update();
 };
 
-struct ObjectTurret {
+struct MYDLL_API ObjectTurret {
 	std::vector<ConditionalAnim> anims;
 	GameObject *parent;
 	bool fixed = false;
@@ -192,7 +192,7 @@ struct ObjectTurret {
 	void attack();
 };
 
-struct ObjectDeathParams {
+struct MYDLL_API ObjectDeathParams {
 	std::optional<ConditionalAnim> anim;
 	std::optional<unsigned> fadeTime;
 	std::optional<unsigned> stayTime;
@@ -217,7 +217,7 @@ struct ObjectDeathParams {
 	ObjectDeathParams(const GameObject *obj, const ObjectDeathParams &other);
 };
 
-struct ObjectSpawnParams {
+struct MYDLL_API ObjectSpawnParams {
 	enum Type {
 		TYPE_APPEAR
 	};
@@ -229,13 +229,13 @@ struct ObjectSpawnParams {
 	ObjectSpawnParams(const nlohmann::json &json);
 };
 
-struct ObjectDecel {
+struct MYDLL_API ObjectDecel {
 	float dist2 = 0;
 	float min;
 	float step;
 };
 
-class GameObjectData {
+class MYDLL_API GameObjectData {
 public:
 	struct AnimationState {
 		std::string storageKey;
@@ -379,7 +379,7 @@ protected:
 	GameObjectData(const GameObjectData &);
 };
 
-class GameObject : public GameObjectData {
+class MYDLL_API GameObject : public GameObjectData {
 public:
 	GameObject(const GameObject &b);
 	GameObject(

@@ -13,7 +13,6 @@
 #include "Weapon.hpp"
 #include "Warhead.hpp"
 #include "GameObject.hpp"
-#include "Mods/D2K/D2KUI.hpp"
 #include "UI/LuaUI.hpp"
 #include "Resources/Game.hpp"
 
@@ -95,6 +94,8 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	assert_exp(data.contains("radar_powered") && data["radar_powered"].is_boolean());
 	assert_exp(!data.contains("repairing_animation") || data["repairing_animation"].is_object());
 	assert_exp(data.contains("queues") && data["queues"].is_object());
+	assert_exp(data.contains("ui_path") && data["ui_path"].is_string());
+	assert_exp(data.contains("ui_params"));
 
 	assert_exp(data.contains("sounds") && data["sounds"].is_array());
 	for (size_t i = 0; i < data["sounds"].size(); i++)
@@ -167,10 +168,19 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	this->_warheads = data["warheads"];
 	this->_sounds = data["sounds"];
 	this->_startingMoney = data["starting_money"];
-	this->_uiData = data["ui"];
+	this->_uiData = data["ui_params"];
+	this->_uiPath = data["ui_path"];
 	this->_regressTech = data["regress_tech"];
 	this->_hasRadar = data["has_radar"];
 	this->_radarPowered = data["radar_powered"];
+	assert_exp(this->_uiPath.ends_with(".lua") || this->_uiPath.ends_with(".ui"));
+	if (this->_uiPath.ends_with(".ui")) {
+		std::filesystem::path p = base.getBase() / this->_uiPath;
+
+		this->_sl = dlopen(p.string().c_str(), RTLD_LAZY);
+		printf("Loading %s: %p\n", p.string().c_str(), this->_sl);
+		assert_msg(this->_sl, p.string() + ": " + dlerror());
+	}
 
 	if (data.contains("repairing_animation"))
 		this->_repairAnim = data["repairing_animation"];
@@ -203,6 +213,12 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 		TRY {
 			this->_queues.emplace(RESOURCE(base.getName(), n), FactionQueue{base, q});
 		} CATCH_AND_RETHROW("In faction queue \"" + n + "\"\n")
+}
+
+Faction::~Faction()
+{
+	if (this->_sl)
+		dlclose(this->_sl);
 }
 
 void Faction::load(const std::vector<std::string> &allFactions)
@@ -315,10 +331,14 @@ const std::vector<StartObject> &Faction::getStartingObjects() const
 
 UI *Faction::createUI(UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map) const
 {
-	// TODO:
-	if (this->_base.getName() == "d2k")
-		return new D2KUI(*this, state, manager, ownerState, map, this->_base.getBase(), this->_uiData);
-	return new LuaUI(*this, state, manager, ownerState, map, game->lua, (this->_base.getBase() / "ui" / "ui.lua").string());
+	if (this->_uiPath.ends_with(".lua"))
+		return new LuaUI(*this, state, manager, ownerState, map, game->lua, (this->_base.getBase() / this->_uiPath).string());
+
+	auto symbol = reinterpret_cast<void *>(dlsym(this->_sl, "createUiFor"));
+	auto fct = reinterpret_cast<UICreationCB>(symbol);
+
+	assert_msg(fct, dlerror());
+	return fct(*this, state, manager, ownerState, map, this->_base.getBase(), this->_uiData);
 }
 
 const Mod &Faction::getBase() const

@@ -142,7 +142,7 @@ tgui::Panel::Ptr generateCrashPanel(Stacktrace st, const std::exception &e)
 	simplifySym(whatStr);
 
 	if (!traceFont)
-		traceFont = new tgui::Font("mods/NotoSansMono-Regular.ttf");
+		traceFont = new tgui::Font("assets/NotoSansMono-Regular.ttf");
 	auto title = tgui::Label::create("Game crashed !");
 	auto exception = tgui::RichTextLabel::create("Exception: <color=#ff0000>" + exc + "</color>");
 	auto what = tgui::Label::create(whatStr);
@@ -312,7 +312,7 @@ int main(int argc, char **argv)
 	_controlfp_s(&current_word, 0, _EM_INVALID);
 #endif
 	TRY {
-		new Game("mods/NotoSans-Regular.ttf");
+		new Game("assets/NotoSans-Regular.ttf");
 	#ifdef _WIN32
 		ShowWindow(game->screen->getNativeHandle(), SW_MAXIMIZE);
 	#endif

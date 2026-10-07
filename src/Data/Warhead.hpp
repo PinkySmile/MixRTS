@@ -26,7 +26,7 @@ enum DamageType {
 	DMGTYPE_COUNT
 };
 
-class Warhead {
+class MYDLL_API Warhead {
 private:
 	DamageType _dmgType;
 	unsigned _radius = 0;

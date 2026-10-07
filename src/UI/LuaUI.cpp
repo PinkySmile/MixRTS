@@ -27,7 +27,7 @@ static bool callLuaFunc(const sol::object &func, Args&&... args)
 	return false;
 }
 
-LuaUI::LuaUI(const Faction &faction, UIState *ostate, GameManager *manager, PlayerState *ownerState, MapState *map, sol::state &state, const std::string &path) :
+LuaUI::LuaUI(const Faction &faction, UIState *ostate, GameManager *manager, PlayerState *ownerState, MapState *map, sol::state &state, const std::filesystem::path &path) :
 	UI(faction, ostate, manager, ownerState, map),
 	_state(state),
 	_env{state, sol::create, state.globals()}
@@ -35,7 +35,7 @@ LuaUI::LuaUI(const Faction &faction, UIState *ostate, GameManager *manager, Play
 	this->_env["super"] = std::ref(*static_cast<UI *>(this));
 	// safe_script_file (rather than do_file) throws automatically if the
 	// script fails to load/parse or errors at the top level while running.
-	this->_table = state.safe_script_file(path, this->_env);
+	this->_table = state.safe_script_file(path.string(), this->_env);
 }
 
 void LuaUI::setEnabled(bool enabled)

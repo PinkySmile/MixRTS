@@ -8,7 +8,7 @@
 
 #include "Mod.hpp"
 
-class ModManager {
+class MYDLL_API ModManager {
 private:
 	std::map<std::string, Mod> _mods;
 

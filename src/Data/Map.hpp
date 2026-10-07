@@ -19,7 +19,7 @@
 
 #define MAX_TEAM_COUNT 16
 
-struct MapState {
+struct MYDLL_API MapState {
 	// OPTIMIZE: Align line size to PAGE_SIZE, or a power of 2
 	std::vector<uint32_t> grid;
 	PathFindingGrid pathFindingGrid;
@@ -45,28 +45,28 @@ struct MapState {
 	void resetGridBits(const Quad &abs, uint32_t bits);
 	void setGridBits(const Vector2i &rel, uint32_t bits);
 	void setGridBits(const Quad &abs, uint32_t bits);
-	[[nodiscard]] bool hasAnyGridBits(const Vector2i &rel, uint32_t bits) const;
-	[[nodiscard]] bool hasAllGridBits(const Vector2i &rel, uint32_t bits) const;
-	[[nodiscard]] bool hasExactlySomeGridBits(const Vector2i &rel, uint32_t bits, uint32_t expectedBits) const;
-	[[nodiscard]] bool anyHasAnyGridBits(const Quad &abs, uint32_t bits) const;
-	[[nodiscard]] bool anyHasAllGridBits(const Quad &abs, uint32_t bits) const;
-	[[nodiscard]] bool anyHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const;
-	[[nodiscard]] bool allHasAnyGridBits(const Quad &abs, uint32_t bits) const;
-	[[nodiscard]] bool allHasAllGridBits(const Quad &abs, uint32_t bits) const;
-	[[nodiscard]] bool allHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const;
-	[[nodiscard]] Vector2i absToTileCoord(const Vector2i &) const;
-	[[nodiscard]] Vector2f absToRelCoord(const Vector2i &) const;
-	[[nodiscard]] Vector2i topLeftCoordToAbs(const Vector2i &) const;
-	[[nodiscard]] Vector2i topLeftCoordToAbs(size_t index) const;
-	[[nodiscard]] Vector2i relCoordToAbs(const Vector2f &) const;
-	[[nodiscard]] Vector2i indexToRelPos(size_t index) const;
-	[[nodiscard]] Quad tileCoordToAbs(const Vector2i &) const;
-	[[nodiscard]] Quad tileCoordToAbs(size_t index) const;
+	[[nodiscard]] inline bool hasAnyGridBits(const Vector2i &rel, uint32_t bits) const;
+	[[nodiscard]] inline bool hasAllGridBits(const Vector2i &rel, uint32_t bits) const;
+	[[nodiscard]] inline bool hasExactlySomeGridBits(const Vector2i &rel, uint32_t bits, uint32_t expectedBits) const;
+	[[nodiscard]] inline bool anyHasAnyGridBits(const Quad &abs, uint32_t bits) const;
+	[[nodiscard]] inline bool anyHasAllGridBits(const Quad &abs, uint32_t bits) const;
+	[[nodiscard]] inline bool anyHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const;
+	[[nodiscard]] inline bool allHasAnyGridBits(const Quad &abs, uint32_t bits) const;
+	[[nodiscard]] inline bool allHasAllGridBits(const Quad &abs, uint32_t bits) const;
+	[[nodiscard]] inline bool allHasExactlySomeGridBits(const Quad &abs, uint32_t bits, uint32_t expected) const;
+	[[nodiscard]] inline Vector2i absToTileCoord(const Vector2i &) const;
+	[[nodiscard]] inline Vector2f absToRelCoord(const Vector2i &) const;
+	[[nodiscard]] inline Vector2i topLeftCoordToAbs(const Vector2i &) const;
+	[[nodiscard]] inline Vector2i topLeftCoordToAbs(size_t index) const;
+	[[nodiscard]] inline Vector2i relCoordToAbs(const Vector2f &) const;
+	[[nodiscard]] inline Vector2i indexToRelPos(size_t index) const;
+	[[nodiscard]] inline Quad tileCoordToAbs(const Vector2i &) const;
+	[[nodiscard]] inline Quad tileCoordToAbs(size_t index) const;
 
 	static void pushUserType(sol::state &state);
 };
 
-struct MapResource {
+struct MYDLL_API MapResource {
 	enum Strategy {
 		STRAT_RANDOM,
 		STRAT_CONNECTED
@@ -86,7 +86,7 @@ struct MapResource {
 	static void pushUserType(sol::state &state);
 };
 
-struct MapMetadata {
+struct MYDLL_API MapMetadata {
 	std::unordered_map<std::string, std::vector<Animation>> animations;
 	std::unordered_map<unsigned, MapResource> resources;
 	std::map<Vector2u, std::vector<unsigned>> skirtsConcrete;
@@ -97,7 +97,7 @@ struct MapMetadata {
 	void loadColors(const std::filesystem::path &path);
 };
 
-struct LoadedMap {
+struct MYDLL_API LoadedMap {
 	MapState grid;
 	MapMetadata metadata;
 	PathFindingGrid pathFindingGrid;

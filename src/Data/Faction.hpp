@@ -6,7 +6,6 @@
 #define MIXRTS_FACTION_HPP
 
 
-#include <filesystem>
 #include <nlohmann/json.hpp>
 #include <sol/forward.hpp>
 #include "forward.hpp"
@@ -14,7 +13,44 @@
 #include "Sprite.hpp"
 #include "MultiSound.hpp"
 
-struct StartObject {
+#ifdef _WIN32
+#include <windows.h>
+#define dlopen(path, _) LoadLibraryA(path)
+#define dlsym(sl, name) GetProcAddress(sl, name)
+#define dlclose(sl) FreeLibrary(sl)
+typedef HMODULE SharedLibrary;
+
+inline std::string dlerror()
+{
+	DWORD err = GetLastError();
+	wchar_t *s;
+	auto chars = FormatMessageW(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		nullptr,
+		err,
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		(LPWSTR)&s,
+		0,
+		NULL
+	);
+
+	std::stringstream stream;
+
+	stream << "GetLastError " << err;
+	if (!chars)
+		return stream.str();
+	stream << ": ";
+	for (int i = 0; s[i]; i++)
+		stream << static_cast<char>(s[i]);
+	LocalFree(s);
+	return stream.str();
+}
+#else
+#include <dlfcn.h>
+typedef void *SharedLibrary;
+#endif
+
+struct MYDLL_API StartObject {
 	Vector2i offset = {0, 0};
 	std::string name;
 	std::string queue;
@@ -22,7 +58,7 @@ struct StartObject {
 	static void pushUserType(sol::state &state);
 };
 
-struct FactionQueue {
+struct MYDLL_API FactionQueue {
 	enum Type {
 		TYPE_SINGLE_QUEUE,
 		TYPE_MULTI_QUEUE,
@@ -61,7 +97,7 @@ struct FactionQueue {
 	static void pushUserType(sol::state &state);
 };
 
-class Faction {
+class MYDLL_API Faction {
 private:
 	const Mod &_base;
 	mutable std::array<std::vector<Sprite>, 3> _placementCursors;
@@ -85,7 +121,9 @@ private:
 	std::optional<std::string> _primaryQueue;
 	std::optional<nlohmann::json> _repairAnim;
 	nlohmann::json _uiData;
+	std::string _uiPath;
 	std::string _name;
+	SharedLibrary _sl = nullptr;
 	bool _regressTech;
 	bool _canSell;
 	bool _canRepair;
@@ -99,9 +137,10 @@ public:
 		CURSORINDEX_BAD,
 	};
 
+	typedef UI *(*UICreationCB)(const Faction &faction, UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map, const std::filesystem::path &base, const nlohmann::json &params);
+
 	Faction(const Mod &base, const std::string &name, const nlohmann::json &data);
-	//! @brief Loads all the resources of this faction.
-	//! @param allFactions The full list of every faction id being loaded in this session (used to determine which armor files are needed for the warheads).
+	~Faction();
 	void load(const std::vector<std::string> &allFactions);
 	[[nodiscard]] const std::optional<std::string> &getPrimaryQueue() const;
 	[[nodiscard]] const std::unordered_map<std::string, MultiSound> &getSounds() const;

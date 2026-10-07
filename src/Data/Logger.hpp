@@ -10,11 +10,12 @@
 #include <fstream>
 #include <string>
 #include <mutex>
+#include "Resources/MSVCMacros.hpp"
 #ifdef __ANDROID__
 #include <android/log.h>
 #endif
 
-class Logger {
+class MYDLL_API Logger {
 private:
 #ifndef __ANDROID__
 	std::ofstream file;

@@ -235,7 +235,7 @@ DWORD FormatNtStatus(NTSTATUS nsCode, wchar_t **ppszMessage) {
 
 tgui::Panel::Ptr crashPacketPanel(const CrashPacket &packet)
 {
-	tgui::Font traceFont("mods/NotoSansMono-Regular.ttf");
+	tgui::Font traceFont("assets/NotoSansMono-Regular.ttf");
 	auto panel = tgui::Panel::create({"100%", "100%"});
 	auto title = tgui::Label::create("Game crashed !");
 	std::wstring signalStr;

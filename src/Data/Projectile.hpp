@@ -10,7 +10,7 @@
 #include <sol/forward.hpp>
 #include "forward.hpp"
 
-class Projectile {
+class MYDLL_API Projectile {
 private:
 	std::vector<ConditionalAnim> _anims;
 	const GameObject *_parent;

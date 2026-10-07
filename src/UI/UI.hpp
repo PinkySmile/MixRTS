@@ -19,7 +19,7 @@
 #include "../Data/Vector.hpp"
 #include "Sound.hpp"
 
-class UI {
+class MYDLL_API UI {
 public:
 	enum EVASound {
 		EVA_BUILDING,

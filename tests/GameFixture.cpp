@@ -28,7 +28,7 @@ void GameFixture::SetUpTestSuite()
 		return;
 
 	// Deliberately leaked, see the comment on the declaration in GameFixture.hpp.
-	_game = new Game("mods/NotoSans-Regular.ttf", _mode, _video, _size);
+	_game = new Game("assets/NotoSans-Regular.ttf", _mode, _video, _size);
 	game->modManager.loadMod("mods/dune2000/");
 	game->modManager.loadMod("tests/");
 	_mod = &game->modManager.get("d2k");

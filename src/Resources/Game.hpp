@@ -11,6 +11,7 @@
 #include <random>
 #include <sol/sol.hpp>
 #include <TGUI/Backend/SFML-Graphics.hpp>
+#include "MSVCMacros.hpp"
 #include "SoundManager.hpp"
 #include "SceneManager.hpp"
 #include "Data/Logger.hpp"
@@ -36,7 +37,7 @@ typedef SoundManager SoundManagerImpl;
 //! Random from r, between mi and ma (included)
 #define random_distrib(r, mi, ma) ((((int64_t)(r)() - (int64_t)(r).min()) * (int64_t)((ma) + 1 - (mi))) / ((int64_t)(r).max() - (int64_t)(r).min() + 1) + (int64_t)(mi))
 
-struct Game {
+struct MYDLL_API Game {
 	bool hosting = false;
 	bool paused = false;
 	std::random_device random;
@@ -66,7 +67,7 @@ struct Game {
 };
 
 #ifdef _DEBUG
-extern bool DEBUG_MODE;
+MYDLL_API extern bool DEBUG_MODE;
 #else
 #define DEBUG_MODE false
 #endif

@@ -20,7 +20,7 @@
 #include "Utils.hpp"
 #include "UI/UI.hpp"
 
-struct PlayerQueue {
+struct MYDLL_API PlayerQueue {
 	std::unordered_map<std::string, PlayerQueueEntry> entries;
 	const FactionQueue *params;
 	unsigned providers = 0;
@@ -38,7 +38,7 @@ struct PlayerQueue {
 	static void pushUserType(sol::state &state);
 };
 
-struct PlayerQueueEntry {
+struct MYDLL_API PlayerQueueEntry {
 	PlayerQueue *queue;
 	const Faction *faction;
 	const Upgrade *upgrade;
@@ -56,7 +56,7 @@ struct PlayerQueueEntry {
 	static void pushUserType(sol::state &state);
 };
 
-struct PlayerState {
+struct MYDLL_API PlayerState {
 	size_t team = 0;
 	size_t index;
 	size_t factionIndex;
@@ -79,13 +79,13 @@ struct PlayerState {
 	static void pushUserType(sol::state &state);
 };
 
-struct UIState {
+struct MYDLL_API UIState {
 	std::set<const GameObject *> selectedObjects;
 
 	static void pushUserType(sol::state &state);
 };
 
-class Player {
+class MYDLL_API Player {
 private:
 	GameManager &_parent;
 	MapState &_mapState;

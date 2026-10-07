@@ -7,8 +7,9 @@
 
 
 #include <SFML/Graphics/Color.hpp>
+#include "Resources/MSVCMacros.hpp"
 
-union Color {
+union MYDLL_API Color {
 	struct {
 		unsigned char r;
 		unsigned char g;

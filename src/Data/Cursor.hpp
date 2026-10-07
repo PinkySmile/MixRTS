@@ -10,8 +10,9 @@
 #include <SFML/Graphics.hpp>
 #include <nlohmann/json_fwd.hpp>
 #include "Vector.hpp"
+#include "Resources/MSVCMacros.hpp"
 
-class Cursor {
+class MYDLL_API Cursor {
 private:
 	unsigned _duration;
 	Vector2u _offset;

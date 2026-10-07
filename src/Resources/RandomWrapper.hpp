@@ -7,13 +7,14 @@
 
 
 #include <random>
+#include "MSVCMacros.hpp"
 
 #ifdef max
 #undef max
 #undef min
 #endif
 
-class RandomWrapper {
+class MYDLL_API RandomWrapper {
 public:
 	struct SerializedWrapper {
 		uint32_t seed = 0;

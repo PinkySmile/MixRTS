@@ -14,7 +14,7 @@
 #include "Data/Vector.hpp"
 #include "Color.hpp"
 
-class TextureManager {
+class MYDLL_API TextureManager {
 private:
 	struct AllocatedTexture {
 		unsigned index;

@@ -13,7 +13,7 @@
 #include "forward.hpp"
 #include "Data/Requirements/ReqAndCombinator.hpp"
 
-class Upgrade {
+class MYDLL_API Upgrade {
 public:
 	const Faction &_base;
 	std::optional<std::string> _buildQueue;

@@ -226,7 +226,7 @@ typedef float (*GetTileCostCb)(Vector2i pos, void *context);
 
 namespace AStar
 {
-	void computePath(
+	MYDLL_API void computePath(
 		const PathFindingGrid &grid,
 		Vector2i currentPos,
 		Vector2i dest,
@@ -240,7 +240,7 @@ namespace AStar
 }
 namespace CrashAndTurn
 {
-	void computePath(
+	MYDLL_API void computePath(
 		const PathFindingGrid &grid,
 		Vector2i currentPos,
 		Vector2i dest,

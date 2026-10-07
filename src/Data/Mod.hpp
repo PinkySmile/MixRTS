@@ -12,7 +12,7 @@
 #include "CursorAnimation.hpp"
 #include "Faction.hpp"
 
-class Mod {
+class MYDLL_API Mod {
 private:
 	std::string _name;
 	std::filesystem::path _base;

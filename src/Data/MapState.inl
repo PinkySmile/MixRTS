@@ -9,6 +9,7 @@
 #include "Vector.hpp"
 #include "Resources/Assert.hpp"
 #include "GameManager.hpp"
+#include "Map.hpp"
 
 
 inline Vector2i MapState::absToTileCoord(const Vector2i &p) const

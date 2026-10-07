@@ -9,9 +9,9 @@
 #include <sol/sol.hpp>
 #include "UI.hpp"
 
-class LuaUI : public UI {
+class MYDLL_API LuaUI : public UI {
 public:
-	LuaUI(const Faction &faction, UIState *ostate, GameManager *manager, PlayerState *ownerState, MapState *map, sol::state &state, const std::string &path);
+	LuaUI(const Faction &faction, UIState *ostate, GameManager *manager, PlayerState *ownerState, MapState *map, sol::state &state, const std::filesystem::path &path);
 	~LuaUI() override = default;
 	void setEnabled(bool enabled) override;
 

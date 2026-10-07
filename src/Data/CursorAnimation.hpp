@@ -8,8 +8,9 @@
 
 #include <sol/forward.hpp>
 #include "Cursor.hpp"
+#include "Resources/MSVCMacros.hpp"
 
-class CursorAnimation {
+class MYDLL_API CursorAnimation {
 private:
 	unsigned _timer = 0;
 	unsigned _currentAnimation = 0;

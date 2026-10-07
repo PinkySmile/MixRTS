@@ -232,10 +232,10 @@ void Player::_updateSingleQueue(PlayerQueueEntry &entry)
 
 	unsigned amount;
 
-	percent = 100 + (static_cast<double>(this->state.producedPower) - this->state.consumedPower) / 2;
-	if (percent >= 100)
+	percent = (200.f + this->state.producedPower) / (this->state.consumedPower + 200.f);
+	if (percent >= 1)
 		amount = 8;
-	else if (percent >= 50)
+	else if (percent >= 0.5)
 		amount = 4;
 	else
 		amount = 2;

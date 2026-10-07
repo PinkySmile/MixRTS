@@ -82,7 +82,7 @@ float computeTextWidth(const sf::Text &text, const std::string &txt);
 //! size via displayShrunkRect.
 std::unique_ptr<PreparedShrunkRect> prepareShrunkRectFromSprite(sf::Sprite &sprite);
 
-class Screen : public sf::RenderWindow {
+class MYDLL_API Screen : public sf::RenderWindow {
 private:
 	sf::Font           _font;
 	sf::RectangleShape _rect;

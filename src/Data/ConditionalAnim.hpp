@@ -13,7 +13,7 @@
 #include "Color.hpp"
 #include "Utils.hpp"
 
-class ConditionalAnim {
+class MYDLL_API ConditionalAnim {
 private:
 	const GameObject *_parent;
 	std::vector<Animation> _anim;

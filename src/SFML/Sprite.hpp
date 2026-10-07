@@ -9,12 +9,12 @@
 #include <SFML/Graphics.hpp>
 #include "Screen.hpp"
 
-struct Sprite : public sf::Sprite {
+struct MYDLL_API Sprite : public sf::Sprite {
 private:
 	unsigned _textureHandle = 0;
 
 public:
-	Sprite();
+	MYDLL_API Sprite();
 	Sprite(unsigned handle);
 	Sprite(const Sprite &o);
 	~Sprite() override;

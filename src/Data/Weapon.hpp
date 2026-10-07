@@ -23,7 +23,7 @@ enum WeaponType {
 	WEAPONTYPE_ENTER
 };
 
-struct WeaponTakeControl {
+struct MYDLL_API WeaponTakeControl {
 	std::vector<std::string> targets;
 	unsigned baseTime = 0;
 	unsigned timeLossHit = 0;
@@ -31,7 +31,7 @@ struct WeaponTakeControl {
 	WeaponTakeControl(const nlohmann::json &json);
 };
 
-struct WeaponProjectile {
+struct MYDLL_API WeaponProjectile {
 	std::vector<ConditionalAnim> anims;
 	std::pair<unsigned, unsigned> bounce;
 	const Effect *trail = nullptr;
@@ -58,7 +58,7 @@ struct WeaponProjectile {
 	);
 };
 
-class Weapon {
+class MYDLL_API Weapon {
 private:
 	WeaponType _type;
 	WeaponNeeds _needs = WEAPONNEED_NONE;

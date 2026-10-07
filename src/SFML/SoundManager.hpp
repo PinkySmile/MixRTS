@@ -13,7 +13,7 @@
 #include "Data/Vector.hpp"
 #include "Color.hpp"
 
-class SoundManager {
+class MYDLL_API SoundManager {
 private:
 	struct SoundPair {
 		sf::SoundBuffer buffer;

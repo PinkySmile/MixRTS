@@ -11,7 +11,7 @@
 #include "Data/Vector.hpp"
 #include "forward.hpp"
 
-class Sound {
+class MYDLL_API Sound {
 private:
 	unsigned _handle = 0;
 	float _volume = 100;

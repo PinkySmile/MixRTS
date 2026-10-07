@@ -10,12 +10,12 @@
 #include <nlohmann/json.hpp>
 #include "Color.hpp"
 
-nlohmann::json &mergeObjects(nlohmann::json &dst, const nlohmann::json &t);
+MYDLL_API nlohmann::json &mergeObjects(nlohmann::json &dst, const nlohmann::json &t);
 
 #define TOHEX_ENDIAN_LITTLE false
 #define TOHEX_ENDIAN_BIG true
-std::string toHex(const unsigned char *buffer, size_t size, bool endian);
-std::wstring wtoHex(const unsigned char *buffer, size_t size, bool endian);
+MYDLL_API std::string toHex(const unsigned char *buffer, size_t size, bool endian);
+MYDLL_API std::wstring wtoHex(const unsigned char *buffer, size_t size, bool endian);
 
 template<typename T, size_t size = sizeof(T)>
 std::enable_if_t<std::is_integral_v<T>, std::string> toHex(const T &v)
@@ -41,7 +41,7 @@ std::enable_if_t<std::is_integral_v<T>, std::wstring> wtoHex(const T &v)
 
 #define RESOURCE(declaredPkg, name) (std::string(name).find(':') == std::string::npos ? std::string(declaredPkg) + ":" + std::string(name) : std::string(name))
 
-struct HSLColor {
+struct MYDLL_API HSLColor {
 	short h = 0;
 	short s = 0;
 	short l = 0;
@@ -145,7 +145,7 @@ typename WindowType::Ptr openWindowWithFocus(T &gui, tgui::Layout width, tgui::L
 //! @brief Get the last Exception Name
 //! @details Return the last type of Exception name
 //! @return std::string The last Exception name
-std::string getLastExceptionName();
+MYDLL_API std::string getLastExceptionName();
 
 
 #endif //MIXRTS_UTILS_HPP

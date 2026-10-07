@@ -11,7 +11,7 @@
 #include <nlohmann/json_fwd.hpp>
 #include "Sound.hpp"
 
-class MultiSound {
+class MYDLL_API MultiSound {
 private:
 	std::vector<Sound> _sounds;
 

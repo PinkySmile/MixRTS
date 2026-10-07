@@ -8,6 +8,8 @@
 
 #include <string>
 
+#include "MSVCMacros.hpp"
+
 #ifdef __GNUC__
 #define FCT_NAME __PRETTY_FUNCTION__
 #elif defined(_MSC_VER)
@@ -66,7 +68,7 @@
 #include <cpptrace/cpptrace.hpp>
 #include <cpptrace/from_current.hpp>
 
-class _AssertionFailedException : public cpptrace::lazy_exception {
+class MYDLL_API _AssertionFailedException : public cpptrace::lazy_exception {
 private:
 	std::string _msg;
 
@@ -93,7 +95,7 @@ public:
 	throw _AssertionFailedException(std::string(msg) + e.what());\
 }
 
-class _AssertionFailedException : public std::exception {
+class MYDLL_API _AssertionFailedException : public std::exception {
 private:
 	std::string _msg;
 

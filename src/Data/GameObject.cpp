@@ -1609,7 +1609,7 @@ bool GameObject::_updateDeploy()
 	if (this->_onDeploy->spawnBuilding) {
 		auto &s = *this->_onDeploy->spawnBuilding;
 
-		if (this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position, {this->index})) {
+		if (this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, {this->index})) {
 			this->_solid = false;
 			this->_disposable = true;
 
@@ -2722,7 +2722,7 @@ bool GameObject::canDeploy() const
 		if (this->_onDeploy->spawnBuilding) {
 			auto &s = *this->_onDeploy->spawnBuilding;
 
-			return this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, this->_position, {this->index});
+			return this->manager->canSpawnBuilding(this->owner->state.index, this->_position + s.offset, s.building, {this->index});
 		}
 	}
 	return false;

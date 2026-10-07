@@ -686,7 +686,7 @@ void GameManager::consumeGeneralEvent(const sf::Event &event)
 	}
 }
 
-bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const Vector2i &basePosAbs, const std::vector<unsigned> &exclusionList) const
+bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const std::vector<unsigned> &exclusionList) const
 {
 	auto &player = this->_players[owner];
 	auto &map = this->_mapStates[player.state.factionIndex];
@@ -695,7 +695,6 @@ bool GameManager::canSpawnBuilding(size_t owner, Vector2i absPos, const std::str
 	auto &base = *objects.at(id);
 	auto &tiles = base.getTileData();
 	Vector2i pos = map.absToTileCoord(absPos);
-	Vector2i basePos = map.absToTileCoord(basePosAbs);
 
 	if (!tiles)
 		return this->isAreaFree(absPos, base.getSize());

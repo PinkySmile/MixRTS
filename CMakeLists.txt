@@ -154,7 +154,7 @@ else (NOT NO_TRACE)
 	set(EXTRA_SOURCES src/Debug/CrashNone.cpp)
 endif (NOT NO_TRACE)
 
-find_package(Lua 5.4 EXACT REQUIRED)
+find_package(Lua 5.1 REQUIRED)
 include_directories(${LUA_INCLUDE_DIR})
 add_compile_definitions(LUA_VERSION_STRING="${LUA_VERSION_STRING}")
 add_subdirectory(sol2)
@@ -187,12 +187,9 @@ endif()
 # Game engine sources, shared between the MixRTS executable and the MixRTSTests
 # target below. Kept in a single variable so both targets always compile the
 # exact same engine code.
-set(
-	MIXRTS_ENGINE_SOURCES
-	src/Mods/D2K/D2KCameo.cpp
-	src/Mods/D2K/D2KCameo.hpp
-	src/Mods/D2K/D2KUI.cpp
-	src/Mods/D2K/D2KUI.hpp
+add_library(
+	MixRTS_Core SHARED
+
 	src/Data/Animation.cpp
 	src/Data/Animation.hpp
 	src/Data/ConditionalAnim.cpp
@@ -279,17 +276,8 @@ set(
 	src/Utils.cpp
 	src/Utils.hpp
 )
-
-add_executable(
-	MixRTS
-	${MIXRTS_ENGINE_SOURCES}
-	src/main.cpp
-	src/Debug/Crash.hpp
-	${EXTRA_SOURCES}
-)
-
 target_link_libraries(
-	MixRTS
+	MixRTS_Core
 	SFML::Graphics
 	SFML::Audio
 	SFML::Network
@@ -298,6 +286,33 @@ target_link_libraries(
 	${LUA_LIBRARIES}
 	${EXTRA_LIBS}
 )
+target_compile_definitions(MixRTS_Core PRIVATE MYDLL_EXPORTS)
+if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_link_options(MixRTS_Core PRIVATE -Wl,--exclude-all-symbols)
+endif ()
+
+add_executable(
+	MixRTS
+	src/main.cpp
+	src/Debug/Crash.hpp
+	${EXTRA_SOURCES}
+)
+target_link_libraries(MixRTS MixRTS_Core)
+add_custom_command(TARGET MixRTS POST_BUILD COMMAND cmake -E copy_directory_if_different "${CMAKE_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/assets")
+
+set(MODS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mods")
+file(GLOB MOD_PATHS RELATIVE "${MODS_DIR}" "${MODS_DIR}/*")
+foreach(MOD_NAME ${MOD_PATHS})
+	set(FULL_PATH "${MODS_DIR}/${MOD_NAME}")
+
+	# Check if it is a directory and contains its own CMakeLists.txt
+	if (IS_DIRECTORY "${FULL_PATH}" AND EXISTS "${FULL_PATH}/CMakeLists.txt")
+		message(STATUS "Adding mod: ${MOD_NAME}")
+		set(MOD_DEST_PATH "${CMAKE_CURRENT_BINARY_DIR}/mods/${MOD_NAME}")
+		add_subdirectory("mods/${MOD_NAME}")
+		add_dependencies(MixRTS "${MOD_NAME}")
+	endif()
+endforeach()
 
 if (WIN32)
 	add_custom_command(
@@ -318,7 +333,6 @@ endif()
 if (NOT NO_TEST)
 	add_executable(
 		MixRTS-tests
-		${MIXRTS_ENGINE_SOURCES}
 
 		src/Mock/MockedScreen.cpp
 		src/Mock/MockedScreen.hpp
@@ -345,14 +359,8 @@ if (NOT NO_TEST)
 	# tests/main.cpp for the exact flags).
 	target_link_libraries(
 		MixRTS-tests
-		SFML::Graphics
-		SFML::Audio
-		SFML::Network
-		TGUI::TGUI
-		sol2::sol2
-		${LUA_LIBRARIES}
+		MixRTS_Core
 		GTest::gtest
-		${EXTRA_LIBS}
 	)
 
 	if (WIN32)

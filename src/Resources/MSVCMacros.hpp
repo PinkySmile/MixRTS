@@ -5,7 +5,7 @@
 #ifndef MIXRTS_MSVCMACROS_HPP
 #define MIXRTS_MSVCMACROS_HPP
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #ifdef MYDLL_EXPORTS
 #define MYDLL_API __declspec(dllexport)
 #else
