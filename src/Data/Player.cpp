@@ -733,12 +733,12 @@ void Player::recomputeLocked()
 		for (auto &q : list.entries | std::ranges::views::values) {
 			if (!q.faction->regressesTech())
 				continue;
-			if (
+			if (q.unlocked && (
 				(q.object && !q.object->getRequirements()(this->state.elementsOwned)) ||
 				(q.upgrade && !q.upgrade->getRequirements()(this->state.elementsOwned))
-			) {
-				this->resetQueue(*q.queueId);
-				q.unlocked = false;
+			)) {
+				this->refreshQueue(*q.queueId);
+				break;
 			}
 		}
 	}
@@ -780,6 +780,25 @@ void Player::resetQueue(const std::string &queueId)
 		for (auto &p : q.spent)
 			this->credit(p.first, p.second, CREDIT_SYSTEM);
 		q.spent.clear();
+	}
+}
+
+void Player::refreshQueue(const std::string &queueId)
+{
+	assert_msg(this->state.queues.contains(queueId), queueId);
+	auto &q = this->state.queues.at(queueId);
+
+	for (auto &[name, q] : q.entries) {
+		auto &req = q.upgrade ? q.upgrade->getRequirements() : q.object->getRequirements();
+
+		if (!req(this->state.elementsOwned)) {
+			q.buildable = this->state.elementsOwned[name] < q.limit;
+			q.paused = false;
+			q.buildProgress = 0;
+			for (auto &p : q.spent)
+				this->credit(p.first, p.second, CREDIT_SYSTEM);
+			q.spent.clear();
+		}
 	}
 }
 
@@ -907,11 +926,7 @@ void Player::onObjectLost(GameObject *obj)
 				}
 				this->state.buildQueues[*queue] = nullptr;
 			} else if (this->state.buildQueues[*queue]) {
-				PlayerQueueEntry *q1 = this->state.buildQueues[*queue];
-
-				for (auto &[c, v] : q1->spent)
-					this->credit(c, v, CREDIT_SYSTEM);
-				q1->spent.clear();
+				this->resetQueue(*queue);
 				this->state.buildQueues[*queue] = nullptr;
 			}
 		}
@@ -1011,10 +1026,12 @@ void Player::unlockObject(const std::string &name, const T &object, bool debugTi
 		return;
 
 	entry.unlocked = true;
-	entry.limit = object.getLimit();
-	entry.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < entry.limit;
-	entry.paused = false;
-	entry.buildProgress = 0;
+	if (this->state.buildQueues[*bqueue] != &entry) {
+		entry.limit = object.getLimit();
+		entry.buildable = this->state.buildQueues[*bqueue] == nullptr && this->state.elementsOwned[name] < entry.limit;
+		entry.paused = false;
+	} else
+		entry.buildProgress = 0;
 	entry.buildTime = debugTime ? 1 : object.getBuildSpeed() * 8;
 	entry.queue = &queue;
 	if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*entry.object)>>) {

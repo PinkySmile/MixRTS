@@ -151,6 +151,7 @@ public:
 	void checkUnlocked();
 	void lockQueue(const std::string &queueId);
 	void resetQueue(const std::string &queueId);
+	void refreshQueue(const std::string &queueId);
 	std::vector<std::unique_ptr<UI>> &getUIs();
 	void onMouseMoved(Vector2i pos);
 	void onLeftMouseClicked(Vector2i pos);
