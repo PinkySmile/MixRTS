@@ -174,13 +174,6 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	this->_hasRadar = data["has_radar"];
 	this->_radarPowered = data["radar_powered"];
 	assert_exp(this->_uiPath.ends_with(".lua") || this->_uiPath.ends_with(".ui"));
-	if (this->_uiPath.ends_with(".ui")) {
-		std::filesystem::path p = base.getBase() / this->_uiPath;
-
-		this->_sl = dlopen(p.string().c_str(), RTLD_LAZY);
-		printf("Loading %s: %p\n", p.string().c_str(), this->_sl);
-		assert_msg(this->_sl, p.string() + ": " + dlerror());
-	}
 
 	if (data.contains("repairing_animation"))
 		this->_repairAnim = data["repairing_animation"];
@@ -333,6 +326,12 @@ UI *Faction::createUI(UIState *state, GameManager *manager, PlayerState *ownerSt
 {
 	if (this->_uiPath.ends_with(".lua"))
 		return new LuaUI(*this, state, manager, ownerState, map, game->lua, (this->_base.getBase() / this->_uiPath).string());
+	if (this->_sl == nullptr) {
+		std::filesystem::path p = this->_base.getBase() / this->_uiPath;
+
+		this->_sl = dlopen(p.string().c_str(), RTLD_LAZY);
+		assert_msg(this->_sl, p.string() + ": " + dlerror());
+	}
 
 	auto symbol = reinterpret_cast<void *>(dlsym(this->_sl, "createUiFor"));
 	auto fct = reinterpret_cast<UICreationCB>(symbol);

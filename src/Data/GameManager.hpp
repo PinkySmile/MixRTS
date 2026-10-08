@@ -42,8 +42,8 @@ private:
 	Vector2f _cameraTranslate = {0, 0};
 	LoadedMap _map;
 	std::vector<MapState> _mapStates;
-	std::vector<Player> _players;
 	std::vector<Faction> _factions;
+	std::vector<Player> _players;
 	std::array<std::vector<Effect>, 5> _effects;
 	std::list<Projectile> _liveProjectiles;
 	std::list<GameObject> _liveObjects;

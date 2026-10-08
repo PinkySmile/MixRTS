@@ -123,7 +123,7 @@ private:
 	nlohmann::json _uiData;
 	std::string _uiPath;
 	std::string _name;
-	SharedLibrary _sl = nullptr;
+	mutable SharedLibrary _sl = nullptr;
 	bool _regressTech;
 	bool _canSell;
 	bool _canRepair;

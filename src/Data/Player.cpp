@@ -231,11 +231,11 @@ void Player::_updateSingleQueue(PlayerQueueEntry &entry)
 		this->consume(p.first, p.second);
 
 	unsigned amount;
+	float energy = (200.f + this->state.producedPower) / (this->state.consumedPower + 200.f);
 
-	percent = (200.f + this->state.producedPower) / (this->state.consumedPower + 200.f);
-	if (percent >= 1)
+	if (energy >= 1)
 		amount = 8;
-	else if (percent >= 0.5)
+	else if (energy >= 0.5)
 		amount = 4;
 	else
 		amount = 2;
