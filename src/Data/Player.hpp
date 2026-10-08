@@ -155,6 +155,8 @@ public:
 	void onMouseMoved(Vector2i pos);
 	void onLeftMouseClicked(Vector2i pos);
 	void onRightMouseClicked(Vector2i pos);
+	void onLeftMouseReleased(Vector2i pos);
+	void onRightMouseReleased(Vector2i pos);
 	bool credit(const std::string &type, unsigned amount, CreditStrategy strategy);
 	bool consume(const std::string &type, unsigned amount);
 	GameObject *getPrimaryBuilding(const std::string &queue);

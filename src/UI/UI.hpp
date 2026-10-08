@@ -223,6 +223,7 @@ public:
 	virtual void onCancel(Vector2i absPos);
 	virtual void tileClicked(Vector2i absPos);
 	virtual void mouseMovedToTile(Vector2i absPos);
+	virtual void mouseReleased(Vector2i absPos);
 	virtual void onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta);
 	virtual void update();
 	virtual void render();
@@ -273,7 +274,9 @@ protected:
 	void _displaySelectBox(Vector2i pos, Vector2u size);
 	virtual void _displaySelectedObjectUI(const GameObject &object) = 0;
 
+	bool _dragging = false;
 	const Faction &_faction;
+	std::optional<Vector2i> _startDrag;
 	std::array<sf::Texture, 4> _selectCorners;
 	unsigned _placementAnimation[3] = {0, 0, 0};
 	Vector2i _placementPos;

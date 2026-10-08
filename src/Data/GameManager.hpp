@@ -75,7 +75,7 @@ private:
 	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, size_t team, char mod, bool isStatic, bool crushable);
 	void _pushOrder(GameObject &obj, const std::string &order);
 
-	static bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size, bool onlySolid);
+	static bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size, bool onlySolid, bool partial);
 
 public:
 	GameManager(const std::vector<Faction> &factions, size_t nbPlayers);
@@ -99,8 +99,8 @@ public:
 	void consumeEvent(const sf::Event &event);
 	void consumeGeneralEvent(const sf::Event &event);
 	bool isAreaFree(const Vector2i &pos, const Vector2u &size, const std::vector<unsigned> &exclusion = {}, bool stackable = false, bool notSolid = false) const;
-	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects);
-	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<const GameObject *> &objects);
+	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects, bool partial=true, const std::function<bool (GameObject *)> &fct={});
+	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<const GameObject *> &objects, bool partial=true, const std::function<bool (const GameObject *)> &fct={});
 	void registerObject(GameObject *o);
 	void deregisterObject(GameObject *o);
 	void modUnitInArea(const MapState::Quad &quad, size_t player, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable);

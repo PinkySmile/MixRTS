@@ -444,6 +444,16 @@ void Player::onRightMouseClicked(Vector2i pos)
 		this->_uis[this->_currentUi]->onCancel(pos);
 }
 
+void Player::onLeftMouseReleased(Vector2i pos)
+{
+	if (this->_enabled)
+		this->_uis[this->_currentUi]->mouseReleased(pos);
+}
+
+void Player::onRightMouseReleased(Vector2i)
+{
+}
+
 void Player::mouseOnUi()
 {
 	if (this->_enabled)

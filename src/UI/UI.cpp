@@ -1055,23 +1055,57 @@ void UI::_tileClickedSell()
 
 void UI::tileClicked(Vector2i absPos)
 {
+	this->_startDrag = absPos;
 	this->_placementPos = absPos;
-	if (this->_placementBuilding != nullptr)
-		return this->_handleTryPlace();
-	this->_objectBuffer.clear();
-	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
-
-	if (this->_selling)
-		this->_tileClickedSell();
-	else if (this->_repairing)
-		this->_tileClickedRepair();
-	else
-		this->_tileClickedNormal();
 }
 
 void UI::mouseMovedToTile(Vector2i absPos)
 {
+	if (this->_startDrag)
+		if (std::abs(this->_startDrag->x - absPos.x) > 12 && std::abs(this->_startDrag->y - absPos.y) > 12)
+			this->_dragging = true;
 	this->_placementPos = absPos;
+}
+
+void UI::mouseReleased(Vector2i)
+{
+	if (!this->_dragging) {
+		this->_startDrag.reset();
+		if (this->_placementBuilding != nullptr)
+			return this->_handleTryPlace();
+		this->_objectBuffer.clear();
+		this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
+
+		if (this->_selling)
+			this->_tileClickedSell();
+		else if (this->_repairing)
+			this->_tileClickedRepair();
+		else
+			this->_tileClickedNormal();
+	} else {
+		Vector2i tl = {
+			std::min(this->_startDrag->x, this->_placementPos.x),
+			std::min(this->_startDrag->y, this->_placementPos.y)
+		};
+		Vector2i br = {
+			std::max(this->_startDrag->x, this->_placementPos.x),
+			std::max(this->_startDrag->y, this->_placementPos.y)
+		};
+
+		this->_dragging = false;
+		this->_placementBuilding = nullptr;
+		this->_startDrag.reset();
+		this->_objectBuffer.clear();
+		this->manager->getObjectsInArea(tl, br - tl, this->_objectBuffer, false, [this](const GameObject *obj) {
+			return obj->owner->state.index == this->ownerState->index && obj->canMove() && obj->isSelectable();
+		});
+		if (!this->_objectBuffer.empty()) {
+			this->state->selectedObjects.clear();
+			this->_objectBuffer.front()->select();
+			for (auto t : this->_objectBuffer)
+				this->state->selectedObjects.emplace(t);
+		}
+	}
 }
 
 void UI::onCancel(Vector2i absPos)

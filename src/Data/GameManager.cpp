@@ -142,7 +142,7 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned
 		this->centerCameraOn(this->_mapStates[factionIndex].startAreas[startingArea]);
 }
 
-#define SCROLL_SPEED 8
+#define SCROLL_SPEED 24
 
 void GameManager::_checkScroll()
 {
@@ -197,7 +197,6 @@ void GameManager::update()
 	if (this->_paused && !this->_forceStep)
 		return;
 	this->_forceStep = false;
-	this->_checkScroll();
 	if (this->_shake.time) {
 		this->_shakeTimer++;
 		if (this->_shakeTimer >= this->_shake.interval) {
@@ -264,6 +263,7 @@ void GameManager::update()
 
 void GameManager::updateRender()
 {
+	this->_checkScroll();
 	for (auto &player : this->_players)
 		player.updateRender();
 }
@@ -645,6 +645,22 @@ void GameManager::consumeEvent(const Event &event)
 					p.onRightMouseClicked(pos);
 			}
 		}
+	} else if (auto mouseUp = event.getIf<sf::Event::MouseButtonReleased>()) {
+		Vector2i pos = mouseUp->position;
+
+		pos /= this->_cameraZoom;
+		pos += this->_cameraTranslate;
+		if (mouseUp->button == sf::Mouse::Button::Left) {
+			if (!isMouseOverUI()) {
+				for (auto &p: this->_players)
+					p.onLeftMouseReleased(pos);
+			}
+		} else if (mouseUp->button == sf::Mouse::Button::Right) {
+			if (!isMouseOverUI()) {
+				for (auto &p : this->_players)
+					p.onRightMouseReleased(pos);
+			}
+		}
 	} else if (event.is<sf::Event::FocusLost>()) {
 		game->paused = true;
 	}
@@ -950,7 +966,7 @@ const LoadedMap &GameManager::getLoadedMap() const
 	return this->_map;
 }
 
-bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const Vector2u &size, bool onlySolid)
+bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const Vector2u &size, bool onlySolid, bool partial)
 {
 	if (obj.isDisposable())
 		return false;
@@ -963,14 +979,25 @@ bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const
 	if (!tiles) {
 		auto s = obj.getSize();
 
-		if (absPos.x + static_cast<int>(size.x) <= objPos.x)
-			return false;
-		if (absPos.y + static_cast<int>(size.y) <= objPos.y)
-			return false;
-		if (absPos.x >= objPos.x + static_cast<int>(s.x))
-			return false;
-		if (absPos.y >= objPos.y + static_cast<int>(s.y))
-			return false;
+		if (partial) {
+			if (absPos.x + static_cast<int>(size.x) <= objPos.x)
+				return false;
+			if (absPos.y + static_cast<int>(size.y) <= objPos.y)
+				return false;
+			if (absPos.x >= objPos.x + static_cast<int>(s.x))
+				return false;
+			if (absPos.y >= objPos.y + static_cast<int>(s.y))
+				return false;
+		} else {
+			if (absPos.x + static_cast<int>(size.x) <= objPos.x + static_cast<int>(s.x))
+				return false;
+			if (absPos.y + static_cast<int>(size.y) <= objPos.y + static_cast<int>(s.y))
+				return false;
+			if (absPos.x >= objPos.x)
+				return false;
+			if (absPos.y >= objPos.y)
+				return false;
+		}
 		return true;
 	}
 
@@ -1016,7 +1043,7 @@ bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const
 	for (auto &o : this->_liveObjects) {
 		if (std::ranges::find(exclusion, o.index) != exclusion.end())
 			continue;
-		if (!GameManager::_isInArea(o, absPos, size, notSolid))
+		if (!GameManager::_isInArea(o, absPos, size, notSolid, true))
 			continue;
 		// A stackable mover can share the area with other stackable units,
 		// up to PATHFINDING_STACK_LIMIT of them; anything else blocks it.
@@ -1028,19 +1055,19 @@ bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const
 	return true;
 }
 
-void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<GameObject *> &objects)
+void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<GameObject *> &objects, bool partial, const std::function<bool (GameObject *)> &fct)
 {
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)
-		if (GameManager::_isInArea(b, absPos, size, false))
+		if ((!fct || fct(&b)) && GameManager::_isInArea(b, absPos, size, false, partial))
 			objects.push_back(&b);
 }
 
-void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<const GameObject *> &objects)
+void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<const GameObject *> &objects, bool partial, const std::function<bool (const GameObject *)> &fct)
 {
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)
-		if (GameManager::_isInArea(b, absPos, size, false))
+		if ((!fct || fct(&b)) && GameManager::_isInArea(b, absPos, size, false, partial))
 			objects.push_back(&b);
 }
 
