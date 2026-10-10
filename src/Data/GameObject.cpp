@@ -783,20 +783,7 @@ GameObject::GameObject(
 			this->_turrets.emplace_back(this, base, animList, turret);
 	}
 
-	if (json.contains("select")) {
-		assert_exp(json["select"].contains("x"));
-		assert_exp(json["select"]["x"].is_number());
-		assert_exp(json["select"].contains("y"));
-		assert_exp(json["select"]["y"].is_number());
-		assert_exp(json["select"].contains("h"));
-		assert_exp(json["select"]["h"].is_number());
-		assert_exp(json["select"].contains("w"));
-		assert_exp(json["select"]["w"].is_number());
-		this->_selectBox.position.x = json["select"]["x"];
-		this->_selectBox.position.y = json["select"]["y"];
-		this->_selectBox.size.x = json["select"]["h"];
-		this->_selectBox.size.y = json["select"]["w"];
-	} else if (!this->_anims.empty() && !this->_anims.front().empty()) {
+	if (!this->_anims.empty() && !this->_anims.front().empty()) {
 		auto &anims = this->_anims.front().front().getAnims();
 
 		if (!anims.empty()) {
@@ -805,6 +792,24 @@ GameObject::GameObject(
 			this->_selectBox.position.x = 0;
 			this->_selectBox.position.y = anim.getOffset().y;
 			this->_selectBox.size = this->_size;
+		}
+	}
+	if (json.contains("select")) {
+		if (json["select"].contains("x")) {
+			assert_exp(json["select"]["x"].is_number());
+			this->_selectBox.position.x = json["select"]["x"];
+		}
+		if (json["select"].contains("y")) {
+			assert_exp(json["select"]["y"].is_number());
+			this->_selectBox.position.y = json["select"]["y"];
+		}
+		if (json["select"].contains("h")) {
+			assert_exp(json["select"]["h"].is_number());
+			this->_selectBox.size.x = json["select"]["h"];
+		}
+		if (json["select"].contains("w")) {
+			assert_exp(json["select"]["w"].is_number());
+			this->_selectBox.size.y = json["select"]["w"];
 		}
 	}
 	this->animationState.health = 1;
@@ -1341,8 +1346,10 @@ bool GameObject::_updateMove(Vector2i destination, MoveReason reason, bool force
 			this->_cachedDist += this->_pathCache[i].distance(this->_pathCache[i + 1]);
 	}
 
-	for (auto &turret : this->_turrets)
+	for (auto &turret : this->_turrets) {
+		turret.fast = true;
 		turret.shotTimer = 0;
+	}
 	if (this->_pathCache.empty())
 		return true;
 
@@ -1711,6 +1718,7 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 		size_t d = direction * turret->anims.size() / this->_anims.size();
 
 		turret->directionTarget = d;
+		turret->fast = true;
 		if (turret->direction != d) {
 			turret->shotTimer = 1;
 			return false;
@@ -3073,6 +3081,7 @@ void GameObject::deinitGlobalGrid()
 		for (GameObject *obj : buffer)
 			obj->disconnectFrom(this);
 		this->_connections.fill({});
+		this->_connectedMask = 0;
 	}
 	if (this->_tiles) {
 		this->manager->deinitUnitTiles(*this->_tiles, this->_gridPos, *this->map);
@@ -3214,8 +3223,6 @@ const std::optional<std::vector<std::vector<BuildingMask>>> &GameObject::getTile
 
 unsigned GameObject::getBottom() const
 {
-	if (this->_tiles)
-		return this->_position.y + this->map->tileSize.y * this->_tiles->size() - 1;
 	return this->_position.y + this->_size.y - 1;
 }
 
@@ -3729,6 +3736,7 @@ ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unord
 	assert_exp(json.contains("barrel") && json["barrel"].is_number());
 	assert_exp(!json.contains("fixed") || json["fixed"].is_boolean());
 	assert_exp(!json.contains("offset") || json["offset"].is_object());
+	assert_exp(!json.contains("recoil") || json["recoil"].is_number());
 	assert_exp(!json.contains("turn_delay") || json["turn_delay"].is_number());
 	assert_exp(!json.contains("directions") || json["directions"].is_number());
 
@@ -3747,7 +3755,9 @@ ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unord
 	assert_exp(parent->_barrels[this->barrel].turret == nullptr);
 	parent->_barrels[this->barrel].turret = this;
 	if (json.contains("turn_delay"))
-		this->turnDelay = json["turn_delay"];
+		this->turnDelay = json["turn_delay"].get<unsigned>() + 1;
+	if (json.contains("recoil"))
+		this->recoilMax = json["recoil"];
 	if (json.contains("fixed"))
 		this->fixed = json["fixed"];
 	if (json.contains("offset")) {
@@ -3768,13 +3778,14 @@ ObjectTurret::ObjectTurret(GameObject *parent, const ObjectTurret &other) :
 	parent->_barrels[this->barrel].turret = this;
 	this->direction = other.direction;
 	this->recoilTimer = other.recoilTimer;
+	this->recoilMax = other.recoilMax;
 }
 
-#define RECOIL_TIME 30
 void ObjectTurret::attack()
 {
-	this->recoilTimer = RECOIL_TIME;
+	this->recoilTimer = this->recoilMax;
 	this->shotTimer = 300;
+	this->fast = true;
 }
 
 void ObjectTurret::update()
@@ -3789,24 +3800,29 @@ void ObjectTurret::update()
 		else
 			this->shotTimer--;
 	}
-	if (!this->fixed && this->direction != this->directionTarget) {
-		this->turnTimer++;
-		if (this->turnTimer > this->turnDelay) {
-			size_t diff = (this->direction - this->directionTarget + this->anims.size()) % this->anims.size();
+	if (!this->fixed) {
+		if (this->direction != this->directionTarget) {
+			unsigned delay = this->fast ? this->turnDelay : this->turnDelay * 8;
 
-			this->turnTimer = 0;
-			if (diff >= this->anims.size() / 2)
-				this->direction = (this->direction + 1) % this->anims.size();
-			else
-				this->direction = (this->direction - 1 + this->anims.size()) % this->anims.size();
-		}
+			this->turnTimer++;
+			if (this->turnTimer >= delay) {
+				size_t diff = (this->direction - this->directionTarget + this->anims.size()) % this->anims.size();
+
+				this->turnTimer = 0;
+				if (diff >= this->anims.size() / 2)
+					this->direction = (this->direction + 1) % this->anims.size();
+				else
+					this->direction = (this->direction - 1 + this->anims.size()) % this->anims.size();
+			}
+		} else
+			this->fast = false;
 	}
 }
 
 void ObjectTurret::render(int layer)
 {
 	double angle = M_PI * 2 * this->direction / this->anims.size() - M_PI_2 - M_PI;
-	Vector2d recoilOffset = {(std::log(RECOIL_TIME + 1) - std::log(RECOIL_TIME + 1 - this->recoilTimer)) * 2, 0};
+	Vector2d recoilOffset = {(std::log(this->recoilMax + 1) - std::log(this->recoilMax + 1 - this->recoilTimer)) * 2, 0};
 
 	if (this->anims[this->direction].getLayer() == layer)
 		this->parent->_displayAnim(this->anims[this->direction].getAnim(), this->offset + recoilOffset.rotation(angle, {0, 0}));

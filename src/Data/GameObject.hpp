@@ -176,14 +176,16 @@ struct MYDLL_API ObjectTurret {
 	GameObject *parent;
 	bool fixed = false;
 	bool independent = true;
+	bool fast = true;
 	Vector2f offset;
 	unsigned shotTimer = 0;
 	unsigned turnTimer = 0;
-	unsigned turnDelay = 0;
+	unsigned turnDelay = 1;
 	unsigned barrel;
 	unsigned direction = 0;
 	unsigned directionTarget = 0;
 	unsigned recoilTimer = 0;
+	unsigned recoilMax = 0;
 
 	ObjectTurret(GameObject *parent, const Mod &base, const std::unordered_map<std::string, std::vector<Animation>> &animList, const nlohmann::json &j);
 	ObjectTurret(GameObject *parent, const ObjectTurret &other);
