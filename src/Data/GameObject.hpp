@@ -280,6 +280,10 @@ protected:
 	std::optional<std::string> _buildQueue;
 	std::optional<std::string> _proxy;
 	std::vector<Vector2i> _pathCache;
+	std::array<std::vector<const GameObject *>, 8> _connections;
+	std::vector<unsigned char> _connectedSides;
+	unsigned _connectedMask = 0;
+	std::string _connectTo;
 	Vector2i _cachedDest;
 	double _cachedDist;
 	sf::Image _cachedDebug;
@@ -438,7 +442,11 @@ public:
 	void nextDirection();
 	void setOwner(Player *player, unsigned time, unsigned timeDecOnAtk);
 	void spawn(const Vector2f &spawnPoint);
+	void connectTo(const GameObject *object);
+	void disconnectFrom(const GameObject *object);
+	void disposeOf();
 
+	[[nodiscard]] const std::string &getConnectTo() const;
 	[[nodiscard]] Vector2f getMiddle() const;
 	[[nodiscard]] bool isBeingPickedUp() const;
 	[[nodiscard]] bool canPickup(MoveReason r, double dist) const;
@@ -528,15 +536,11 @@ protected:
 	[[nodiscard]] const ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree) const;
 	[[nodiscard]] ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree);
 	[[nodiscard]] Vector2f _getTileOffsetFromCenter() const;
+	void _recomputeConnectedMask();
+	unsigned char _getConnectionSide(const GameObject *);
 	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);
 	bool _tileAvailableFor(Vector2i tile) const;
 	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size, const GameObject *ignoreObject) const;
-	//! Looks for the tile closest to preferredTile (preferredTile itself
-	//! included) where both target's footprint and this carrier's own
-	//! footprint (it briefly lands to set target down, see _updatePickup's
-	//! altitude-0 states) can fit without overlapping any other (solid)
-	//! object, and where target's terrain is passable for it. Falls back to
-	//! preferredTile itself if nothing else is found on the whole map.
 	[[nodiscard]] Vector2i _findLandingSpot(GameObject *target, Vector2i preferredTile) const;
 	CollisionResolution _resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject);
 	CollisionResolution _resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject);

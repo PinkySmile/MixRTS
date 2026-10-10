@@ -329,6 +329,13 @@ GameObject::GameObject(
 	assert_exp(!json.contains("repair_delay") || json["repair_delay"].is_number());
 	assert_exp(!json.contains("repair_heal") || json["repair_heal"].is_number());
 	assert_exp(!json.contains("repair_cost") || json["repair_cost"].is_object());
+	if (json.contains("connected")) {
+		assert_exp(json["connected"].is_object());
+		assert_exp(json["connected"].contains("type") && json["connected"]["type"].is_string());
+		assert_exp(json["connected"].contains("valid") && json["connected"]["valid"].is_array());
+		for (size_t i = 0; i < json["connected"]["valid"].size(); i++)
+			assert_msg(json["connected"]["valid"][i].is_number_unsigned(), "json[\"connected\"][\"valid\"][" + std::to_string(i) + "]");
+	}
 	if (json.contains("anim_idles")) {
 		assert_exp(json["anim_idles"].is_array());
 		for (size_t i = 0; i < json["anim_idles"].size(); i++)
@@ -353,9 +360,9 @@ GameObject::GameObject(
 	assert_exp(!json.contains("deploy") || json["deploy"].is_object());
 	if (json.contains("sell")) {
 		assert_exp(json["sell"].is_object());
-		assert_exp(json["sell"].contains("anim") && json["sell"]["anim"].is_object());
-		assert_exp(json["sell"].contains("units") && json["sell"]["units"].is_object());
-		assert_exp(json["sell"].contains("refund") && json["sell"]["refund"].is_object());
+		assert_exp(!json["sell"].contains("anim") || json["sell"]["anim"].is_object());
+		assert_exp(!json["sell"].contains("units") || json["sell"]["units"].is_object());
+		assert_exp(!json["sell"].contains("refund") || json["sell"]["refund"].is_object());
 	}
 	if (json.contains("skirt")) {
 		assert_exp(json["skirt"].is_object());
@@ -450,6 +457,7 @@ GameObject::GameObject(
 	this->_tags.emplace_back("any");
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
+	assert_exp(!json.contains("connected") || !json.contains("directions"));
 	if (json.contains("directions")) {
 		directions = json["directions"].get<unsigned>();
 		assert_msg(*directions % 8 == 0, "Number of directions must be divisible by 8");
@@ -617,14 +625,30 @@ GameObject::GameObject(
 	else if (this->_buildAnim)
 		this->_showAfterBuild = this->_buildAnim->size();
 
-	if (json.contains("sell")) {
-		this->_sellAnim.emplace(base, this, animList, json["sell"]["anim"]);
-		this->_sellRefund = json["sell"]["refund"];
-		for (auto &[key, nb] : json["sell"]["units"].items()) {
-			assert_msg(nb.is_number_unsigned(), "json[\"sell\"][\"units\"][\"" + key + "\"]");
-			this->_sellUnits[RESOURCE(base.getName(), key)] = nb;
+	if (json.contains("connected")) {
+		this->_connectTo = json["connected"]["type"];
+		this->_connectedSides = json["connected"]["valid"].get<std::vector<unsigned char>>();
+		assert_exp(!this->_connectTo.empty());
+		assert_exp(this->_connectedSides.size() <= 8 && !this->_connectedSides.empty());
+		for (size_t i = 0; i < this->_connectedSides.size(); i++) {
+			assert_msg(this->_connectedSides[i] != 0, "json[\"connected\"][\"valid\"][" + std::to_string(i) + "]");
+			assert_msg(this->_connectedSides[i] != 5, "json[\"connected\"][\"valid\"][" + std::to_string(i) + "]");
+			assert_msg(this->_connectedSides[i] <= 9, "json[\"connected\"][\"valid\"][" + std::to_string(i) + "]");
 		}
-		this->_showBeforeSell = this->_buildAnim->size() - this->_showAfterBuild;
+	}
+	if (json.contains("sell")) {
+		if (json["sell"].contains("anim")) {
+			this->_sellAnim.emplace(base, this, animList, json["sell"]["anim"]);
+			this->_showBeforeSell = this->_buildAnim->size() - this->_showAfterBuild;
+		}
+		if (json["sell"].contains("refund"))
+			this->_sellRefund = json["sell"]["refund"];
+		if (json["sell"].contains("units")) {
+			for (auto &[key, nb] : json["sell"]["units"].items()) {
+				assert_msg(nb.is_number_unsigned(), "json[\"sell\"][\"units\"][\"" + key + "\"]");
+				this->_sellUnits[RESOURCE(base.getName(), key)] = nb;
+			}
+		}
 	}
 	if (json.contains("select_sound")) {
 		std::string selectSound = RESOURCE(base.getName(), json["select_sound"]);
@@ -671,6 +695,24 @@ GameObject::GameObject(
 				this->_muzzleAnim.push_back(&effects.at(muzzleEffect));
 			}
 		}
+	} else if (!this->_connectedSides.empty()) {
+		assert_exp(!json.contains("anim_move"));
+		assert_exp(!json.contains("anim_fire"));
+		assert_exp(!json.contains("anim_crouch"));
+		assert_exp(!json.contains("anim_crawl"));
+		assert_exp(!json.contains("anim_crawl_fire"));
+		this->_anims.resize(1 << this->_connectedSides.size());
+		for (auto &anim: json["anims"])
+			for (size_t i = 0; i < (1ULL << this->_connectedSides.size()); i++) {
+				unsigned index = 0;
+
+				for (size_t j = 0; j < this->_connectedSides.size(); j++)
+					if (i & (1 << j)) {
+						index *= 10;
+						index += j + 1;
+					}
+				this->_anims[i].emplace_back(base, this, animList, anim, index);
+			}
 	} else {
 		this->_anims.emplace_back();
 		for (auto &anim: json["anims"])
@@ -814,10 +856,7 @@ GameObject::GameObject(
 	assert_msg(!this->_moveWhileTurn || (!this->_boundToGrid && this->_ignoreTerrain), "move_while_turn only works if the unit isn't bound to grid, and ignores terrain");
 }
 
-GameObject::~GameObject()
-{
-	this->deinitGlobalGrid();
-}
+GameObject::~GameObject() = default;
 
 
 struct ObstructionContext {
@@ -2177,12 +2216,20 @@ void GameObject::update()
 		if (!this->_buildAnim || !(*this->_buildAnim)() || this->_buildAnim->update())
 			this->_built = false;
 	} else if (this->_sold) {
-		assert_exp(this->_sellAnim);
-		if (this->_sellAnim->current() == this->_showBeforeSell && this->_sellTimer == 0) {
-			this->_sellTimer++;
+		if (this->_sellAnim) {
+			if (this->_sellAnim->current() == this->_showBeforeSell && this->_sellTimer == 0) {
+				this->_sellTimer++;
+				this->_spawnUnits(this->_sellUnits);
+			}
+			if ((*this->_sellAnim)() && this->_sellAnim->update()) {
+				for (auto &[fundType, value] : this->_sellRefund)
+					this->owner->credit(fundType, value, Player::CREDIT_SYSTEM);
+				this->_disposable = true;
+				this->_solid = false;
+				return;
+			}
+		} else {
 			this->_spawnUnits(this->_sellUnits);
-		}
-		if ((*this->_sellAnim)() && this->_sellAnim->update()) {
 			for (auto &[fundType, value] : this->_sellRefund)
 				this->owner->credit(fundType, value, Player::CREDIT_SYSTEM);
 			this->_disposable = true;
@@ -2201,10 +2248,14 @@ void GameObject::update()
 		this->_asideCooldown--;
 	if (!this->_shooting && !this->_dumpStop && !this->_dumpStart && !this->_dumping && !this->_currentIdle) {
 		if (this->_crouchTimer == 0) {
-			if (this->_moving && !this->_moveAnim.empty()) {
+			if (!this->_connectTo.empty()) {
+				for (auto &anim : this->_anims[this->_connectedMask])
+					if (anim())
+						anim.update();
+			} else if (this->_moving && !this->_moveAnim.empty()) {
 				if (this->_moveAnim[this->_currentDir]())
 					this->_moveAnim[this->_currentDir].update();
-			} else for (auto &anim: this->_anims[this->_currentDir])
+			} else for (auto &anim : this->_anims[this->_currentDir])
 				if (anim())
 					anim.update();
 		} else {
@@ -2311,7 +2362,13 @@ void GameObject::render(int layer)
 	if (display) {
 		if (!this->_dumpStop && !this->_dumpStart && !this->_dumping) {
 			if (this->_crouchTimer == 0) {
-				if (this->_shooting && !this->_fireAnim.empty()) {
+				unsigned a = this->_currentDir;
+
+				if (!this->_connectTo.empty()) {
+					for (auto &anim : this->_anims[this->_connectedMask])
+						if (anim() && anim.getLayer() == layer)
+							this->_displayAnim(anim.getAnim());
+				} else if (this->_shooting && !this->_fireAnim.empty()) {
 					auto &anim = this->_fireAnim[this->_currentDir];
 
 					if (anim() && anim.getLayer() == layer)
@@ -2326,7 +2383,7 @@ void GameObject::render(int layer)
 
 					if (anim() && anim.getLayer() == layer)
 						this->_displayAnim(anim.getAnim());
-				} else for (auto &anim: this->_anims[this->_currentDir])
+				} else for (auto &anim : this->_anims[a])
 					if (anim() && anim.getLayer() == layer)
 						this->_displayAnim(anim.getAnim());
 			} else {
@@ -2935,6 +2992,17 @@ void GameObject::initGlobalGrid()
 	if (this->_altitude)
 		return;
 
+	if (!this->_connectTo.empty()) {
+		std::vector<GameObject *> buffer;
+
+		this->manager->getObjectsInArea(this->_position - this->map->tileSize, this->map->tileSize * 2 + this->_size, buffer, true, [this](const GameObject *o) {
+			return this != o && this->_connectTo == o->_connectTo;
+		});
+		for (GameObject *obj : buffer) {
+			this->connectTo(obj);
+			obj->connectTo(this);
+		}
+	}
 	if (this->_tiles) {
 		this->_decayTarget = this->_maxHp * (this->manager->initUnitTiles(*this->_tiles, this->_gridPos, *this->map) + 1) / 2;
 		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
@@ -2991,6 +3059,16 @@ void GameObject::deinitGlobalGrid()
 {
 	if (!this->_initGrid)
 		return;
+	if (!this->_connectTo.empty()) {
+		std::vector<GameObject *> buffer;
+
+		this->manager->getObjectsInArea(this->_position - this->map->tileSize, this->map->tileSize * 2 + this->_size, buffer, true, [this](const GameObject *o) {
+			return this != o && this->_connectTo == o->_connectTo;
+		});
+		for (GameObject *obj : buffer)
+			obj->disconnectFrom(this);
+		this->_connections.fill({});
+	}
 	if (this->_tiles) {
 		this->manager->deinitUnitTiles(*this->_tiles, this->_gridPos, *this->map);
 		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
@@ -3347,6 +3425,87 @@ void GameObject::spawn(const Vector2f &spawnPoint)
 	this->setPosition(this->map->topLeftCoordToAbs(gridPos) + off);
 	if (pos != spawnPoint)
 		this->moveTo(spawnPoint, MOVEREASON_MOVE_SPAWN);
+}
+
+inline void GameObject::_recomputeConnectedMask()
+{
+	this->_connectedMask = 0;
+	for (const std::vector<const GameObject *> &a : this->_connections | std::ranges::views::reverse) {
+		this->_connectedMask <<= 1;
+		this->_connectedMask |= !a.empty();
+	}
+}
+
+unsigned char GameObject::_getConnectionSide(const GameObject *obj)
+{
+	double angle = this->getMiddle().angle(obj->getMiddle());
+	// 1 (top left)     -> 5π/8 ≤ angle < 7π/8
+	// 2 (top)          -> 3π/8 ≤ angle < 5π/8
+	// 3 (top right)    -> π/8 ≤ angle < 3π/8
+	// 4 (left)         -> 7π/8 ≤ angle ≤ π or -π/8 ≤ angle ≤ -7π/8
+	// 6 (right)        -> -π/8 ≤ angle < π/8
+	// 7 (bottom left)  -> -7π/8 ≤ angle < -5π/8
+	// 8 (bottom)       -> -5π/8 ≤ angle < -3π/8
+	// 9 (bottom right) -> -3π/8 ≤ angle < -π/8
+	unsigned side;
+
+	if (5 * M_PI / 8 <= angle && angle < 7 * M_PI / 8)
+		side = 1;
+	else if (3 * M_PI / 8 <= angle && angle < 5 * M_PI / 8)
+		side = 2;
+	else if (M_PI / 8 <= angle && angle < 3 * M_PI / 8)
+		side = 3;
+	else if (-M_PI / 8 <= angle && angle < M_PI / 8)
+		side = 6;
+	else if (-3 * M_PI / 8 <= angle && angle < -M_PI / 8)
+		side = 9;
+	else if (-5 * M_PI / 8 <= angle && angle < -3 * M_PI / 8)
+		side = 8;
+	else if (-7 * M_PI / 8 <= angle && angle < -5 * M_PI / 8)
+		side = 7;
+	else
+		side = 4;
+
+	auto it = std::ranges::find(this->_connectedSides, side);
+
+	if (it == this->_connectedSides.end())
+		return UINT8_MAX;
+	return it - this->_connectedSides.begin();
+}
+
+void GameObject::connectTo(const GameObject *object)
+{
+	unsigned char side = this->_getConnectionSide(object);
+
+	if (side == UINT8_MAX)
+		return;
+	assert_exp(std::ranges::find(this->_connections[side], object) == this->_connections[side].end());
+	this->_connections[side].push_back(object);
+	this->_recomputeConnectedMask();
+}
+
+void GameObject::disconnectFrom(const GameObject *object)
+{
+	unsigned char side = this->_getConnectionSide(object);
+
+	if (side == UINT8_MAX)
+		return;
+
+	auto it = std::ranges::find(this->_connections[side], object);
+
+	assert_exp(it != this->_connections[side].end());
+	this->_connections[side].erase(it);
+	this->_recomputeConnectedMask();
+}
+
+void GameObject::disposeOf()
+{
+	this->deinitGlobalGrid();
+}
+
+const std::string &GameObject::getConnectTo() const
+{
+	return this->_connectTo;
 }
 
 Vector2f GameObject::getMiddle() const

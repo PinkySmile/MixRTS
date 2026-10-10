@@ -253,9 +253,10 @@ void GameManager::update()
 		// TODO: Objects above expect the pointers to stay valid until they can check isDisposable
 		//       which isn't the case here. We should hold on to disposable objects for a full tick
 		//       to allow all objects to properly dispose of the pointers to dead objects.
-		if (itb->isDisposable())
+		if (itb->isDisposable()) {
+			itb->disposeOf();
 			itb = this->_liveObjects.erase(itb);
-		else
+		} else
 			++itb;
 	for (auto p : toRecompute)
 		p->recomputeLocked();

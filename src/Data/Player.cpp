@@ -1059,8 +1059,12 @@ void PlayerQueueEntry::pushUserType(sol::state &state)
 	type["faction"] = &PlayerQueueEntry::faction;
 	type["upgrade"] = &PlayerQueueEntry::upgrade;
 	type["object"] = &PlayerQueueEntry::object;
-	type["queue_id"] = &PlayerQueueEntry::queueId;
-	type["element_id"] = &PlayerQueueEntry::elementId;
+	type["queue_id"] = sol::property([](PlayerQueueEntry &entry) -> const std::string & {
+		return *entry.queueId;
+	});
+	type["element_id"] = sol::property([](PlayerQueueEntry &entry) -> const std::string & {
+		return *entry.elementId;
+	});
 	type["spent"] = &PlayerQueueEntry::spent;
 	type["build_time"] = &PlayerQueueEntry::buildTime;
 	type["build_progress"] = &PlayerQueueEntry::buildProgress;

@@ -8,9 +8,6 @@
 _AssertionFailedException::_AssertionFailedException(const std::string &&msg) :
 	_msg(msg)
 {
-	std::string f = game->lua["debug"]["traceback"]();
-
-	std::cout << f << std::endl;
 }
 
 #ifndef NO_TRACE
