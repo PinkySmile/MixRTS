@@ -304,6 +304,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("select_sound") || json["select_sound"].is_string());
 	assert_exp(!json.contains("pass_flags") || json["pass_flags"].is_string() || json["pass_flags"].is_number_unsigned());
 	assert_exp(!json.contains("fake") || json["fake"].is_boolean());
+	assert_exp(!json.contains("wall") || json["wall"].is_boolean());
 	assert_exp(!json.contains("proxy") || json["proxy"].is_string());
 	assert_exp(!json.contains("harvest_anim") || json["harvest_anim"].is_object());
 	assert_exp(!json.contains("death") || json["death"].is_object());
@@ -484,6 +485,8 @@ GameObject::GameObject(
 		this->_sight = json["sight"];
 	if (json.contains("fake"))
 		this->_fake = json["fake"];
+	if (json.contains("wall"))
+		this->_wall = json["wall"];
 	if (json.contains("repair_delay"))
 		this->_repairDelay = json["repair_delay"];
 	if (json.contains("repair_heal"))
@@ -3501,6 +3504,11 @@ void GameObject::disconnectFrom(const GameObject *object)
 void GameObject::disposeOf()
 {
 	this->deinitGlobalGrid();
+}
+
+bool GameObject::isWall() const
+{
+	return this->_wall;
 }
 
 const std::string &GameObject::getConnectTo() const

@@ -33,6 +33,7 @@ Projectile::Projectile(const GameObject *parent, const Weapon *weapon, Vector2f 
 		this->_ownerIndex = parent->owner->state.index;
 		this->_owner = parent->owner;
 	}
+	this->_blockedByWall = data.blockedByWall;
 	this->_homing = data.homing;
 	this->_trail = data.trail;
 	this->_trailInterval = data.trailInterval;
@@ -108,7 +109,10 @@ void Projectile::update()
 		this->_position == this->_targetPos ||
 		(diff.x > 0) != (diff2.x > 0) ||
 		(diff.y > 0) != (diff2.y > 0) ||
-		(this->_range && this->_position.distance(this->_startPos) >= this->_range)
+		(this->_range && this->_position.distance(this->_startPos) >= this->_range) ||
+		(this->_blockedByWall && this->manager->getObjectInArea(this->_position, {1, 1}, true, [](const GameObject *o){
+			return o->isWall();
+		}))
 	) {
 		const Effect *hitEffect = this->_weapon->getHitEffect();
 

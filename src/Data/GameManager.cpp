@@ -1056,6 +1056,15 @@ bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const
 	return true;
 }
 
+GameObject *GameManager::getObjectInArea(const Vector2i &absPos, const Vector2u &size, bool partial, const std::function<bool(GameObject *)> &fct)
+{
+	// OPTIMIZE: Split the map into quadrants
+	for (auto &b : this->_liveObjects)
+		if ((!fct || fct(&b)) && GameManager::_isInArea(b, absPos, size, false, partial))
+			return &b;
+	return nullptr;
+}
+
 void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<GameObject *> &objects, bool partial, const std::function<bool (GameObject *)> &fct)
 {
 	// OPTIMIZE: Split the map into quadrants

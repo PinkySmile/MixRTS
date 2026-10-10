@@ -99,6 +99,7 @@ public:
 	void consumeEvent(const sf::Event &event);
 	void consumeGeneralEvent(const sf::Event &event);
 	bool isAreaFree(const Vector2i &pos, const Vector2u &size, const std::vector<unsigned> &exclusion = {}, bool stackable = false, bool notSolid = false) const;
+	GameObject *getObjectInArea(const Vector2i &pos, const Vector2u &size, bool partial=true, const std::function<bool (GameObject *)> &fct={});
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<GameObject *> &objects, bool partial=true, const std::function<bool (GameObject *)> &fct={});
 	void getObjectsInArea(const Vector2i &pos, const Vector2u &size, std::vector<const GameObject *> &objects, bool partial=true, const std::function<bool (const GameObject *)> &fct={});
 	void registerObject(GameObject *o);

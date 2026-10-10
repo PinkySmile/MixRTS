@@ -208,6 +208,7 @@ WeaponProjectile::WeaponProjectile(
 	assert_exp(!data.contains("arc") || data["arc"].is_boolean());
 	assert_exp(!data.contains("shadow") || data["shadow"].is_boolean());
 	assert_exp(!data.contains("falling") || data["falling"].is_boolean());
+	assert_exp(!data.contains("blocked_by_wall") || data["blocked_by_wall"].is_boolean());
 	assert_exp(!data.contains("bounce") || (data["bounce"].is_array() && data["bounce"].size() == 2));
 	assert_exp(!data.contains("v") || data["v"].is_number());
 	assert_exp(!data.contains("y") || data["y"].is_number());
@@ -216,8 +217,11 @@ WeaponProjectile::WeaponProjectile(
 	std::optional<unsigned> directions;
 
 	this->speed = data["speed"];
+
 	if (data.contains("bounce"))
 		this->bounce = { data["bounce"][0], data["bounce"][1] };
+	if (data.contains("blocked_by_wall"))
+		this->blockedByWall = data["blocked_by_wall"];
 	if (data.contains("falling"))
 		this->falling = data["falling"];
 	if (data.contains("ramp_delay"))

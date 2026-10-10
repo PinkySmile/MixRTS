@@ -49,6 +49,7 @@ struct MYDLL_API WeaponProjectile {
 	bool arc = false;
 	bool shadow = false;
 	bool falling = false;
+	bool blockedByWall = false;
 
 	WeaponProjectile(
 		const Mod &base,

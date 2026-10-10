@@ -363,6 +363,7 @@ protected:
 	bool _animFinished = false;
 	bool _ignoreTerrain = false;
 	bool _moveWhileTurn = false;
+	bool _wall = false;
 	// TODO: Find a better way to do this
 	bool _shooting = false;
 	bool _dumpStop = false;
@@ -446,6 +447,7 @@ public:
 	void disconnectFrom(const GameObject *object);
 	void disposeOf();
 
+	[[nodiscard]] bool isWall() const;
 	[[nodiscard]] const std::string &getConnectTo() const;
 	[[nodiscard]] Vector2f getMiddle() const;
 	[[nodiscard]] bool isBeingPickedUp() const;

@@ -39,6 +39,7 @@ private:
 	bool _arc;
 	bool _shadow;
 	bool _falling;
+	bool _blockedByWall;
 	bool _disposable = false;
 
 	void _displayAnim(Animation &anim, Vector2f offset = {}) const;
