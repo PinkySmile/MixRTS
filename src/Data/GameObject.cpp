@@ -3028,7 +3028,7 @@ void GameObject::initGlobalGrid()
 						static_cast<int>(this->_gridPos.x + gx),
 						static_cast<int>(this->_gridPos.y + gy)
 					}),
-					this->owner->state.index, 1,
+					this->owner->state.index, line[gx].placementSpread,
 					this->_currentTilePosition,
 					line[gx].solid ? 1 : 0,
 					!this->canMove(),

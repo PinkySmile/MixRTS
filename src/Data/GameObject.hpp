@@ -133,6 +133,7 @@ union MYDLL_API BuildingMask {
 		bool placementConcrete: 1; // 1
 		bool solid: 1;             // 2
 		bool placementRequired: 1; // 4
+		bool placementSpread: 1;   // 8
 	};
 	uint8_t value;
 };
