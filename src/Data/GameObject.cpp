@@ -1687,9 +1687,9 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 	Vector2f opCenter = obj->getHitboxCenter(myCenter);
 	Vector2f diff = opCenter - myCenter;
 	Vector2f diffAbs = diff.abs();
-	const ObjectWeapon *weapon = this->_getBestWeaponFor(obj, UINT32_MAX, true);
+	const ObjectWeapon *weapon = this->getBestWeaponFor(obj, UINT32_MAX, true);
 	if (weapon == nullptr)
-		weapon = this->_getBestWeaponFor(obj, UINT32_MAX, false);
+		weapon = this->getBestWeaponFor(obj, UINT32_MAX, false);
 	assert_exp(weapon);
 	if (this->_barrels[weapon->barrel].shootTimer != 0)
 		return false;
@@ -2561,7 +2561,6 @@ void GameObject::damage(unsigned amount, DamageType type)
 		this->owner->playEVA(UI::EVA_BUILDING_ATTACKED, 300, 3, 600, this->_id);
 	else
 		this->owner->playEVA(UI::EVA_UNIT_ATTACKED, 300, 1, 600, this->_id);
-	//if (this->_moving && amount > this->_)
 	if (!this->_crouchAnim.empty() && random_distrib(game->gameRandom, 0, 3) == 0)
 		this->_crouchTimer = 600;
 	this->_reduceTimeControlTimer(this->_timeDecOnAtk);
@@ -3651,7 +3650,7 @@ Vector2f GameObject::getHitboxCenter(Vector2f pos) const
 	return ocenter;
 }
 
-const ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel, bool isFree) const
+const ObjectWeapon *GameObject::getBestWeaponFor(const GameObject *obj, unsigned barrel, bool isFree) const
 {
 	const std::vector<std::string> &tags = obj->getTags();
 	bool air = obj->getAltitude() > 0;
@@ -3682,14 +3681,14 @@ const ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigne
 	return nullptr;
 }
 
-ObjectWeapon *GameObject::_getBestWeaponFor(const GameObject *obj, unsigned barrel, bool isFree)
+ObjectWeapon *GameObject::getBestWeaponFor(const GameObject *obj, unsigned barrel, bool isFree)
 {
-	return const_cast<ObjectWeapon *>(static_cast<const GameObject *>(this)->_getBestWeaponFor(obj, barrel, isFree));
+	return const_cast<ObjectWeapon *>(static_cast<const GameObject *>(this)->getBestWeaponFor(obj, barrel, isFree));
 }
 
 bool GameObject::canAttack(const GameObject *obj) const
 {
-	return this->_getBestWeaponFor(obj, UINT32_MAX, false) != nullptr;
+	return this->getBestWeaponFor(obj, UINT32_MAX, false) != nullptr;
 }
 
 const std::vector<std::string> &GameObject::getTags() const

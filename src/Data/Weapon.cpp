@@ -27,6 +27,7 @@ Weapon::Weapon(
 	assert_exp(data.contains("damage") && data["damage"].is_number_unsigned());
 	assert_exp(data.contains("range") && data["range"].is_number_unsigned());
 	assert_exp(data.contains("warhead") && data["warhead"].is_string());
+	assert_exp(!data.contains("cursor") || data["cursor"].is_string());
 	assert_exp(data.contains("can_hit_tags") && data["can_hit_tags"].is_array());
 	for (auto &j : data["can_hit_tags"])
 		assert_exp(j.is_string());
@@ -62,6 +63,8 @@ Weapon::Weapon(
 	assert_msg(warheads.contains(warhead), warhead);
 	this->_warhead = &warheads.at(warhead);
 
+	if (data.contains("cursor"))
+		this->_cursor = data["cursor"];
 	if (data.contains("air"))
 		this->_air = data["air"];
 	if (data.contains("ground"))
@@ -96,6 +99,11 @@ Weapon::Weapon(
 		assert_msg(sounds.contains(sound), sound);
 		this->_sound = &sounds.at(sound);
 	}
+}
+
+const std::optional<std::string> &Weapon::getCursor() const
+{
+	return this->_cursor;
 }
 
 WeaponType Weapon::getType() const

@@ -17,7 +17,9 @@ Warhead::Warhead(const nlohmann::json &data)
 
 	std::string dmgType = data["dmg_type"];
 
-	if (dmgType == "blast")
+	if (dmgType == "generic")
+		this->_dmgType = DMGTYPE_GENERIC;
+	else if (dmgType == "blast")
 		this->_dmgType = DMGTYPE_BLAST;
 	else if (dmgType == "bullet")
 		this->_dmgType = DMGTYPE_BULLET;

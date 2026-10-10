@@ -1430,7 +1430,8 @@ void GameManager::weaponUsedOn(unsigned damage, const Weapon *weapon, double dis
 	double result = damage;
 	float mult = warhead->getMultiplier(obj.getArmor());
 
-	result *= (radius - dist) / radius;
+	if (radius)
+		result *= (radius - dist) / radius;
 	result *= mult;
 	if (result < 0)
 		result = 0;

@@ -449,6 +449,8 @@ public:
 	void disconnectFrom(const GameObject *object);
 	void disposeOf();
 
+	[[nodiscard]] const ObjectWeapon *getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree) const;
+	[[nodiscard]] ObjectWeapon *getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree);
 	[[nodiscard]] bool isWall() const;
 	[[nodiscard]] const std::string &getConnectTo() const;
 	[[nodiscard]] Vector2f getMiddle() const;
@@ -537,8 +539,6 @@ protected:
 	std::unordered_map<std::string, std::vector<ObjectBarrel *>> _barrelByTag;
 	std::unordered_map<std::string, std::vector<ObjectWeapon *>> _weaponByTag;
 
-	[[nodiscard]] const ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree) const;
-	[[nodiscard]] ObjectWeapon *_getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree);
 	[[nodiscard]] Vector2f _getTileOffsetFromCenter() const;
 	void _recomputeConnectedMask();
 	unsigned char _getConnectionSide(const GameObject *);

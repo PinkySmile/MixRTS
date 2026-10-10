@@ -553,13 +553,19 @@ void UI::_setCursorMapping(Cursor cursor, const std::string &name)
 
 CursorAnimation &UI::_getCurrentCursor()
 {
+	std::unordered_map<std::string, CursorAnimation>::iterator it;
+
+	if (!this->forcedCursor && this->_cursorName) {
+		it = this->_cursors.find(*this->_cursorName);
+		if (it != this->_cursors.end())
+			return it->second;
+	}
+
 	Cursor cursor = !game->paused && this->forcedCursor ? *this->forcedCursor : this->_cursor;
-
 	assert_exp(cursor < CURSOR_COUNT);
-
 	auto &cursorName = this->_cursorMapping[cursor];
-	auto it = this->_cursors.find(cursorName);
 
+	it = this->_cursors.find(cursorName);
 	assert_msg(it != this->_cursors.end(), cursorName);
 	return it->second;
 }
@@ -593,6 +599,7 @@ void UI::_updateCursorNormal()
 {
 	Vector2i pos = this->map->absToTileCoord(this->_placementPos);
 
+	this->_cursorName.reset();
 	if (!this->_objectBuffer.empty()) {
 		// TODO: Handle non snap-to-grid units/buildings
 		if (this->state->selectedObjects.size() == 1) {
@@ -624,8 +631,11 @@ void UI::_updateCursorNormal()
 			auto otherAllied = this->ownerState->team == other->owner->state.team;
 
 			if (ownObj && !otherAllied) {
-				if (obj->canAttack(other)) {
+				const ObjectWeapon *w = obj->getBestWeaponFor(other, UINT32_MAX, false);
+
+				if (w) {
 					this->_cursor = CURSOR_ATTACK;
+					this->_cursorName = w->weapon->getCursor();
 					return;
 				}
 			}
