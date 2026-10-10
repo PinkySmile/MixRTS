@@ -1708,8 +1708,10 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 
 	direction %= this->_anims.size();
 	if (turret && !turret->fixed) {
-		turret->directionTarget = direction;
-		if (turret->direction != direction) {
+		size_t d = direction * turret->anims.size() / this->_anims.size();
+
+		turret->directionTarget = d;
+		if (turret->direction != d) {
 			turret->shotTimer = 1;
 			return false;
 		}
@@ -3551,7 +3553,9 @@ bool GameObject::ignoresTerrain() const
 
 size_t GameObject::getDirections() const
 {
-	return this->_anims.size();
+	if (this->_connectTo.empty())
+		return this->_anims.size();
+	return 1;
 }
 
 double GameObject::getFacingAngle() const
@@ -3726,14 +3730,18 @@ ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unord
 	assert_exp(!json.contains("fixed") || json["fixed"].is_boolean());
 	assert_exp(!json.contains("offset") || json["offset"].is_object());
 	assert_exp(!json.contains("turn_delay") || json["turn_delay"].is_number());
+	assert_exp(!json.contains("directions") || json["directions"].is_number());
 
 	size_t directions = parent->getDirections();
 
-	if (directions != 1) {
-		for (size_t i = 0; i < directions; i++)
-			this->anims.emplace_back(base, parent, animList, json["anim"], i);
-	} else
+	if (json.contains("directions")) {
+		directions = json["directions"].get<unsigned>();
+		assert_msg(directions % 8 == 0, "Number of directions must be divisible by 8");
+	}
+	if (directions == 1)
 		this->anims.emplace_back(base, parent, animList, json["anim"]);
+	else for (size_t i = 0; i < directions; i++)
+		this->anims.emplace_back(base, parent, animList, json["anim"], i);
 	this->barrel = json["barrel"];
 	assert_exp(parent->_barrels.size() > this->barrel);
 	assert_exp(parent->_barrels[this->barrel].turret == nullptr);
@@ -3772,12 +3780,12 @@ void ObjectTurret::attack()
 void ObjectTurret::update()
 {
 	if (this->fixed)
-		this->direction = this->parent->getDirection();
+		this->direction = this->parent->getDirection() * this->anims.size() / this->parent->getDirections();
 	if (this->recoilTimer)
 		this->recoilTimer--;
 	if (this->independent) {
-		if (this->shotTimer == 0)
-			this->directionTarget = this->parent->getDirection();
+		if (this->shotTimer == 0 && this->parent->getDirections() != 1)
+			this->directionTarget = this->parent->getDirection() * this->anims.size() / this->parent->getDirections();
 		else
 			this->shotTimer--;
 	}
