@@ -786,9 +786,9 @@ void Player::resetQueue(const std::string &queueId)
 void Player::refreshQueue(const std::string &queueId)
 {
 	assert_msg(this->state.queues.contains(queueId), queueId);
-	auto &q = this->state.queues.at(queueId);
+	PlayerQueue &pq = this->state.queues.at(queueId);
 
-	for (auto &[name, q] : q.entries) {
+	for (auto &[name, q] : pq.entries) {
 		auto &req = q.upgrade ? q.upgrade->getRequirements() : q.object->getRequirements();
 
 		if (!req(this->state.elementsOwned)) {
@@ -800,6 +800,14 @@ void Player::refreshQueue(const std::string &queueId)
 				this->credit(p.first, p.second, CREDIT_SYSTEM);
 			q.spent.clear();
 		}
+	}
+
+	auto it = this->state.buildQueues.find(queueId);
+	if (it != this->state.buildQueues.end() && it->second) {
+		auto &req = it->second->upgrade ? it->second->upgrade->getRequirements() : it->second->object->getRequirements();
+
+		if (!req(this->state.elementsOwned))
+			return this->resetQueue(queueId);
 	}
 }
 

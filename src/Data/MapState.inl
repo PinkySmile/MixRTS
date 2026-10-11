@@ -88,7 +88,7 @@ inline void MapState::updatePlacementGrid(const Vector2i &rel, unsigned int play
 	auto &b = this->placementGrid[player][rel.x + rel.y * this->gridSize.x];
 
 	assert_exp(delta < 0 || b < 256 - delta);
-	assert_exp(delta > 0 || b >= delta);
+	assert_exp(delta > 0 || b >= -delta);
 	b += delta;
 }
 
@@ -104,7 +104,7 @@ inline void MapState::updatePlacementGrid(const Quad &abs, unsigned int player, 
 			auto &b = this->placementGrid[player][x + y * this->gridSize.x];
 
 			assert_exp(delta < 0 || b < 256 - delta);
-			assert_exp(delta > 0 || b >= delta);
+			assert_exp(delta > 0 || b >= -delta);
 			b += delta;
 		}
 }
