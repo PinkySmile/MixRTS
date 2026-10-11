@@ -1495,14 +1495,10 @@ void GameManager::centerCameraOn(Vector2f target)
 		target.x - size.x / 2,
 		target.y - size.y / 2 + 20 * guiScale
 	};
-	if (this->_cameraTranslate.x < 0)
-		this->_cameraTranslate.x = 0;
-	if (this->_cameraTranslate.y < 0)
-		this->_cameraTranslate.y = 0;
-	if (this->_cameraTranslate.x >= this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x)
-		this->_cameraTranslate.x = 0;
-	if (this->_cameraTranslate.y >= this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y)
-		this->_cameraTranslate.y = 0;
+	this->_cameraTranslate.x = std::max<float>(this->_cameraTranslate.x, 0);
+	this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -20 * guiScale);
+	this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x);
+	this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y);
 	game->soundMgr.setCamera(this->_cameraTranslate + size / 2, size);
 }
 
