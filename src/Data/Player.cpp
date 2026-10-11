@@ -792,6 +792,7 @@ void Player::refreshQueue(const std::string &queueId)
 		auto &req = q.upgrade ? q.upgrade->getRequirements() : q.object->getRequirements();
 
 		if (!req(this->state.elementsOwned)) {
+			q.unlocked = false;
 			q.buildable = this->state.elementsOwned[name] < q.limit;
 			q.paused = false;
 			q.buildProgress = 0;
