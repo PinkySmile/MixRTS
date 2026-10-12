@@ -24,6 +24,7 @@
 #define dumpTimer _gpTimerU[0]
 #define blockTimer _gpTimerU[3]
 #define currentAngle _gpTimerF[0]
+#define attackFirst _gpTimerU[7]
 
 #define dropTimer _gpTimerU[4]
 #define dropLast _gpTimerU[5]
@@ -1607,7 +1608,7 @@ bool GameObject::_updateDump(GameObject *place)
 		}
 	} else if (this->_dumpStop) {
 		if (this->_dumpStop && (*this->_dump->stop)() && this->_dump->stop->update()) {
-			if (this->_lots.size() != 0)
+			if (!this->_lots.empty())
 				this->_dumpInClosestResourceDump();
 			else
 				this->_harvestClosestResource();
@@ -1672,7 +1673,9 @@ bool GameObject::_updateDeploy()
 bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 {
 	if (obj == nullptr || obj->isDead() || obj->owner->state.team == this->owner->state.team)
-		return true;
+		return this->_updateFinishMovement();
+	if (this->_firstEvent)
+		this->attackFirst = 1;
 
 	Vector2f myCenter;
 	if (this->_boundToGrid) {
@@ -1689,14 +1692,13 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 	if (weapon == nullptr)
 		weapon = this->getBestWeaponFor(obj, UINT32_MAX, false);
 	assert_exp(weapon);
-	if (this->_barrels[weapon->barrel].shootTimer != 0)
-		return false;
 
-	ObjectBarrel &barrel = this->_barrels[weapon->barrel];
 	unsigned range = weapon->weapon->getRange();
 
 	range *= range;
 	if (range < diffAbs.magnitude2()) {
+		this->_firstEvent = this->attackFirst;
+		this->attackFirst = 0;
 		if (this->_updateMove(opCenter, force ? MOVEREASON_FORCE_ATTACK_COMMAND : automatic ? MOVEREASON_AUTO_AGRO : MOVEREASON_ATTACK_COMMAND, false, obj)) {
 			// TODO: Handle when unit is blocked
 			if (opCenter != this->_cachedDest)
@@ -1707,9 +1709,14 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 	if (!this->_updateFinishMovement())
 		return false;
 
+	ObjectBarrel &barrel = this->_barrels[weapon->barrel];
+
+	if (barrel.shootTimer != 0)
+		return false;
+
 	double angle = diff.angle();
 	unsigned direction = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
-	ObjectTurret *turret = this->_barrels[weapon->barrel].turret;
+	ObjectTurret *turret = barrel.turret;
 
 	direction %= this->_anims.size();
 	if (turret && !turret->fixed) {
@@ -2930,7 +2937,7 @@ bool GameObject::moveAside(GameObject *asker)
 		return false;
 
 	this->_orderQueue.emplace_front(MoveOrder{destination, MOVEREASON_MOVE_ASIDE, false});
-	this->_firstEvent = true;
+	this->_firstREvent = true;
 	this->_pathCached = false;
 	this->_asideCooldown = waitBlocked;
 	return true;
