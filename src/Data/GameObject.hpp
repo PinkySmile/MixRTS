@@ -345,7 +345,6 @@ protected:
 	PFFreeMask _currentTilePosition;
 	unsigned char _buildMaxDistance = 0;
 	mutable bool _cachedDebugTexLoaded = false;
-	bool _requiresQueueBuilding = true;
 	bool _requiresPlacement = false;
 	bool _boundToGrid = false;
 	bool _disposable = false;
@@ -401,9 +400,9 @@ public:
 	);
 	virtual ~GameObject();
 
+	virtual void update();
+	virtual void render(int layer);
 	void setColor(const HSLColor &color);
-	void update();
-	void render(int layer);
 	bool canDeploy() const;
 	bool isDeployable() const;
 	bool canMove() const;
@@ -486,7 +485,6 @@ public:
 	[[nodiscard]] const std::vector<std::string> &getAcceptResources() const;
 	[[nodiscard]] unsigned getResourceStorage() const;
 	[[nodiscard]] bool isFake() const;
-	[[nodiscard]] bool requiresQueueBuilding() const;
 	[[nodiscard]] bool requiresPlacement() const;
 	[[nodiscard]] const std::optional<std::string> &getProxy() const;
 	[[nodiscard]] const std::optional<std::vector<std::vector<BuildingMask>>> &getTileData() const;
@@ -507,7 +505,7 @@ public:
 	[[nodiscard]] unsigned getBuildSpeed() const;
 	[[nodiscard]] const std::string &getGroup() const;
 	[[nodiscard]] const std::string &getArmor() const;
-	[[nodiscard]] bool isObstructed() const;
+	[[nodiscard]] bool isObstructed(bool stackable) const;
 	[[nodiscard]] unsigned getLimit() const;
 	[[nodiscard]] unsigned getPassFlags() const;
 	[[nodiscard]] bool isSolid() const;

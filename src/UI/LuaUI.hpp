@@ -31,7 +31,6 @@ public:
 protected:
 	void _displaySelectedObjectUI(const GameObject &object) override;
 
-	sol::state &_state;
 	sol::table _table;
 	sol::environment _env;
 };

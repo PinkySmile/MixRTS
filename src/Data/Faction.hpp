@@ -12,43 +12,8 @@
 #include "Extra.hpp"
 #include "Sprite.hpp"
 #include "MultiSound.hpp"
+#include "SharedLibrary.hpp"
 
-#ifdef _WIN32
-#include <windows.h>
-#define dlopen(path, _) LoadLibraryA(path)
-#define dlsym(sl, name) GetProcAddress(sl, name)
-#define dlclose(sl) FreeLibrary(sl)
-typedef HMODULE SharedLibrary;
-
-inline std::string dlerror()
-{
-	DWORD err = GetLastError();
-	wchar_t *s;
-	auto chars = FormatMessageW(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-		nullptr,
-		err,
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPWSTR)&s,
-		0,
-		NULL
-	);
-
-	std::stringstream stream;
-
-	stream << "GetLastError " << err;
-	if (!chars)
-		return stream.str();
-	stream << ": ";
-	for (int i = 0; s[i]; i++)
-		stream << static_cast<char>(s[i]);
-	LocalFree(s);
-	return stream.str();
-}
-#else
-#include <dlfcn.h>
-typedef void *SharedLibrary;
-#endif
 
 struct MYDLL_API StartObject {
 	Vector2i offset = {0, 0};
@@ -62,7 +27,8 @@ struct MYDLL_API FactionQueue {
 	enum Type {
 		TYPE_SINGLE_QUEUE,
 		TYPE_MULTI_QUEUE,
-		TYPE_STARPORT
+		TYPE_STARPORT,
+		TYPE_AUTO_TICK
 	};
 	enum Spawn {
 		SPAWN_NONE,
@@ -86,11 +52,14 @@ struct MYDLL_API FactionQueue {
 		StarportParams(const Mod &base, const nlohmann::json &data);
 	};
 
-	Type behavior;
 	bool requiresProducer;
+	Type behavior;
 	Spawn unitSpawn;
+	std::map<float, float, std::greater<>> powerMul;
+	std::map<unsigned, float, std::greater<>> producerMul;
 	std::optional<StarportParams> starportParams;
 	std::optional<ExtraSpawn> delivery;
+	std::optional<std::filesystem::path> loader;
 
 	FactionQueue(const Mod &base, const nlohmann::json &data);
 

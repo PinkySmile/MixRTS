@@ -29,7 +29,6 @@ static bool callLuaFunc(const sol::object &func, Args&&... args)
 
 LuaUI::LuaUI(const Faction &faction, UIState *ostate, GameManager *manager, PlayerState *ownerState, MapState *map, sol::state &state, const std::filesystem::path &path) :
 	UI(faction, ostate, manager, ownerState, map),
-	_state(state),
 	_env{state, sol::create, state.globals()}
 {
 	this->_env["super"] = std::ref(*static_cast<UI *>(this));

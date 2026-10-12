@@ -526,8 +526,6 @@ GameObject::GameObject(
 		this->_spawnOffset = {json["spawn_offset"]["x"], json["spawn_offset"]["y"]};
 	if (json.contains("point"))
 		this->_point = {json["point"]["x"], json["point"]["y"]};
-	if (json.contains("requires_queue_building"))
-		this->_requiresQueueBuilding = json["requires_queue_building"];
 	if (json.contains("requires_placement"))
 		this->_requiresPlacement = json["requires_placement"];
 	if (json.contains("queue"))
@@ -1958,7 +1956,7 @@ bool GameObject::_updateFinishMovement()
 
 bool GameObject::_updateDelivery(const std::vector<std::string> &objects, const std::string &queue, const Position &destination, const MapState &state)
 {
-	GameObject *obj = this->owner->getSpawnBuilding(queue);
+	GameObject *obj = this->owner->getSpawnBuilding(queue, false);
 	Vector2f dest = destination.getPosition(obj ? obj->getPosition() : Vector2i{0, 0}, state, {0, 0}) + state.tileSize / 2;
 
 	for (auto &b : this->owner->state.queueBuildings[queue])
@@ -2732,7 +2730,7 @@ const std::string &GameObject::getArmor() const
 	return this->_armor;
 }
 
-bool GameObject::isObstructed() const
+bool GameObject::isObstructed(bool stackable) const
 {
 	auto spawn = this->getSpawnOffset();
 
@@ -2740,7 +2738,8 @@ bool GameObject::isObstructed() const
 		return !this->manager->isAreaFree(
 			*spawn + this->getPosition(),
 			this->map->tileSize,
-			{this->index}
+			{this->index},
+			stackable
 		);
 	return false;
 }
@@ -3198,11 +3197,6 @@ unsigned GameObject::getResourceStorage() const
 bool GameObject::isFake() const
 {
 	return this->_fake;
-}
-
-bool GameObject::requiresQueueBuilding() const
-{
-	return this->_requiresQueueBuilding;
 }
 
 bool GameObject::requiresPlacement() const
@@ -4113,7 +4107,6 @@ void GameObject::pushUserType(sol::state &state)
 	type["accept_resources"] = sol::property(&GameObject::getAcceptResources);
 	type["resource_storage"] = sol::property(&GameObject::getResourceStorage);
 	type["fake"] = sol::property(&GameObject::isFake);
-	type["requires_queue_building"] = sol::property(&GameObject::requiresQueueBuilding);
 	type["requires_placement"] = sol::property(&GameObject::requiresPlacement);
 	type["proxy"] = sol::property(&GameObject::getProxy);
 	type["id"] = sol::property(&GameObject::getId);

@@ -46,7 +46,7 @@ private:
 	std::vector<Player> _players;
 	std::array<std::vector<Effect>, 5> _effects;
 	std::list<Projectile> _liveProjectiles;
-	std::list<GameObject> _liveObjects;
+	std::list<std::unique_ptr<GameObject>> _liveObjects;
 	unsigned _lastObjectId = 0;
 	std::unordered_map<unsigned, GameObject *> _objectMap;
 	std::map<int64_t, std::list<GameObject *>> _renderObjects;
@@ -94,6 +94,7 @@ public:
 	GameObject *getObjectById(unsigned index);
 	GameObject *findPickup(size_t owner, MoveReason reason, double dist, GameObject *ignore);
 	GameObject *spawnObject(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id);
+	void spawnCustomObject(size_t owner, Vector2i absPos, GameObject *object);
 	bool canSpawnBuilding(size_t owner, Vector2i absPos, const std::string &id, const std::vector<unsigned> &exclusionList) const;
 	const LoadedMap &getLoadedMap() const;
 	void consumeEvent(const sf::Event &event);

@@ -22,13 +22,134 @@
 #define EXPIRE_POWER 1800
 #define COOLDOWN_POWER 1800
 
-void PlayerQueue::init(const std::string *id, const Faction &faction, const FactionQueue *params, const std::unordered_map<std::string, const Upgrade *> &upgrade, const std::unordered_map<std::string, const GameObject *> &objs)
+CustomQueue::CustomQueue(Player *player, PlayerQueue *queue) :
+	queue(queue),
+	player(player)
 {
+}
+
+CustomQueueLua::CustomQueueLua(Player *player, PlayerQueue *queue, sol::state &lua, const std::filesystem::path &path) :
+	CustomQueue(player, queue)
+{
+	this->_env["super"] = static_cast<CustomQueue *>(this);
+	// safe_script_file (rather than do_file) throws automatically if the
+	// script fails to load/parse or errors at the top level while running.
+	this->_function = lua.safe_script_file(path.string(), this->_env);
+}
+
+bool CustomQueueLua::update(PlayerQueue &entry)
+{
+	// TODO:
+	return true;
+}
+
+bool CustomQueueLua::update(PlayerQueueEntry *entry)
+{
+	// TODO:
+	return true;
+}
+
+bool CustomQueueLua::tryEndBuild(PlayerQueueEntry *entry)
+{
+	// TODO:
+	return true;
+}
+
+bool CustomQueueLua::handleStartBuildEvent(PlayerQueueEntry *entry, const UI::StartBuildEvent &event)
+{
+	// TODO:
+	return true;
+}
+
+bool CustomQueueLua::handlePlaceBuildEvent(PlayerQueueEntry *entry, const UI::PlaceBuildEvent &event)
+{
+	// TODO:
+	return true;
+}
+
+bool CustomQueueLua::handleCancelBuildEvent(PlayerQueueEntry *entry, const UI::CancelBuildEvent &event)
+{
+	// TODO:
+	return true;
+}
+
+CustomQueueDll::CustomQueueDll(Player *player, PlayerQueue *queue, const std::filesystem::path &path) :
+	CustomQueue(player, queue)
+{
+	this->_library = dlopen(path.string().c_str(), RTLD_LAZY);
+	assert_msg(this->_library, path.string() + ": " + dlerror());
+
+	auto vsym = reinterpret_cast<void *>(dlsym(this->_library, "_ABI_VERSION"));
+	auto version = reinterpret_cast<unsigned *>(vsym);
+	assert_exp(version && *version == ABI_VERSION);
+
+	this->_update = reinterpret_cast<bool (*)(CustomQueue &, PlayerQueue &)>(dlsym(this->_library, "update"));
+	this->_updateEntry = reinterpret_cast<bool (*)(CustomQueue &, PlayerQueueEntry *)>(dlsym(this->_library, "updateEntry"));
+	this->_tryEndBuild = reinterpret_cast<bool (*)(CustomQueue &, PlayerQueueEntry *)>(dlsym(this->_library, "tryEndBuild"));
+	this->_handleStartBuildEvent = reinterpret_cast<bool (*)(CustomQueue &, PlayerQueueEntry *, const UI::StartBuildEvent &)>(dlsym(this->_library, "handleStartBuildEvent"));
+	this->_handlePlaceBuildEvent = reinterpret_cast<bool (*)(CustomQueue &, PlayerQueueEntry *, const UI::PlaceBuildEvent &)>(dlsym(this->_library, "handlePlaceBuildEvent"));
+	this->_handleCancelBuildEvent = reinterpret_cast<bool (*)(CustomQueue &, PlayerQueueEntry *, const UI::CancelBuildEvent &)>(dlsym(this->_library, "handleCancelBuildEvent"));
+}
+
+CustomQueueDll::~CustomQueueDll()
+{
+	if (this->_library)
+		dlclose(this->_library);
+}
+
+bool CustomQueueDll::update(PlayerQueue &entry)
+{
+	if (this->_update)
+		return this->_update(*this, entry);
+	return true;
+}
+
+bool CustomQueueDll::update(PlayerQueueEntry *entry)
+{
+	if (this->_update)
+		return this->_updateEntry(*this, entry);
+	return true;
+}
+
+bool CustomQueueDll::tryEndBuild(PlayerQueueEntry *entry)
+{
+	if (this->_tryEndBuild)
+		return this->_tryEndBuild(*this, entry);
+	return true;
+}
+
+bool CustomQueueDll::handleStartBuildEvent(PlayerQueueEntry *entry, const UI::StartBuildEvent &event)
+{
+	if (this->_handleStartBuildEvent)
+		return this->_handleStartBuildEvent(*this, entry, event);
+	return true;
+}
+
+bool CustomQueueDll::handlePlaceBuildEvent(PlayerQueueEntry *entry, const UI::PlaceBuildEvent &event)
+{
+	if (this->_handleStartBuildEvent)
+		return this->_handlePlaceBuildEvent(*this, entry, event);
+	return true;
+}
+
+bool CustomQueueDll::handleCancelBuildEvent(PlayerQueueEntry *entry, const UI::CancelBuildEvent &event)
+{
+	if (this->_handleStartBuildEvent)
+		return this->_handleCancelBuildEvent(*this, entry, event);
+	return true;
+}
+
+void PlayerQueue::init(Player &player, const std::string *id, const Faction &faction, const FactionQueue *params)
+{
+	const std::unordered_map<std::string, const Upgrade *> &upgrades = player.getLoadedUpgrades();
+	const std::unordered_map<std::string, const GameObject *> &objects = player.getLoadedObjects();
+
+	this->player = &player;
 	this->params = params;
 	if (params->behavior == FactionQueue::TYPE_STARPORT) {
 		for (auto &u : params->starportParams->units) {
-			assert_msg(objs.contains(u), u);
-			const GameObject *obj = objs.at(u);
+			assert_msg(objects.contains(u), u);
+			const GameObject *obj = objects.at(u);
 			auto &entry = this->entries[u];
 
 			entry.object = obj;
@@ -40,7 +161,7 @@ void PlayerQueue::init(const std::string *id, const Faction &faction, const Fact
 			this->basket[u] = 0;
 		}
 	} else {
-		for (auto &[nid, obj] : objs) {
+		for (auto &[nid, obj] : objects) {
 			auto q = obj->getBuildQueue();
 			if (!q || *q != *id) continue;
 			auto &entry = this->entries[nid];
@@ -57,7 +178,7 @@ void PlayerQueue::init(const std::string *id, const Faction &faction, const Fact
 			entry.object = obj;
 			entry.upgrade = nullptr;
 		}
-		for (auto &[nid, obj] : upgrade) {
+		for (auto &[nid, obj] : upgrades) {
 			auto q = obj->getBuildQueue();
 			if (!q || *q != *id) continue;
 			auto &entry = this->entries[nid];
@@ -75,21 +196,29 @@ void PlayerQueue::init(const std::string *id, const Faction &faction, const Fact
 			entry.upgrade = obj;
 		}
 	}
+	if (params->loader) {
+		if (params->loader->string().ends_with(".lua"))
+			this->customLib = std::make_shared<CustomQueueLua>(&player, this, game->lua, *params->loader);
+		else
+			this->customLib = std::make_shared<CustomQueueDll>(&player, this, *params->loader);
+	}
 }
 
 void PlayerQueue::update()
 {
-	if (this->params->behavior == FactionQueue::TYPE_STARPORT) {
+	if (this->customLib && !this->customLib->update(*this))
+		return;
+	switch (this->params->behavior) {
+	case FactionQueue::TYPE_STARPORT:
 		if (this->timer == 0 && !this->checkingMenu) {
 			for (auto &[n, v] : this->stock) {
-				if (v >= this->params->starportParams->stockMax)
-					v = this->params->starportParams->stockMax;
-				else {
+				if (v < this->params->starportParams->stockMax) {
 					auto r = random_distrib(game->gameRandom, 0, 99);
 
 					if (r < this->params->starportParams->stockIncreaseProba)
 						v++;
-				}
+				} else
+					v = this->params->starportParams->stockMax;
 
 				float percent = (100 - random_distrib(game->gameRandom, this->params->starportParams->discountMin, this->params->starportParams->discountMax)) / 100.f;
 
@@ -100,6 +229,14 @@ void PlayerQueue::update()
 			this->timer = this->params->starportParams->stockIncreaseDelay;
 		} else
 			this->timer--;
+		break;
+	case FactionQueue::TYPE_AUTO_TICK:
+		for (auto &[n, q] : this->entries)
+			if (q.unlocked)
+				this->player->_updateAutoTickQueue(q);
+		break;
+	default:
+		break;
 	}
 }
 
@@ -112,8 +249,8 @@ unsigned PlayerState::getCombinedMoney(const std::string &key)
 }
 
 Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &mapState) :
-	_parent(parent),
-	_mapState(mapState[index]),
+	parent(parent),
+	mapState(mapState[index]),
 	_currentUi(index),
 	_color(color),
 	_primaryFaction(factions[index]),
@@ -141,10 +278,10 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 		if (i == index)
 			continue;
 		for (auto &[key, params] : f.getQueues())
-			this->state.queues[key].init(&key, f, &params, this->_loadedUpgrades, this->_loadedObjects);
+			this->state.queues[key].init(*this, &key, f, &params);
 	}
 	for (auto &[key, params] : this->_primaryFaction.getQueues())
-		this->state.queues[key].init(&key, this->_primaryFaction, &params, this->_loadedUpgrades, this->_loadedObjects);
+		this->state.queues[key].init(*this, &key, this->_primaryFaction, &params);
 
 	for (size_t i = 0; i < factions.size(); i++) {
 		const Faction &f = factions[i];
@@ -188,6 +325,8 @@ void Player::_clean()
 
 void Player::_updateQueue(PlayerQueueEntry &entry)
 {
+	if (entry.queue->customLib && !entry.queue->customLib->update(&entry))
+		return;
 	switch (entry.queue->params->behavior) {
 	case FactionQueue::TYPE_SINGLE_QUEUE:
 		return this->_updateSingleQueue(entry);
@@ -230,26 +369,24 @@ void Player::_updateSingleQueue(PlayerQueueEntry &entry)
 	for (auto &p : extra)
 		this->consume(p.first, p.second);
 
-	unsigned amount;
+	float amount = 1;
+	float tmp = 1;
 	float energy = (200.f + this->state.producedPower) / (this->state.consumedPower + 200.f);
+	size_t size = this->state.queueBuildings[*entry.queueId].size();
 
-	if (energy >= 1)
-		amount = 8;
-	else if (energy >= 0.5)
-		amount = 4;
-	else
-		amount = 2;
-	switch (this->state.queueBuildings[*entry.queueId].size()) {
-	case 0:
-	case 1:
-		break;
-	case 2:
-		amount += amount / 2;
-		break;
-	default:
-		amount *= 2;
-		break;
+	for (auto [count, mul] : entry.queue->params->powerMul) {
+		tmp = mul;
+		if (count <= energy)
+			break;
 	}
+	amount *= tmp;
+	for (auto [count, mul] : entry.queue->params->producerMul) {
+		tmp = mul;
+		if (count <= size)
+			break;
+	}
+	amount *= tmp;
+
 	entry.buildProgress += amount;
 	entry.spent = expected;
 	if (entry.buildProgress >= entry.buildTime) {
@@ -265,9 +402,12 @@ void Player::_updateStarportQueue(PlayerQueueEntry &entry)
 	assert_exp(q.params->starportParams->deliveryEvaTimes == 5);
 	if (entry.buildProgress == entry.buildTime)
 		return this->_tryEndBuildStarport(entry);
-	entry.buildProgress++;
-	if (entry.buildProgress % (entry.buildTime / 4) == 0)
-		switch (entry.buildProgress / (entry.buildTime / 4)) {
+
+	unsigned oldP = entry.buildProgress++ / (entry.buildTime / 4);
+	unsigned newP = entry.buildProgress / (entry.buildTime / 4);
+
+	if (oldP != newP)
+		switch (newP) {
 		case 4:
 			this->playEVA(UI::EVA_ORDER_IN_1, 300, 4, 300);
 			break;
@@ -285,9 +425,40 @@ void Player::_updateStarportQueue(PlayerQueueEntry &entry)
 		}
 }
 
+void Player::_updateAutoTickQueue(PlayerQueueEntry &entry)
+{
+	if (entry.buildProgress == entry.buildTime)
+		return this->_tryEndBuildAutoTick(entry);
+
+	float tmp = 1;
+	float amount = 1;
+	float energy = (200.f + this->state.producedPower) / (this->state.consumedPower + 200.f);
+	size_t size = this->state.queueBuildings[*entry.queueId].size();
+
+	for (auto [count, mul] : entry.queue->params->powerMul) {
+		tmp = mul;
+		if (count <= energy)
+			break;
+	}
+	amount *= tmp;
+	for (auto [count, mul] : entry.queue->params->producerMul) {
+		tmp = mul;
+		if (count <= size)
+			break;
+	}
+	amount *= tmp;
+
+	entry.paused = amount == 0;
+	entry.buildProgress += amount;
+	if (entry.buildProgress >= entry.buildTime) {
+		this->playEVA(UI::EVA_BUILDING_DONE, EXPIRE_BUILD, PRIORITY_BUILD, 0, *entry.elementId);
+		entry.buildProgress = entry.buildTime;
+	}
+}
+
 void Player::_spawnDelivery(const std::string &queue, Vector2f target, const ExtraSpawn &extra, const std::vector<std::string> &objects)
 {
-	GameObject *eobj = this->_parent.spawnObject(
+	GameObject *eobj = this->parent.spawnObject(
 		this->state.index,
 		{0, 0},
 		"",
@@ -296,20 +467,20 @@ void Player::_spawnDelivery(const std::string &queue, Vector2f target, const Ext
 
 	assert_exp(extra.dest);
 	assert_exp(extra.carry.empty());
-	eobj->setPosition(extra.pos.getPosition(target, this->_mapState, this->_mapState.tileSize + eobj->getSize()));
-	eobj->deliverTo(objects, queue, *extra.dest, this->_mapState);
+	eobj->setPosition(extra.pos.getPosition(target, this->mapState, this->mapState.tileSize + eobj->getSize()));
+	eobj->deliverTo(objects, queue, *extra.dest, this->mapState);
 	eobj->execCb([queue, this] {
 		this->state.queues[queue].busy = false;
 		return true;
 	});
 	if (extra.out)
-		eobj->moveOut(extra.out->getPosition(target, this->_mapState, this->_mapState.tileSize + eobj->getSize()));
+		eobj->moveOut(extra.out->getPosition(target, this->mapState, this->mapState.tileSize + eobj->getSize()));
 }
 
 void Player::_tryEndBuildSingle(PlayerQueueEntry &entry)
 {
-	auto defaultPos = this->_parent.getLoadedMap().pathFindingGrid.gridSize / 2;
-
+	if (entry.queue->customLib && !entry.queue->customLib->tryEndBuild(&entry))
+		return;
 	switch (entry.queue->params->unitSpawn) {
 	case FactionQueue::SPAWN_NONE:
 		this->state.elementsOwned[*entry.elementId]++;
@@ -318,17 +489,19 @@ void Player::_tryEndBuildSingle(PlayerQueueEntry &entry)
 		this->checkUnlocked();
 		break;
 	case FactionQueue::SPAWN_INSIDE:
-		this->_parent.spawnObject(this->state.index, defaultPos, *entry.queueId, *entry.elementId);
+		if (!this->parent.spawnObject(this->state.index, {-1, -1}, *entry.queueId, *entry.elementId))
+			return;
 		entry.spent.clear();
 		this->resetQueue(*entry.queueId);
 		this->checkUnlocked();
 		break;
 	case FactionQueue::SPAWN_DELIVERY: {
-		GameObject *s = this->getSpawnBuilding(*entry.queueId);
+		GameObject *s = this->getSpawnBuilding(*entry.queueId, false);
 
-		assert_exp(s);
-		this->_spawnDelivery(*entry.queueId, s->getPosition() + s->getPoint(), *entry.queue->params->delivery, {*entry.elementId});
-		entry.spent.clear();
+		if (s) {
+			this->_spawnDelivery(*entry.queueId, s->getPosition() + s->getPoint(), *entry.queue->params->delivery, {*entry.elementId});
+			entry.spent.clear();
+		}
 		break;
 	}
 	case FactionQueue::SPAWN_PLACEMENT:
@@ -347,9 +520,10 @@ void Player::_tryEndBuildStarport(PlayerQueueEntry &entry)
 	}
 	this->state.buildQueues[*entry.queueId] = nullptr;
 
-	GameObject *s = this->getSpawnBuilding(*entry.queueId);
+	GameObject *s = this->getSpawnBuilding(*entry.queueId, false);
 
-	assert_exp(s);
+	if (!s)
+		return;
 	switch (entry.queue->params->unitSpawn) {
 	case FactionQueue::SPAWN_DELIVERY: {
 		this->_spawnDelivery(*entry.queueId, s->getPosition() + s->getPoint(), *entry.queue->params->delivery, pool);
@@ -361,6 +535,11 @@ void Player::_tryEndBuildStarport(PlayerQueueEntry &entry)
 	case FactionQueue::SPAWN_PLACEMENT:
 		assert_not_reached();
 	}
+}
+
+void Player::_tryEndBuildAutoTick(PlayerQueueEntry &entry)
+{
+	this->_tryEndBuildSingle(entry);
 }
 
 void Player::update()
@@ -468,7 +647,7 @@ void Player::keyPressed(const Event::KeyPressed &key)
 	if (key.code == sf::Keyboard::Key::H) {
 		for (auto &b : this->state.myObjects)
 			if (b->isCentral()) {
-				this->_parent.centerCameraOn(*b);
+				this->parent.centerCameraOn(*b);
 				return;
 			}
 	}
@@ -488,6 +667,8 @@ void Player::_handleUiEvent(const UI::StartBuildEvent &event)
 	assert_msg(this->state.queues.contains(event.queue), event.queue);
 	auto &q = this->state.queues.at(event.queue);
 
+	if (q.customLib && !q.customLib->handleStartBuildEvent(this->state.buildQueues[event.queue], event))
+		return;
 	if (q.params->behavior == FactionQueue::TYPE_STARPORT) {
 		if (q.busy || q.providers == 0)
 			return;
@@ -551,10 +732,14 @@ void Player::_handleUiEvent(const UI::PlaceBuildEvent &event)
 {
 	assert_msg(this->state.queues.contains(event.queue), event.queue);
 	auto &q = this->state.queues.at(event.queue);
+
+	if (q.customLib && !q.customLib->handlePlaceBuildEvent(this->state.buildQueues[event.queue], event))
+		return;
+
 	assert_exp(q.params->unitSpawn == FactionQueue::SPAWN_PLACEMENT);
 	auto &sq = q.entries[event.id];
 
-	this->_parent.spawnObject(this->state.index, event.position, event.queue, event.id);
+	this->parent.spawnObject(this->state.index, event.position, event.queue, event.id);
 	sq.spent.clear();
 	this->resetQueue(event.queue);
 }
@@ -564,6 +749,8 @@ void Player::_handleUiEvent(const UI::CancelBuildEvent &event)
 	assert_msg(this->state.queues.contains(event.queue), event.queue);
 	auto &q = this->state.queues.at(event.queue);
 
+	if (q.customLib && !q.customLib->handleCancelBuildEvent(this->state.buildQueues[event.queue], event))
+		return;
 	if (q.params->behavior == FactionQueue::TYPE_STARPORT) {
 		if (q.basket[event.id] == 0)
 			return;
@@ -591,7 +778,7 @@ void Player::_handleUiEvent(const UI::CancelBuildEvent &event)
 
 void Player::_handleUiEvent(const UI::DeployUnitEvent &event)
 {
-	GameObject *obj = this->_parent.getObjectById(event.index);
+	GameObject *obj = this->parent.getObjectById(event.index);
 
 	obj->clearOrders();
 	obj->deploy();
@@ -601,7 +788,7 @@ void Player::_handleUiEvent(const UI::DeployUnitEvent &event)
 void Player::_handleUiEvent(const UI::MoveUnitEvent &event)
 {
 	for (unsigned i : event.indices) {
-		GameObject *obj = this->_parent.getObjectById(i);
+		GameObject *obj = this->parent.getObjectById(i);
 
 		obj->clearOrders();
 		obj->moveTo(event.position, MOVEREASON_MOVE_COMMAND);
@@ -612,7 +799,7 @@ void Player::_handleUiEvent(const UI::MoveUnitEvent &event)
 void Player::_handleUiEvent(const UI::HarvestUnitEvent &event)
 {
 	for (unsigned i : event.indices) {
-		GameObject *obj = this->_parent.getObjectById(i);
+		GameObject *obj = this->parent.getObjectById(i);
 
 		obj->clearPrimaryDump();
 		obj->clearOrders();
@@ -623,10 +810,10 @@ void Player::_handleUiEvent(const UI::HarvestUnitEvent &event)
 
 void Player::_handleUiEvent(const UI::DumpUnitEvent &event)
 {
-	GameObject *hole = this->_parent.getObjectById(event.hole);
+	GameObject *hole = this->parent.getObjectById(event.hole);
 
 	for (unsigned i : event.indices) {
-		GameObject *obj = this->_parent.getObjectById(i);
+		GameObject *obj = this->parent.getObjectById(i);
 
 		obj->clearOrders();
 		obj->dumpResourcesTo(hole, false);
@@ -636,7 +823,7 @@ void Player::_handleUiEvent(const UI::DumpUnitEvent &event)
 
 void Player::_handleUiEvent(const UI::SetPrimaryEvent &event)
 {
-	GameObject *building = this->_parent.getObjectById(event.index);
+	GameObject *building = this->parent.getObjectById(event.index);
 	std::optional<std::string> gq = building->getGivenQueue();
 	assert_exp(gq);
 	GameObject *old = this->state.primaryBuildings[*gq];
@@ -656,21 +843,21 @@ void Player::_handleUiEvent(const UI::SetPrimaryEvent &event)
 
 void Player::_handleUiEvent(const UI::RepairEvent &event)
 {
-	this->_parent.getObjectById(event.index)->toggleRepair();
+	this->parent.getObjectById(event.index)->toggleRepair();
 }
 
 void Player::_handleUiEvent(const UI::SellEvent &event)
 {
-	this->_parent.getObjectById(event.index)->sell();
+	this->parent.getObjectById(event.index)->sell();
 	this->playEVA(UI::EVA_SELL, 120, 1, 0);
 }
 
 void Player::_handleUiEvent(const UI::AttackUnitEvent &event)
 {
-	GameObject *target = this->_parent.getObjectById(event.target);
+	GameObject *target = this->parent.getObjectById(event.target);
 
 	for (unsigned o : event.indices) {
-		GameObject *obj = this->_parent.getObjectById(o);
+		GameObject *obj = this->parent.getObjectById(o);
 
 		obj->clearOrders();
 		obj->attack(target, false, false);
@@ -681,7 +868,7 @@ void Player::_handleUiEvent(const UI::AttackUnitEvent &event)
 void Player::_handleUiEvent(const UI::StopEvent &event)
 {
 	for (unsigned i : event.indices)
-		this->_parent.getObjectById(i)->clearOrders();
+		this->parent.getObjectById(i)->clearOrders();
 }
 
 void Player::_handleUiEvent(const UI::OpenQueueEvent &event)
@@ -876,15 +1063,15 @@ GameObject *Player::getPrimaryBuilding(const std::string &queue)
 	return nullptr;
 }
 
-GameObject *Player::getSpawnBuilding(const std::string &queue)
+GameObject *Player::getSpawnBuilding(const std::string &queue, bool stackable)
 {
 	auto parent = this->state.primaryBuildings[queue];
 
-	if (parent && !parent->isObstructed())
+	if (parent && !parent->isObstructed(stackable))
 		return parent;
 	if (this->state.queueBuildings.contains(queue))
 		for (auto p: this->state.queueBuildings[queue])
-			if (!p->isObstructed())
+			if (!p->isObstructed(stackable))
 				return p;
 	return nullptr;
 }
@@ -1019,17 +1206,18 @@ void Player::unlockObject(const std::string &name, const T &object, bool debugTi
 	if (!bqueue)
 		return;
 
+	assert_msg(this->state.queues.contains(*bqueue), *bqueue);
+	PlayerQueue &queue = this->state.queues.at(*bqueue);
+
 	if (!debugTime) {
-		if (this->state.queueBuildings[*bqueue].empty() && object.requiresQueueBuilding())
+		if (this->state.queueBuildings[*bqueue].empty() && queue.params->requiresProducer)
 			return;
 		if (!object.getRequirements()(this->state.elementsOwned))
 			return;
 	}
 
-	assert_msg(this->state.queues.contains(*bqueue), *bqueue);
-	auto &queue = this->state.queues.at(*bqueue);
 	assert_msg(queue.entries.contains(name), name);
-	auto &entry = queue.entries[name];
+	PlayerQueueEntry &entry = queue.entries[name];
 
 	if (!debugTime && entry.unlocked)
 		return;
@@ -1041,7 +1229,7 @@ void Player::unlockObject(const std::string &name, const T &object, bool debugTi
 		entry.paused = false;
 	} else
 		entry.buildProgress = 0;
-	entry.buildTime = debugTime ? 1 : object.getBuildSpeed() * 8;
+	entry.buildTime = debugTime ? 1 : object.getBuildSpeed();
 	entry.queue = &queue;
 	if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(*entry.object)>>) {
 		entry.object = &object;

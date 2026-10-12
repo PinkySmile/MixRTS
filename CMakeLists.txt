@@ -275,6 +275,7 @@ add_library(
 	src/UI/UI.hpp
 	src/Utils.cpp
 	src/Utils.hpp
+	src/Data/SharedLibrary.hpp
 )
 target_link_libraries(
 	MixRTS_Core

@@ -207,7 +207,7 @@ void GameManager::update()
 			return;
 	}
 	for (auto &o : this->_liveObjects)
-		o.update();
+		o->update();
 	for (auto &p : this->_liveProjectiles)
 		p.update();
 	for (auto &player : this->_players)
@@ -253,8 +253,8 @@ void GameManager::update()
 		// TODO: Objects above expect the pointers to stay valid until they can check isDisposable
 		//       which isn't the case here. We should hold on to disposable objects for a full tick
 		//       to allow all objects to properly dispose of the pointers to dead objects.
-		if (itb->isDisposable()) {
-			itb->disposeOf();
+		if ((*itb)->isDisposable()) {
+			(*itb)->disposeOf();
 			itb = this->_liveObjects.erase(itb);
 		} else
 			++itb;
@@ -592,7 +592,7 @@ void GameManager::_checkObjectLocked(const std::string &name, T &object, Player 
 	auto &req = object.getRequirements();
 
 	if (
-		(object.requiresQueueBuilding() && owner.state.queueBuildings[*bqueue].empty()) ||
+		(queue.params->requiresProducer && owner.state.queueBuildings[*bqueue].empty()) ||
 		!req(owner.state.elementsOwned)
 	) {
 		entry.unlocked = false;
@@ -602,7 +602,7 @@ void GameManager::_checkObjectLocked(const std::string &name, T &object, Player 
 			owner.resetQueue(*bqueue);
 		}
 	}
-	entry.buildTime = object.getBuildSpeed() * 8;
+	entry.buildTime = object.getBuildSpeed();
 }
 
 void GameManager::_recomputeLocked()
@@ -751,8 +751,6 @@ void GameManager::_pushOrder(GameObject &obj, const std::string &order)
 
 void GameManager::_initObject(MapState &map, Player &owner, GameObject &obj)
 {
-	auto group = obj.getGroup();
-
 	obj.manager = this;
 	obj.owner = &owner;
 	obj.map = &map;
@@ -864,14 +862,19 @@ void GameManager::deinitUnitTiles(const std::vector<std::vector<BuildingMask>> &
 GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id)
 {
 	auto &in = this->_players[owner].getObjects();
-	auto &out = this->_liveObjects;
+	assert_msg(in.contains(id), id);
+	auto &base = *in.at(id);
 	auto &player = this->_players[owner];
+	GameObject *parent = player.getSpawnBuilding(buildQueue, base.isStackable());
+
+	if ((absPos.x < 0 || absPos.y < 0) && !parent)
+		return nullptr;
+
+	auto &out = this->_liveObjects;
 	auto &map = this->_mapStates[player.state.factionIndex];
 	auto &objects = player.getObjects();
 	std::string concrete = player.getPrimaryFaction().getBase().getName() + ":conc";
-	assert_msg(in.contains(id), id);
 	assert_msg(objects.contains(concrete), concrete);
-	auto &base = *in.at(id);
 	auto &concBase = *objects.at(concrete);
 	auto &tiles = base.getTileData();
 	Vector2i pos = map.absToTileCoord(absPos);
@@ -901,9 +904,9 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 				this->_map.grid.setGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
 				for (auto &m : this->_mapStates)
 					m.setGridBits(fullPosAbs, GRIDMASK_HAS_CONCRETE);
-				this->_liveObjects.emplace_back(concBase);
-				this->_initObject(map, player, this->_liveObjects.back());
-				this->_onObjectSpawned(fullPos, this->_liveObjects.back());
+				this->_liveObjects.push_back(std::make_unique<GameObject>(concBase));
+				this->_initObject(map, player, *this->_liveObjects.back());
+				this->_onObjectSpawned(fullPos, *this->_liveObjects.back());
 			}
 		}
 	}
@@ -917,12 +920,10 @@ noGrid:
 	base.playBuiltSound(absPos);
 	if (!base.isFake()) {
 		if (proxy)
-			out.push_back(*in.at(*proxy));
+			out.push_back(std::make_unique<GameObject>(*in.at(*proxy)));
 		else
-			out.push_back(base);
-		obj = &out.back();
-
-		auto parent = player.getSpawnBuilding(buildQueue);
+			out.push_back(std::make_unique<GameObject>(base));
+		obj = &*out.back();
 
 		this->_initObject(map, player, *obj);
 		if (parent) {
@@ -950,6 +951,16 @@ noGrid:
 			obj->produced();
 	}
 	return obj;
+}
+
+void GameManager::spawnCustomObject(size_t owner, Vector2i absPos, GameObject *obj)
+{
+	auto &player = this->_players[owner];
+	auto &map = this->_mapStates[player.state.factionIndex];
+	Vector2i pos = map.absToTileCoord(absPos);
+
+	this->_liveObjects.emplace_back(obj);
+	this->_onObjectSpawned(pos, *obj);
 }
 
 std::vector<Faction> & GameManager::getFactions()
@@ -1042,13 +1053,13 @@ bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const
 	unsigned stackCount = 0;
 
 	for (auto &o : this->_liveObjects) {
-		if (std::ranges::find(exclusion, o.index) != exclusion.end())
+		if (std::ranges::find(exclusion, o->index) != exclusion.end())
 			continue;
-		if (!GameManager::_isInArea(o, absPos, size, notSolid, true))
+		if (!GameManager::_isInArea(*o, absPos, size, notSolid, true))
 			continue;
 		// A stackable mover can share the area with other stackable units,
 		// up to PATHFINDING_STACK_LIMIT of them; anything else blocks it.
-		if (!stackable || !o.isStackable())
+		if (!stackable || !o->isStackable())
 			return false;
 		if (++stackCount >= PATHFINDING_STACK_LIMIT)
 			return false;
@@ -1060,8 +1071,8 @@ GameObject *GameManager::getObjectInArea(const Vector2i &absPos, const Vector2u 
 {
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)
-		if ((!fct || fct(&b)) && GameManager::_isInArea(b, absPos, size, false, partial))
-			return &b;
+		if ((!fct || fct(&*b)) && GameManager::_isInArea(*b, absPos, size, false, partial))
+			return &*b;
 	return nullptr;
 }
 
@@ -1069,16 +1080,16 @@ void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size,
 {
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)
-		if ((!fct || fct(&b)) && GameManager::_isInArea(b, absPos, size, false, partial))
-			objects.push_back(&b);
+		if ((!fct || fct(&*b)) && GameManager::_isInArea(*b, absPos, size, false, partial))
+			objects.push_back(&*b);
 }
 
 void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<const GameObject *> &objects, bool partial, const std::function<bool (const GameObject *)> &fct)
 {
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)
-		if ((!fct || fct(&b)) && GameManager::_isInArea(b, absPos, size, false, partial))
-			objects.push_back(&b);
+		if ((!fct || fct(&*b)) && GameManager::_isInArea(*b, absPos, size, false, partial))
+			objects.push_back(&*b);
 }
 
 void GameManager::registerObject(GameObject *o)
@@ -1319,18 +1330,18 @@ GameObject *GameManager::getClosestResourceDump(const std::vector<std::string> &
 	size_t team = this->_players[player].state.team;
 
 	for (auto &b : this->_liveObjects) {
-		if (b.isDead() || b.owner->state.team != team)
+		if (b->isDead() || b->owner->state.team != team)
 			continue;
 
-		auto &accept = b.getAcceptResources();
+		auto &accept = b->getAcceptResources();
 
 		if (accept.empty())
 			continue;
 
 		size_t score = 0;
-		auto d = pos.distance2(b.getPosition() + b.getPoint() + b.map->tileSize / 2);
+		auto d = pos.distance2(b->getPosition() + b->getPoint() + b->map->tileSize / 2);
 
-		if (b.owner->state.index == player)
+		if (b->owner->state.index == player)
 			score += 1000000;
 		for (auto &r : preferredResources)
 			score += std::ranges::find(accept, r) != accept.end();
@@ -1338,7 +1349,7 @@ GameObject *GameManager::getClosestResourceDump(const std::vector<std::string> &
 			continue;
 		if (resourceScore < score || d < dist) {
 			resourceScore = score;
-			best = &b;
+			best = &*b;
 			dist = d;
 			continue;
 		}
@@ -1413,13 +1424,13 @@ void GameManager::weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f p
 
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects) {
-		if (b.isDisposable() || b.isDead())
+		if (b->isDisposable() || b->isDead())
 			continue;
 
-		double d = b.getHitboxCenter(position).distance2(position);
+		double d = b->getHitboxCenter(position).distance2(position);
 
 		if (d < dist)
-			this->weaponUsedOn(damage, weapon, sqrt(d), owner, b);
+			this->weaponUsedOn(damage, weapon, sqrt(d), owner, *b);
 	}
 }
 

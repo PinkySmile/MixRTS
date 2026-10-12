@@ -22,7 +22,6 @@ public:
 	std::string _group;
 	unsigned _buildSpeed;
 	unsigned _limit;
-	bool _requiresQueueBuilding = true;
 	std::unordered_map<std::string, unsigned> _cost;
 	std::shared_ptr<ReqAndCombinator> _requirements;
 
@@ -36,7 +35,6 @@ public:
 	[[nodiscard]] const ReqAndCombinator &getRequirements() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getCost() const;
 	[[nodiscard]] unsigned getLimit() const;
-	[[nodiscard]] bool requiresQueueBuilding() const;
 
 	static void pushUserType(sol::state &state);
 };

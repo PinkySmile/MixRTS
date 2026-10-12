@@ -33,8 +33,6 @@ Upgrade::Upgrade(const Faction &faction, const std::string &id, const nlohmann::
 	this->_buildSpeed = json.contains("build_speed") ? json["build_speed"].get<unsigned>() : 0;
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
-	if (json.contains("requires_queue_building"))
-		this->_requiresQueueBuilding = json["requires_queue_building"];
 	if (json.contains("queue"))
 		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);
 	if (json.contains("gives_queue"))
@@ -85,11 +83,6 @@ const std::unordered_map<std::string, unsigned> &Upgrade::getCost() const
 	return this->_cost;
 }
 
-bool Upgrade::requiresQueueBuilding() const
-{
-	return this->_requiresQueueBuilding;
-}
-
 void Upgrade::pushUserType(sol::state &state)
 {
 	sol::usertype<Upgrade> type = state.new_usertype<Upgrade>("Upgrade");
@@ -104,5 +97,4 @@ void Upgrade::pushUserType(sol::state &state)
 	//       registered as a usertype, so sol2 can't push it by reference.
 	type["cost"] = sol::property(&Upgrade::getCost);
 	type["limit"] = sol::property(&Upgrade::getLimit);
-	type["requires_queue_building"] = sol::property(&Upgrade::requiresQueueBuilding);
 }

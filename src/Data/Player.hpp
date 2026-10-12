@@ -19,8 +19,62 @@
 #include "Color.hpp"
 #include "Utils.hpp"
 #include "UI/UI.hpp"
+#include "SharedLibrary.hpp"
+
+class CustomQueue {
+public:
+	PlayerQueue *queue;
+	Player *player;
+
+	CustomQueue(Player *player, PlayerQueue *queue);
+	virtual ~CustomQueue() = default;
+	virtual bool update(PlayerQueue &entry) = 0;
+	virtual bool update(PlayerQueueEntry *entry) = 0;
+	virtual bool tryEndBuild(PlayerQueueEntry *entry) = 0;
+	virtual bool handleStartBuildEvent(PlayerQueueEntry *entry, const UI::StartBuildEvent &event) = 0;
+	virtual bool handlePlaceBuildEvent(PlayerQueueEntry *entry, const UI::PlaceBuildEvent &event) = 0;
+	virtual bool handleCancelBuildEvent(PlayerQueueEntry *entry, const UI::CancelBuildEvent &event) = 0;
+};
+
+class CustomQueueLua : public CustomQueue {
+private:
+	sol::function _function;
+	sol::environment _env;
+
+public:
+	CustomQueueLua(Player *player, PlayerQueue *queue, sol::state &lua, const std::filesystem::path &path);
+	~CustomQueueLua() override = default;
+	bool update(PlayerQueue &entry) override;
+	bool update(PlayerQueueEntry *entry) override;
+	bool tryEndBuild(PlayerQueueEntry *entry) override;
+	bool handleStartBuildEvent(PlayerQueueEntry *entry, const UI::StartBuildEvent &event) override;
+	bool handlePlaceBuildEvent(PlayerQueueEntry *entry, const UI::PlaceBuildEvent &event) override;
+	bool handleCancelBuildEvent(PlayerQueueEntry *entry, const UI::CancelBuildEvent &event) override;
+};
+
+class CustomQueueDll : public CustomQueue {
+private:
+	SharedLibrary _library;
+	bool (*_update)(CustomQueue &b, PlayerQueue &entry);
+	bool (*_updateEntry)(CustomQueue &b, PlayerQueueEntry *entry);
+	bool (*_tryEndBuild)(CustomQueue &b, PlayerQueueEntry *entry);
+	bool (*_handleStartBuildEvent)(CustomQueue &b, PlayerQueueEntry *entry, const UI::StartBuildEvent &event);
+	bool (*_handlePlaceBuildEvent)(CustomQueue &b, PlayerQueueEntry *entry, const UI::PlaceBuildEvent &event);
+	bool (*_handleCancelBuildEvent)(CustomQueue &b, PlayerQueueEntry *entry, const UI::CancelBuildEvent &event);
+
+public:
+	CustomQueueDll(Player *player, PlayerQueue *queue, const std::filesystem::path &path);
+	~CustomQueueDll() override;
+	bool update(PlayerQueue &entry) override;
+	bool update(PlayerQueueEntry *entry) override;
+	bool tryEndBuild(PlayerQueueEntry *entry) override;
+	bool handleStartBuildEvent(PlayerQueueEntry *entry, const UI::StartBuildEvent &event) override;
+	bool handlePlaceBuildEvent(PlayerQueueEntry *entry, const UI::PlaceBuildEvent &event) override;
+	bool handleCancelBuildEvent(PlayerQueueEntry *entry, const UI::CancelBuildEvent &event) override;
+};
 
 struct MYDLL_API PlayerQueue {
+	Player *player;
 	std::unordered_map<std::string, PlayerQueueEntry> entries;
 	const FactionQueue *params;
 	unsigned providers = 0;
@@ -29,10 +83,11 @@ struct MYDLL_API PlayerQueue {
 	std::unordered_map<std::string, unsigned> stock;
 	std::unordered_map<std::string, unsigned> basket;
 	std::unordered_map<std::string, std::unordered_map<std::string, unsigned>> prices;
+	std::shared_ptr<CustomQueue> customLib;
 	bool checkingMenu = false;
 	bool busy = false;
 
-	void init(const std::string *id, const Faction &faction, const FactionQueue *params, const std::unordered_map<std::string, const Upgrade *> &upgrade, const std::unordered_map<std::string, const GameObject *> &objs);
+	void init(Player &player, const std::string *id, const Faction &faction, const FactionQueue *params);
 	void update();
 
 	static void pushUserType(sol::state &state);
@@ -46,8 +101,8 @@ struct MYDLL_API PlayerQueueEntry {
 	const std::string *queueId;
 	const std::string *elementId;
 	std::unordered_map<std::string, unsigned> spent;
-	unsigned buildTime;
-	unsigned buildProgress;
+	float buildTime;
+	float buildProgress;
 	unsigned limit;
 	bool unlocked;
 	bool buildable;
@@ -86,44 +141,9 @@ struct MYDLL_API UIState {
 };
 
 class MYDLL_API Player {
-private:
-	GameManager &_parent;
-	MapState &_mapState;
-	bool _enabled = false;
-	size_t _currentUi;
-	HSLColor _color;
-	const Faction &_primaryFaction;
-	const std::vector<Faction> &_factions;
-	std::vector<std::unique_ptr<UI>> _uis;
-	std::unordered_map<std::string, const GameObject *> _loadedObjects;
-	std::unordered_map<std::string, const Upgrade *> _loadedUpgrades;
-
-	void _handleUiEvent(const UI::StartBuildEvent &event);
-	void _handleUiEvent(const UI::PlaceBuildEvent &event);
-	void _handleUiEvent(const UI::CancelBuildEvent &event);
-	void _handleUiEvent(const UI::DeployUnitEvent &event);
-	void _handleUiEvent(const UI::MoveUnitEvent &event);
-	void _handleUiEvent(const UI::HarvestUnitEvent &event);
-	void _handleUiEvent(const UI::DumpUnitEvent &event);
-	void _handleUiEvent(const UI::SetPrimaryEvent &event);
-	void _handleUiEvent(const UI::RepairEvent &event);
-	void _handleUiEvent(const UI::SellEvent &event);
-	void _handleUiEvent(const UI::AttackUnitEvent &event);
-	void _handleUiEvent(const UI::StopEvent &event);
-	void _handleUiEvent(const UI::OpenQueueEvent &event);
-	void _handleUiEvent(const UI::CloseQueueEvent &event);
-
-	void _clean();
-
-	void _updateQueue(PlayerQueueEntry &entry);
-	void _updateSingleQueue(PlayerQueueEntry &entry);
-	void _updateStarportQueue(PlayerQueueEntry &entry);
-
-	void _spawnDelivery(const std::string &queue, Vector2f target, const ExtraSpawn &params, const std::vector<std::string> &objects);
-	void _tryEndBuildSingle(PlayerQueueEntry &entry);
-	void _tryEndBuildStarport(PlayerQueueEntry &entry);
-
 public:
+	GameManager &parent;
+	MapState &mapState;
 	PlayerState state;
 	UIState uiState;
 	bool debugUnlock = false;
@@ -161,7 +181,7 @@ public:
 	bool credit(const std::string &type, unsigned amount, CreditStrategy strategy);
 	bool consume(const std::string &type, unsigned amount);
 	GameObject *getPrimaryBuilding(const std::string &queue);
-	GameObject *getSpawnBuilding(const std::string &queue);
+	GameObject *getSpawnBuilding(const std::string &queue, bool stackable);
 	void onObjectLost(GameObject *obj);
 	void onObjectGained(GameObject *obj);
 	std::vector<GameObject *> getObjects(const std::string &id);
@@ -174,6 +194,45 @@ public:
 	void unlockObject(const std::string &name, const T &object, bool debugTime = false);
 
 	static void pushUserType(sol::state &state);
+
+private:
+	bool _enabled = false;
+	size_t _currentUi;
+	HSLColor _color;
+	const Faction &_primaryFaction;
+	const std::vector<Faction> &_factions;
+	std::vector<std::unique_ptr<UI>> _uis;
+	std::unordered_map<std::string, const GameObject *> _loadedObjects;
+	std::unordered_map<std::string, const Upgrade *> _loadedUpgrades;
+
+	void _handleUiEvent(const UI::StartBuildEvent &event);
+	void _handleUiEvent(const UI::PlaceBuildEvent &event);
+	void _handleUiEvent(const UI::CancelBuildEvent &event);
+	void _handleUiEvent(const UI::DeployUnitEvent &event);
+	void _handleUiEvent(const UI::MoveUnitEvent &event);
+	void _handleUiEvent(const UI::HarvestUnitEvent &event);
+	void _handleUiEvent(const UI::DumpUnitEvent &event);
+	void _handleUiEvent(const UI::SetPrimaryEvent &event);
+	void _handleUiEvent(const UI::RepairEvent &event);
+	void _handleUiEvent(const UI::SellEvent &event);
+	void _handleUiEvent(const UI::AttackUnitEvent &event);
+	void _handleUiEvent(const UI::StopEvent &event);
+	void _handleUiEvent(const UI::OpenQueueEvent &event);
+	void _handleUiEvent(const UI::CloseQueueEvent &event);
+
+	void _clean();
+
+	void _updateQueue(PlayerQueueEntry &entry);
+	void _updateSingleQueue(PlayerQueueEntry &entry);
+	void _updateStarportQueue(PlayerQueueEntry &entry);
+	void _updateAutoTickQueue(PlayerQueueEntry &entry);
+
+	void _spawnDelivery(const std::string &queue, Vector2f target, const ExtraSpawn &params, const std::vector<std::string> &objects);
+	void _tryEndBuildSingle(PlayerQueueEntry &entry);
+	void _tryEndBuildStarport(PlayerQueueEntry &entry);
+	void _tryEndBuildAutoTick(PlayerQueueEntry &entry);
+
+	friend PlayerQueue;
 };
 
 

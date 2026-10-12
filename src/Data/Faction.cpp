@@ -21,6 +21,8 @@ FactionQueue::FactionQueue(const Mod &base, const nlohmann::json &data)
 	assert_exp(data.contains("requires_producer") && data["requires_producer"].is_boolean());
 	assert_exp(data.contains("behavior") && data["behavior"].is_string());
 	assert_exp(data.contains("unit_spawn") && data["unit_spawn"].is_string());
+	assert_exp(!data.contains("power_mul") || data["power_mul"].is_array());
+	assert_exp(!data.contains("producer_mul") || data["producer_mul"].is_array());
 
 	std::string behavior = data["behavior"];
 	std::string spawnType = data["unit_spawn"];
@@ -32,6 +34,8 @@ FactionQueue::FactionQueue(const Mod &base, const nlohmann::json &data)
 		this->behavior = TYPE_MULTI_QUEUE;
 	else if (behavior == "starport")
 		this->behavior = TYPE_STARPORT;
+	else if (behavior == "auto_tick")
+		this->behavior = TYPE_AUTO_TICK;
 	else
 		assert_not_reached_msg("Invalid queue behavior");
 
@@ -46,6 +50,24 @@ FactionQueue::FactionQueue(const Mod &base, const nlohmann::json &data)
 	else
 		assert_not_reached_msg("Invalid queue unit_spawn");
 
+	if (data.contains("loader")) {
+		assert_exp(data.contains("loader") && data["loader"].is_string());
+		this->loader.emplace(base.getBase() / data["loader"].get<std::string>());
+	}
+	if (data.contains("power_mul"))
+		for (size_t i = 0; i < data["power_mul"].size(); i++) {
+			const nlohmann::json &mul = data["power_mul"][i];
+
+			assert_msg(mul.is_array() && mul.size() == 2 && !this->powerMul.contains(mul[0]), "json[\"power_mul\"][" + std::to_string(i) + "]");
+			this->powerMul[mul[0]] = mul[1];
+		}
+	if (data.contains("producer_mul"))
+		for (size_t i = 0; i < data["producer_mul"].size(); i++) {
+			const nlohmann::json &mul = data["producer_mul"][i];
+
+			assert_msg(mul.is_array() && mul.size() == 2 && !this->producerMul.contains(mul[0]), "json[\"producer_mul\"][" + std::to_string(i) + "]");
+			this->producerMul[mul[0]] = mul[1];
+		}
 	if (this->behavior == TYPE_STARPORT)
 		this->starportParams.emplace(base, data);
 	if (this->unitSpawn == SPAWN_DELIVERY)
@@ -331,6 +353,10 @@ UI *Faction::createUI(UIState *state, GameManager *manager, PlayerState *ownerSt
 
 		this->_sl = dlopen(p.string().c_str(), RTLD_LAZY);
 		assert_msg(this->_sl, p.string() + ": " + dlerror());
+
+		auto vsym = reinterpret_cast<void *>(dlsym(this->_sl, "_ABI_VERSION"));
+		auto version = reinterpret_cast<unsigned *>(vsym);
+		assert_exp(version && *version == ABI_VERSION);
 	}
 
 	auto symbol = reinterpret_cast<void *>(dlsym(this->_sl, "createUiFor"));
