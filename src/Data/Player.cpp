@@ -79,8 +79,7 @@ CustomQueueDll::CustomQueueDll(Player *player, PlayerQueue *queue, const std::fi
 	this->_library = dlopen(path.string().c_str(), RTLD_LAZY);
 	assert_msg(this->_library, path.string() + ": " + dlerror());
 
-	auto vsym = reinterpret_cast<void *>(dlsym(this->_library, "_ABI_VERSION"));
-	auto version = reinterpret_cast<unsigned *>(vsym);
+	auto version = static_cast<unsigned *>(dlsym(this->_library, "_ABI_VERSION"));
 	assert_exp(version && *version == ABI_VERSION);
 
 	this->_update = reinterpret_cast<bool (*)(CustomQueue &, PlayerQueue &)>(dlsym(this->_library, "update"));

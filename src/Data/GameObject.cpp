@@ -17,22 +17,22 @@
 #include "Resources/Game.hpp"
 
 #define currentSpeed _gpTimerF[0]
-#define turnTimer _gpTimerU[0]
+#define currentAngle _gpTimerF[0]
+
+#define pickupOldAltitude _gpTimerI[7]
+
+#define dumpTimer _gpTimerU[0]
 #define harvestTimer _gpTimerU[0]
 #define cancel _gpTimerU[1]
 #define harvestDelaying _gpTimerU[2]
-#define dumpTimer _gpTimerU[0]
 #define blockTimer _gpTimerU[3]
-#define currentAngle _gpTimerF[0]
-#define attackFirst _gpTimerU[15]
-
-#define pickupOldAltitude _gpTimerI[7]
+#define turnTimer _gpTimerU[4]
 #define dropTimer _gpTimerU[12]
 #define dropLast _gpTimerU[13]
 #define currentDrop _gpTimerU[14]
 #define pickupState _gpTimerU[15]
+#define attackFirst _gpTimerU[15]
 
-#define waitRetracePath 300
 #define waitBlocked 60
 #define PATH_UNIT_PENALTY 1000
 
@@ -108,7 +108,7 @@ bool GameObject::_shortenOrder(Order &o)
 	if (std::holds_alternative<MoveOrder>(o) || std::holds_alternative<AttackUnitOrder>(o)) {
 		this->_orderQueue.emplace_front(FinishMovementOrder{});
 		return false;
-	} else if (std::holds_alternative<HarvestOrder>(o)) {
+	} else if (std::holds_alternative<HarvestOrder>(o) || std::holds_alternative<DumpOrder>(o)) {
 		this->cancel = true;
 		return false;
 	}
@@ -1620,12 +1620,6 @@ bool GameObject::_updateOrder(const MoveOrder &order)
 
 bool GameObject::_updateOrder(const MoveCheckOrder &order)
 {
-	if (this->_position == this->_oldPos && this->_gpTimerU[0] < waitRetracePath) {
-		this->_gpTimerU[0]++;
-		return false;
-	}
-	this->_oldPos = this->_position;
-
 	if (this->_position != order.destination) {
 		auto front = this->_orderQueue.front();
 
@@ -1706,11 +1700,6 @@ bool GameObject::_updateOrder(const HarvestCloseOrder &)
 bool GameObject::_updateOrder(const DumpOrder &order)
 {
 	if (this->_firstEvent) {
-		if (this->_currentDir != this->_dump->dir) {
-			this->_orderQueue.emplace_front(TurnOrder{this->_dump->dir});
-			this->_orderQueue.emplace_front(DumpOrder{order.target});
-			return true;
-		}
 		if (order.target == nullptr || order.target->isDead()) {
 			this->_dumpInClosestResourceDump();
 			return true;
@@ -1719,16 +1708,13 @@ bool GameObject::_updateOrder(const DumpOrder &order)
 			this->_harvestClosestResource();
 			return true;
 		}
-		if (this->_position != (order.target->getPosition() + order.target->getPoint()).to<float>())
-			return false;
-		this->_dumpStart = true;
 	} else if (this->_dumpStart) {
-		if (this->_dumpStart && (*this->_dump->start)() && this->_dump->start->update()) {
+		if ((*this->_dump->start)() && this->_dump->start->update()) {
 			this->_dumping = true;
 			this->_dumpStart = false;
 		}
 	} else if (this->_dumpStop) {
-		if (this->_dumpStop && (*this->_dump->stop)() && this->_dump->stop->update()) {
+		if ((*this->_dump->stop)() && this->_dump->stop->update()) {
 			if (!this->_lots.empty())
 				this->_dumpInClosestResourceDump();
 			else
@@ -1761,14 +1747,19 @@ bool GameObject::_updateOrder(const DumpOrder &order)
 			order.target->produced();
 		}
 		if (this->dumpTimer >= this->_dump->delay + this->_dump->delayAfter) {
-			if (this->_lots.empty()) {
+			if (this->_lots.empty() || this->cancel) {
 				this->_dumpStop = true;
 				this->_dumping = false;
 			} else
 				this->dumpTimer = 0;
 		} else
 			this->dumpTimer++;
-	}
+	} else if (this->_position != (order.target->getPosition() + order.target->getPoint()).to<float>()) {
+		return false;
+	} else if (!this->_updateOrder(TurnOrder{this->_dump->dir})) {
+		return false;
+	} else
+		this->_dumpStart = true;
 	return false;
 }
 

@@ -6,13 +6,10 @@
 #define MIXRTS_SHAREDLIBRARY_HPP
 
 
-#define ABI_VERSION 1
-#define SL_DECLARE_VERSION SL_EXPORT unsigned _ABI_VERSION = ABI_VERSION
-
 #ifdef _WIN32
 #include <windows.h>
 #define dlopen(path, _) LoadLibraryA(path)
-#define dlsym(sl, name) GetProcAddress(sl, name)
+#define dlsym(sl, name) reinterpret_cast<void *>(GetProcAddress(sl, name))
 #define dlclose(sl) FreeLibrary(sl)
 #define SL_EXPORT extern "C" __declspec(dllexport)
 typedef HMODULE SharedLibrary;
@@ -47,6 +44,9 @@ inline std::string dlerror()
 typedef void *SharedLibrary;
 #define SL_EXPORT extern "C"
 #endif
+
+#define ABI_VERSION 1
+#define SL_DECLARE_VERSION SL_EXPORT unsigned _ABI_VERSION; unsigned _ABI_VERSION = ABI_VERSION
 
 
 #endif //MIXRTS_SHAREDLIBRARY_HPP

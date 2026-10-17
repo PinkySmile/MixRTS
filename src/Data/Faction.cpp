@@ -359,8 +359,7 @@ UI *Faction::createUI(UIState *state, GameManager *manager, PlayerState *ownerSt
 		assert_exp(version && *version == ABI_VERSION);
 	}
 
-	auto symbol = reinterpret_cast<void *>(dlsym(this->_sl, "createUiFor"));
-	auto fct = reinterpret_cast<UICreationCB>(symbol);
+	auto fct = reinterpret_cast<UICreationCB>(dlsym(this->_sl, "createUiFor"));
 
 	assert_msg(fct, dlerror());
 	return fct(*this, state, manager, ownerState, map, this->_base.getBase(), this->_uiData);
