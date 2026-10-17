@@ -867,7 +867,7 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 	auto &player = this->_players[owner];
 	GameObject *parent = player.getSpawnBuilding(buildQueue, base.isStackable());
 
-	if ((absPos.x < 0 || absPos.y < 0) && !parent)
+	if (absPos.x == -1 && absPos.y == -1 && !parent)
 		return nullptr;
 
 	auto &out = this->_liveObjects;

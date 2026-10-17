@@ -64,6 +64,7 @@ struct MYDLL_API TurnOrder {
 struct MYDLL_API MoveOrder {
 	Vector2i destination;
 	MoveReason reason;
+	GameObject *ignore;
 	bool force;
 };
 struct MYDLL_API FinishMovementOrder {};
@@ -322,8 +323,9 @@ protected:
 	unsigned _decayTarget;
 	unsigned _sight = 0;
 	unsigned _limit = UINT32_MAX;
-	std::array<unsigned, 8> _gpTimerU = {};
-	std::array<float, 8> _gpTimerF = {};
+	std::array<unsigned, 16> _gpTimerU = {};
+	std::array<int, 8> _gpTimerI = {};
+	std::array<float, 4> _gpTimerF = {};
 	unsigned _asideCooldown = 0;
 	unsigned _passFlags = 0;
 	unsigned _harvestTime = 0;
@@ -426,7 +428,7 @@ public:
 	void attack(GameObject *obj, bool automatic, bool force);
 	void moveOut(const Vector2i &pos);
 	void moveTo(const Vector2i &pos, MoveReason reason, bool straight = false);
-	bool moveAside(GameObject *asker);
+	bool moveAside(const GameObject *asker);
 	void dumpResourcesTo(GameObject *dump, bool automatic, bool straight = false);
 	void pickup(GameObject *target, Vector2f destination);
 	void deliverTo(const std::vector<GameObject *> &objects, Vector2f destination);
@@ -547,30 +549,32 @@ protected:
 	[[nodiscard]] Vector2i _findLandingSpot(GameObject *target, Vector2i preferredTile) const;
 	CollisionResolution _resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject);
 	CollisionResolution _resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject);
-	// Order update functions
-	bool _updateTurn(unsigned target);
-	bool _updateMove(Vector2i pos, MoveReason reason, bool force, const GameObject *ignoreObject);
-	bool _updateCheckMove(Vector2i pos, void (GameObject::*fail)());
-	bool _updateHarvest();
-	bool _updateHarvestClose();
-	bool _updateDump(GameObject *place);
-	bool _updateDeploy();
-	bool _updateAttack(GameObject *obj, bool automatic, bool force);
-	bool _updateSpin(float amount);
-	bool _updatePickup(GameObject *target, Vector2f destination);
-	bool _updateWaitPickup(const std::vector<MoveReason> &targets, double dist, const Order *other);
-	bool _updateFinishMovement();
-	bool _updateDelivery(const std::vector<std::string> &objects, const std::string &queue, const Position &destination, const MapState &state);
+
+	bool _updateOrder(const TurnOrder &order);
+	bool _updateOrder(const MoveOrder &order);
+	bool _updateOrder(const MoveCheckOrder &order);
+	bool _updateOrder(const HarvestOrder &order);
+	bool _updateOrder(const HarvestCloseOrder &order);
+	bool _updateOrder(const DumpOrder &order);
+	bool _updateOrder(const DeployOrder &order);
+	bool _updateOrder(const AttackUnitOrder &order);
+	bool _updateOrder(const SpinOrder &order);
+	bool _updateOrder(const PickupOrder &order);
+	bool _updateOrder(const WaitPickupOrder &order);
+	bool _updateOrder(const FinishMovementOrder &order);
+	bool _updateOrder(const DeliveryOrder &order);
+	bool _updateOrder(const ExecCbOrder &order);
+	bool _updateOrder(const DieOrder &order);
+	bool _updateOrder(const Order &order);
+
 	void _reduceTimeControlTimer(unsigned dec);
 	void _spawnUnits(const std::unordered_map<std::string, unsigned> &units);
-
 	void _harvestClosestResource();
 	void _dumpInClosestResourceDump();
 	void _goToClosestResource();
 	void _goToClosestResourceDump();
 	bool _shortenOrder(Order &o);
 	void _displayAnim(Animation &anim, Vector2f offset = {}) const;
-	virtual bool _handleOrder(const Order &o);
 
 	friend ObjectTurret;
 };

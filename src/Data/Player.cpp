@@ -37,37 +37,37 @@ CustomQueueLua::CustomQueueLua(Player *player, PlayerQueue *queue, sol::state &l
 	this->_function = lua.safe_script_file(path.string(), this->_env);
 }
 
-bool CustomQueueLua::update(PlayerQueue &entry)
+bool CustomQueueLua::update(PlayerQueue &)
 {
 	// TODO:
 	return true;
 }
 
-bool CustomQueueLua::update(PlayerQueueEntry *entry)
+bool CustomQueueLua::update(PlayerQueueEntry *)
 {
 	// TODO:
 	return true;
 }
 
-bool CustomQueueLua::tryEndBuild(PlayerQueueEntry *entry)
+bool CustomQueueLua::tryEndBuild(PlayerQueueEntry *)
 {
 	// TODO:
 	return true;
 }
 
-bool CustomQueueLua::handleStartBuildEvent(PlayerQueueEntry *entry, const UI::StartBuildEvent &event)
+bool CustomQueueLua::handleStartBuildEvent(PlayerQueueEntry *, const UI::StartBuildEvent &)
 {
 	// TODO:
 	return true;
 }
 
-bool CustomQueueLua::handlePlaceBuildEvent(PlayerQueueEntry *entry, const UI::PlaceBuildEvent &event)
+bool CustomQueueLua::handlePlaceBuildEvent(PlayerQueueEntry *, const UI::PlaceBuildEvent &)
 {
 	// TODO:
 	return true;
 }
 
-bool CustomQueueLua::handleCancelBuildEvent(PlayerQueueEntry *entry, const UI::CancelBuildEvent &event)
+bool CustomQueueLua::handleCancelBuildEvent(PlayerQueueEntry *, const UI::CancelBuildEvent &)
 {
 	// TODO:
 	return true;

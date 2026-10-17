@@ -24,13 +24,13 @@
 #define dumpTimer _gpTimerU[0]
 #define blockTimer _gpTimerU[3]
 #define currentAngle _gpTimerF[0]
-#define attackFirst _gpTimerU[7]
+#define attackFirst _gpTimerU[15]
 
-#define dropTimer _gpTimerU[4]
-#define dropLast _gpTimerU[5]
-#define currentDrop _gpTimerU[6]
-#define pickupState _gpTimerU[7]
-#define pickupOldAltitude _gpTimerF[7]
+#define pickupOldAltitude _gpTimerI[7]
+#define dropTimer _gpTimerU[12]
+#define dropLast _gpTimerU[13]
+#define currentDrop _gpTimerU[14]
+#define pickupState _gpTimerU[15]
 
 #define waitRetracePath 300
 #define waitBlocked 60
@@ -1061,41 +1061,6 @@ Vector2f GameObject::_getTileOffsetFromCenter() const
 	}
 }
 
-bool GameObject::_updateTurn(unsigned int target)
-{
-	if (this->_currentDir == target)
-		return true;
-	this->turnTimer++;
-	if (this->turnTimer > this->_turnDelay) {
-		size_t diff = (this->_currentDir - target + this->_anims.size()) % this->_anims.size();
-
-		this->turnTimer = 0;
-		if (diff >= this->_anims.size() / 2)
-			this->_currentDir = (this->_currentDir + 1) % this->_anims.size();
-		else
-			this->_currentDir = (this->_currentDir - 1 + this->_anims.size()) % this->_anims.size();
-	}
-	return false;
-}
-
-bool GameObject::_updateCheckMove(Vector2i pos, void (GameObject::*fail)())
-{
-	if (this->_position == this->_oldPos && this->_gpTimerU[0] < waitRetracePath) {
-		this->_gpTimerU[0]++;
-		return false;
-	}
-	this->_oldPos = this->_position;
-
-	if (this->_position != pos) {
-		auto front = this->_orderQueue.front();
-
-		this->_orderQueue.pop_front();
-		(this->*fail)();
-		this->_orderQueue.push_front(front);
-	}
-	return true;
-}
-
 void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject)
 {
 	ObstructionContext ctx;
@@ -1318,122 +1283,20 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid, const Ga
 
 	GameObject *blocker = this->_findBlockingUnit(nextPos, this->_size, ignoreObject);
 
-	if (blocker == nullptr || !blocker->canMove() || !blocker->moveAside(this))
+	if (blocker == nullptr)
+		return COLLISION_PROCEED;
+	if (!blocker->canMove())
 		return COLLISION_ABORT;
-	this->blockTimer = 1;
-	return COLLISION_WAIT;
-}
-
-bool GameObject::_updateMove(Vector2i destination, MoveReason reason, bool force, const GameObject *ignoreObject)
-{
-	if (this->_firstEvent)
-		this->currentSpeed = this->_speed;
-	if (this->_pickup) {
-		this->_pathCached = false;
-		return false;
+	if (blocker->owner->state.team == this->owner->state.team) {
+		if (!blocker->moveAside(this))
+			return COLLISION_ABORT;
+		this->blockTimer = 1;
+		return COLLISION_WAIT;
+	} else if (blocker->isCrushable() && this->_canCrush) {
+		blocker->crushedBy(this);
+		return COLLISION_PROCEED;
 	}
-	if (!this->_pathCached) {
-		this->_cachedDest = destination;
-		this->_computeMovePath(destination, force, ignoreObject);
-		this->_pathCached = true;
-		if (this->_pathCache.empty())
-			return true;
-
-		this->_cachedDist = this->_position.distance(this->_pathCache.back() + this->_getTileOffsetFromCenter());
-
-		for (size_t i = 0; i < this->_pathCache.size() - 1; i++)
-			this->_cachedDist += this->_pathCache[i].distance(this->_pathCache[i + 1]);
-	}
-
-	for (auto &turret : this->_turrets) {
-		turret.fast = true;
-		turret.shotTimer = 0;
-	}
-	if (this->_pathCache.empty())
-		return true;
-
-	this->_pickup = this->manager->findPickup(this->owner->state.index, reason, this->_cachedDist, this);
-	if (this->_pickup) {
-		this->_pickup->pickup(this, destination);
-		return false;
-	}
-
-	auto dest = this->_pathCache.back() + this->_getTileOffsetFromCenter();
-	std::optional<float> a;
-
-	while (this->_position == dest) {
-		this->_pathCache.pop_back();
-		if (this->_pathCache.empty())
-			return true;
-	}
-
-	if (this->_boundToGrid) {
-		auto d = this->map->absToTileCoord(dest + this->_size / 2);
-
-		if (d != this->_gridPos)
-			a = this->_gridPos.angle(d);
-	} else
-		a = this->_position.angle(dest);
-
-	// TODO: All units should still have a direction even when non directional sprites are used
-	//       so the turn speed can be changed.
-	if (a) {
-		unsigned angle = round((*a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
-
-		angle %= this->_anims.size();
-		if (angle != this->_currentDir) {
-			if (!this->_updateTurn(angle) && !this->_moveWhileTurn)
-				return false;
-			*a = this->getFacingAngle();
-			dest = {
-				std::cos(*a) * this->currentSpeed * 2,
-				std::sin(*a) * this->currentSpeed * 2
-			};
-		}
-	}
-
-	switch (this->_boundToGrid ? this->_resolveGridCollision(force, ignoreObject) : this->_resolveFreeCollision(force, ignoreObject)) {
-	case COLLISION_ABORT:
-		//return true;
-	case COLLISION_WAIT:
-		return false;
-	case COLLISION_PROCEED:
-		break;
-	}
-
-	auto pos = this->_position;
-	auto diff = dest - pos;
-
-	if (diff.magnitude2() < this->_decel.dist2) {
-		this->currentSpeed -= this->_decel.step;
-		if (this->currentSpeed < this->_decel.min)
-			this->currentSpeed = this->_decel.min;
-	}
-	//if (this->_stackable) {
-	//	//if (std::abs(diff.x))
-	//	//qddqzzqddzq
-	//}
-	this->_moving = true;
-	//if (this->_boundToGrid) {
-	//	diff.x = std::copysign(this->currentSpeed, diff.x);
-	//	diff.y = std::copysign(this->currentSpeed, diff.y);
-	//} else {
-		diff.normalize();
-		diff *= this->currentSpeed;
-	//}
-	if (this->_crouchTimer != 0)
-		diff /= 2;
-	this->_cachedDist -= diff.magnitude();
-	pos += diff;
-
-	auto diff2 = dest - pos;
-
-	if (pos == dest || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
-		pos = dest;
-		this->_pathCache.pop_back();
-	}
-	this->setPosition(pos);
-	return false;
+	return COLLISION_ABORT;
 }
 
 void GameObject::_harvestClosestResource()
@@ -1501,8 +1364,16 @@ void GameObject::_goToClosestResource()
 		pos = this->manager->getLoadedMap().grid.topLeftCoordToAbs(*tile);
 	} else
 		pos = this->map->topLeftCoordToAbs(pos);
-	this->_orderQueue.emplace_front(MoveCheckOrder{&GameObject::_goToClosestResource, pos});
-	this->_orderQueue.emplace_front(MoveOrder{pos, MOVEREASON_HARVEST, false});
+	this->_orderQueue.emplace_front(MoveCheckOrder{
+		.fail = &GameObject::_goToClosestResource,
+		.destination = pos
+	});
+	this->_orderQueue.emplace_front(MoveOrder{
+		.destination = pos,
+		.reason = MOVEREASON_HARVEST,
+		.ignore = nullptr,
+		.force = false
+	});
 }
 
 void GameObject::_dumpInClosestResourceDump()
@@ -1521,11 +1392,251 @@ void GameObject::_goToClosestResourceDump()
 
 	auto pos = this->_lastResourceDump->getPosition() + this->_lastResourceDump->getPoint();
 
-	this->_orderQueue.emplace_front(MoveCheckOrder{&GameObject::_goToClosestResourceDump, pos});
-	this->_orderQueue.emplace_front(MoveOrder{pos, MOVEREASON_DUMP, false});
+	this->_orderQueue.emplace_front(MoveCheckOrder{
+		.fail = &GameObject::_goToClosestResourceDump,
+		.destination = pos
+	});
+	this->_orderQueue.emplace_front(MoveOrder{
+		.destination = pos,
+		.reason = MOVEREASON_DUMP,
+		.ignore = nullptr,
+		.force = false
+	});
 }
 
-bool GameObject::_updateHarvest()
+Vector2i GameObject::_findLandingSpot(GameObject *target, Vector2i preferredTile) const
+{
+	auto &map = *target->map;
+	Vector2u targetSize = target->getSize();
+	unsigned maxRing = std::max(map.gridSize.x, map.gridSize.y);
+
+	for (unsigned r = 0; r <= maxRing; r++) {
+		for (int dy = -static_cast<int>(r); dy <= static_cast<int>(r); dy++)
+			for (int dx = -static_cast<int>(r); dx <= static_cast<int>(r); dx++) {
+				if (std::max(std::abs(dx), std::abs(dy)) != static_cast<int>(r))
+					continue;
+
+				Vector2i tile = preferredTile + Vector2i{dx, dy};
+
+				if (
+					tile.x < 0 || tile.y < 0 ||
+					static_cast<unsigned>(tile.x) >= map.gridSize.x ||
+					static_cast<unsigned>(tile.y) >= map.gridSize.y
+				)
+					continue;
+
+				Vector2i tileAbs = map.topLeftCoordToAbs(tile);
+				MapState::Quad footprint = {
+					tileAbs.to<float>(),
+					{static_cast<float>(tileAbs.x + targetSize.x), static_cast<float>(tileAbs.y)},
+					{static_cast<float>(tileAbs.x + targetSize.x), static_cast<float>(tileAbs.y + targetSize.y)},
+					{static_cast<float>(tileAbs.x), static_cast<float>(tileAbs.y + targetSize.y)}
+				};
+
+				// target must be able to stand there at all (passable terrain for its own pass flags).
+				if (!map.allHasAnyGridBits(footprint, target->_passFlags))
+					continue;
+				// Nothing else already sitting on target's own tile(s).
+				if (!this->manager->isAreaFree(tileAbs, targetSize, {target->index}, target->_stackable))
+					continue;
+				return tile;
+			}
+	}
+	return preferredTile;
+}
+
+void GameObject::_reduceTimeControlTimer(unsigned dec)
+{
+	if (this->_takeControlTime == 0)
+		return;
+	if (this->_takeControlTime > dec) {
+		this->_takeControlTime -= dec;
+		return;
+	}
+	this->_takeControlTime = 0;
+	this->deinitGlobalGrid();
+	this->owner = this->_originalOwner;
+	this->_originalOwner = nullptr;
+	this->initGlobalGrid();
+	this->setColor(this->owner->getColor());
+}
+
+void GameObject::_spawnUnits(const std::unordered_map<std::string, unsigned> &units)
+{
+	std::pair<Vector2f, std::vector<Vector2f>> offsets[] = {
+		{{1, 1}, { {-1,  1}, { 0,  1}, { 1,  1} }},
+		{{0, 0}, { {-1,  0}, {-1, -1}, { 0, -1} }},
+		{{2, 0}, { { 0, -1}, { 1, -1}, { 1,  0} }},
+		{{1, 0}, { {-1, -1}, { 0, -1}, { 1, -1} }},
+		{{0, 1}, { {-1, -1}, {-1,  0}, {-1,  1} }},
+		{{2, 1}, { { 1, -1}, { 1,  0}, { 1,  1} }},
+		{{1, 2}, { {-1,  1}, { 0,  1}, { 1,  1} }},
+		{{0, 2}, { {-1,  0}, {-1,  1}, { 0,  1} }},
+		{{2, 2}, { { 1,  0}, { 1,  1}, { 0,  1} }},
+	};
+	size_t i = 0;
+
+	for (auto [name, nb] : units) {
+		while (nb--) {
+			assert_exp(i < std::size(offsets));
+			auto pos = this->_gridPos + offsets[i].first;
+			auto obj = this->manager->spawnObject(this->owner->state.index, this->map->topLeftCoordToAbs(pos), "", name);
+			auto out = pos + offsets[i].second[game->gameRandom() % offsets[i].second.size()];
+
+			obj->moveTo(this->map->topLeftCoordToAbs(out), MOVEREASON_MOVE_SPAWN, true);
+			i++;
+		}
+	}
+}
+
+bool GameObject::_updateOrder(const TurnOrder &order)
+{
+	if (this->_currentDir == order.resultDir)
+		return true;
+	this->turnTimer++;
+	if (this->turnTimer > this->_turnDelay) {
+		size_t diff = (this->_currentDir - order.resultDir + this->_anims.size()) % this->_anims.size();
+
+		this->turnTimer = 0;
+		if (diff >= this->_anims.size() / 2)
+			this->_currentDir = (this->_currentDir + 1) % this->_anims.size();
+		else
+			this->_currentDir = (this->_currentDir - 1 + this->_anims.size()) % this->_anims.size();
+	}
+	return false;
+}
+
+bool GameObject::_updateOrder(const MoveOrder &order)
+{
+	if (this->_firstEvent)
+		this->currentSpeed = this->_speed;
+	if (this->_pickup) {
+		this->_pathCached = false;
+		return false;
+	}
+	if (!this->_pathCached) {
+		this->_cachedDest = order.destination;
+		this->_computeMovePath(order.destination, order.force, order.ignore);
+		this->_pathCached = true;
+		if (this->_pathCache.empty())
+			return true;
+
+		this->_cachedDist = this->_position.distance(this->_pathCache.back() + this->_getTileOffsetFromCenter());
+
+		for (size_t i = 0; i < this->_pathCache.size() - 1; i++)
+			this->_cachedDist += this->_pathCache[i].distance(this->_pathCache[i + 1]);
+	}
+
+	for (auto &turret : this->_turrets) {
+		turret.fast = true;
+		turret.shotTimer = 0;
+	}
+	if (this->_pathCache.empty())
+		return true;
+
+	this->_pickup = this->manager->findPickup(this->owner->state.index, order.reason, this->_cachedDist, this);
+	if (this->_pickup) {
+		this->_pickup->pickup(this, order.destination);
+		return false;
+	}
+
+	auto dest = this->_pathCache.back() + this->_getTileOffsetFromCenter();
+	std::optional<float> a;
+
+	while (this->_position == dest) {
+		this->_pathCache.pop_back();
+		if (this->_pathCache.empty())
+			return true;
+	}
+
+	if (this->_boundToGrid) {
+		auto d = this->map->absToTileCoord(dest + this->_size / 2);
+
+		if (d != this->_gridPos)
+			a = this->_gridPos.angle(d);
+	} else
+		a = this->_position.angle(dest);
+
+	// TODO: All units should still have a direction even when non directional sprites are used
+	//       so the turn speed can be changed.
+	if (a) {
+		unsigned angle = round((*a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+
+		angle %= this->_anims.size();
+		if (angle != this->_currentDir) {
+			if (!this->_updateOrder(TurnOrder{angle}) && !this->_moveWhileTurn)
+				return false;
+			*a = this->getFacingAngle();
+			dest = {
+				std::cos(*a) * this->currentSpeed * 2,
+				std::sin(*a) * this->currentSpeed * 2
+			};
+		}
+	}
+
+	switch (this->_boundToGrid ? this->_resolveGridCollision(order.force, order.ignore) : this->_resolveFreeCollision(order.force, order.ignore)) {
+	case COLLISION_ABORT:
+		return true;
+	case COLLISION_WAIT:
+		return false;
+	case COLLISION_PROCEED:
+		break;
+	}
+
+	auto pos = this->_position;
+	auto diff = dest - pos;
+
+	if (diff.magnitude2() < this->_decel.dist2) {
+		this->currentSpeed -= this->_decel.step;
+		if (this->currentSpeed < this->_decel.min)
+			this->currentSpeed = this->_decel.min;
+	}
+	//if (this->_stackable) {
+	//	//if (std::abs(diff.x))
+	//	//qddqzzqddzq
+	//}
+	this->_moving = true;
+	//if (this->_boundToGrid) {
+	//	diff.x = std::copysign(this->currentSpeed, diff.x);
+	//	diff.y = std::copysign(this->currentSpeed, diff.y);
+	//} else {
+		diff.normalize();
+		diff *= this->currentSpeed;
+	//}
+	if (this->_crouchTimer != 0)
+		diff /= 2;
+	this->_cachedDist -= diff.magnitude();
+	pos += diff;
+
+	auto diff2 = dest - pos;
+
+	if (pos == dest || (diff.x > 0) != (diff2.x > 0) || (diff.y > 0) != (diff2.y > 0)) {
+		pos = dest;
+		this->_pathCache.pop_back();
+	}
+	this->setPosition(pos);
+	return false;
+}
+
+bool GameObject::_updateOrder(const MoveCheckOrder &order)
+{
+	if (this->_position == this->_oldPos && this->_gpTimerU[0] < waitRetracePath) {
+		this->_gpTimerU[0]++;
+		return false;
+	}
+	this->_oldPos = this->_position;
+
+	if (this->_position != order.destination) {
+		auto front = this->_orderQueue.front();
+
+		this->_orderQueue.pop_front();
+		(this->*order.fail)();
+		this->_orderQueue.push_front(front);
+	}
+	return true;
+}
+
+bool GameObject::_updateOrder(const HarvestOrder &)
 {
 	if (this->harvestDelaying) {
 		this->harvestTimer++;
@@ -1534,20 +1645,30 @@ bool GameObject::_updateHarvest()
 			this->harvestTimer = 0;
 			if (this->cancel)
 				return true;
-			if (this->_lots.size() >= this->_resourceStorage)
-				return this->_dumpInClosestResourceDump(), true;
+			if (this->_lots.size() >= this->_resourceStorage) {
+				this->_dumpInClosestResourceDump();
+				return true;
+			}
+
 			auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
+
 			if (tile)
 				return false;
 			this->_harvestClosestResource();
 			return true;
 		}
 	} else {
-		if (this->_lots.size() >= this->_resourceStorage)
-			return this->_dumpInClosestResourceDump(), true;
+		if (this->_lots.size() >= this->_resourceStorage) {
+			this->_dumpInClosestResourceDump();
+			return true;
+		}
+
 		auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
-		if (!tile)
-			return this->_harvestClosestResource(), true;
+
+		if (!tile) {
+			this->_harvestClosestResource();
+			return true;
+		}
 		if (this->harvestTimer == 0)
 			this->_harvesting = true;
 		this->harvestTimer++;
@@ -1574,7 +1695,7 @@ bool GameObject::_updateHarvest()
 	return false;
 }
 
-bool GameObject::_updateHarvestClose()
+bool GameObject::_updateOrder(const HarvestCloseOrder &)
 {
 	if (this->_pickup)
 		return false;
@@ -1582,15 +1703,15 @@ bool GameObject::_updateHarvestClose()
 	return true;
 }
 
-bool GameObject::_updateDump(GameObject *place)
+bool GameObject::_updateOrder(const DumpOrder &order)
 {
 	if (this->_firstEvent) {
 		if (this->_currentDir != this->_dump->dir) {
 			this->_orderQueue.emplace_front(TurnOrder{this->_dump->dir});
-			this->_orderQueue.emplace_front(DumpOrder{place});
+			this->_orderQueue.emplace_front(DumpOrder{order.target});
 			return true;
 		}
-		if (place == nullptr || place->isDead()) {
+		if (order.target == nullptr || order.target->isDead()) {
 			this->_dumpInClosestResourceDump();
 			return true;
 		}
@@ -1598,7 +1719,7 @@ bool GameObject::_updateDump(GameObject *place)
 			this->_harvestClosestResource();
 			return true;
 		}
-		if (this->_position != (place->getPosition() + place->getPoint()).to<float>())
+		if (this->_position != (order.target->getPosition() + order.target->getPoint()).to<float>())
 			return false;
 		this->_dumpStart = true;
 	} else if (this->_dumpStart) {
@@ -1616,7 +1737,7 @@ bool GameObject::_updateDump(GameObject *place)
 			return true;
 		}
 	} else if (this->_dumping) {
-		if (place == nullptr || place->isDead()) {
+		if (order.target == nullptr || order.target->isDead()) {
 			this->_dumpStop = true;
 			this->_dumping = false;
 			return false;
@@ -1625,7 +1746,7 @@ bool GameObject::_updateDump(GameObject *place)
 			std::unordered_map<std::string, unsigned> value;
 			// TODO: Handle other strategies
 			Player::CreditStrategy strategy = Player::CREDIT_SPILL;
-			auto &accept = place->getAcceptResources();
+			auto &accept = order.target->getAcceptResources();
 
 			for (auto &[type, content] : this->_lots.front().value) {
 				if (std::ranges::find(accept, type) == accept.end()) {
@@ -1635,9 +1756,9 @@ bool GameObject::_updateDump(GameObject *place)
 					value[type] += content;
 			}
 			for (auto &[type, content] : value)
-				place->owner->credit(type, content, strategy);
+				order.target->owner->credit(type, content, strategy);
 			this->_lots.pop_front();
-			place->produced();
+			order.target->produced();
 		}
 		if (this->dumpTimer >= this->_dump->delay + this->_dump->delayAfter) {
 			if (this->_lots.empty()) {
@@ -1651,7 +1772,7 @@ bool GameObject::_updateDump(GameObject *place)
 	return false;
 }
 
-bool GameObject::_updateDeploy()
+bool GameObject::_updateOrder(const DeployOrder &)
 {
 	assert_exp(this->_onDeploy);
 	if (this->_onDeploy->spawnBuilding) {
@@ -1670,14 +1791,17 @@ bool GameObject::_updateDeploy()
 	return true;
 }
 
-bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
+bool GameObject::_updateOrder(const AttackUnitOrder &order)
 {
+	GameObject *obj = order.target;
+
 	if (obj == nullptr || obj->isDead() || obj->owner->state.team == this->owner->state.team)
-		return this->_updateFinishMovement();
+		return this->_updateOrder(FinishMovementOrder{});
 	if (this->_firstEvent)
 		this->attackFirst = 1;
 
 	Vector2f myCenter;
+
 	if (this->_boundToGrid) {
 		MapState::Quad abs = this->map->tileCoordToAbs(this->_gridPos);
 
@@ -1699,14 +1823,23 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 	if (range < diffAbs.magnitude2()) {
 		this->_firstEvent = this->attackFirst;
 		this->attackFirst = 0;
-		if (this->_updateMove(opCenter, force ? MOVEREASON_FORCE_ATTACK_COMMAND : automatic ? MOVEREASON_AUTO_AGRO : MOVEREASON_ATTACK_COMMAND, false, obj)) {
+		if (this->_updateOrder(MoveOrder{
+			.destination = opCenter,
+			.reason = order.force ?
+				MOVEREASON_FORCE_ATTACK_COMMAND :
+			order.automatic ?
+				MOVEREASON_AUTO_AGRO :
+				MOVEREASON_ATTACK_COMMAND,
+			.ignore = obj,
+			.force = false
+		})) {
 			// TODO: Handle when unit is blocked
 			if (opCenter != this->_cachedDest)
 				this->_pathCached = false;
 		}
 		return false;
 	}
-	if (!this->_updateFinishMovement())
+	if (!this->_updateOrder(FinishMovementOrder{}))
 		return false;
 
 	ObjectBarrel &barrel = this->_barrels[weapon->barrel];
@@ -1728,7 +1861,7 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 			turret->shotTimer = 1;
 			return false;
 		}
-	} else if (direction != this->_currentDir && !this->_updateTurn(direction))
+	} else if (direction != this->_currentDir && !this->_updateOrder(TurnOrder{direction}))
 		return false;
 
 	double inaccuracy = weapon->weapon->getInaccuracy(diff.magnitude());
@@ -1789,11 +1922,11 @@ bool GameObject::_updateAttack(GameObject *obj, bool automatic, bool force)
 	return false;
 }
 
-bool GameObject::_updateSpin(float amount)
+bool GameObject::_updateOrder(const SpinOrder &order)
 {
 	if (this->_firstEvent)
 		this->currentAngle = this->getFacingAngle() * 180 / M_PI;
-	this->currentAngle = fmod(this->currentAngle + 360 + amount, 360);
+	this->currentAngle = fmod(this->currentAngle + 360 + order.angle, 360);
 
 	double angle = this->currentAngle * M_PI / 180;
 	Vector2f speed = {this->_speed, 0};
@@ -1804,66 +1937,31 @@ bool GameObject::_updateSpin(float amount)
 	return false;
 }
 
-Vector2i GameObject::_findLandingSpot(GameObject *target, Vector2i preferredTile) const
+bool GameObject::_updateOrder(const PickupOrder &order)
 {
-	auto &map = *target->map;
-	Vector2u targetSize = target->getSize();
-	unsigned maxRing = std::max(map.gridSize.x, map.gridSize.y);
+	GameObject *target = order.target;
 
-	for (unsigned r = 0; r <= maxRing; r++) {
-		for (int dy = -static_cast<int>(r); dy <= static_cast<int>(r); dy++)
-			for (int dx = -static_cast<int>(r); dx <= static_cast<int>(r); dx++) {
-				if (std::max(std::abs(dx), std::abs(dy)) != static_cast<int>(r))
-					continue;
-
-				Vector2i tile = preferredTile + Vector2i{dx, dy};
-
-				if (
-					tile.x < 0 || tile.y < 0 ||
-					static_cast<unsigned>(tile.x) >= map.gridSize.x ||
-					static_cast<unsigned>(tile.y) >= map.gridSize.y
-				)
-					continue;
-
-				Vector2i tileAbs = map.topLeftCoordToAbs(tile);
-				MapState::Quad footprint = {
-					tileAbs.to<float>(),
-					{static_cast<float>(tileAbs.x + targetSize.x), static_cast<float>(tileAbs.y)},
-					{static_cast<float>(tileAbs.x + targetSize.x), static_cast<float>(tileAbs.y + targetSize.y)},
-					{static_cast<float>(tileAbs.x), static_cast<float>(tileAbs.y + targetSize.y)}
-				};
-
-				// target must be able to stand there at all (passable terrain for its own pass flags).
-				if (!map.allHasAnyGridBits(footprint, target->_passFlags))
-					continue;
-				// Nothing else already sitting on target's own tile(s).
-				if (!this->manager->isAreaFree(tileAbs, targetSize, {target->index}, target->_stackable))
-					continue;
-				return tile;
-			}
-	}
-	return preferredTile;
-}
-
-bool GameObject::_updatePickup(GameObject *target, Vector2f destination)
-{
 	switch (this->pickupState) {
 	case 0: {
 		Vector2f targetCenter = target->getMiddle();
 
-		if (this->_updateMove(targetCenter - this->_getTileOffsetFromCenter(), MOVEREASON_DELIVERY, false, target))
+		if (this->_updateOrder(MoveOrder{
+			.destination = targetCenter - this->_getTileOffsetFromCenter(),
+			.reason = MOVEREASON_DELIVERY,
+			.ignore = target,
+			.force = false
+		}))
 			this->pickupState = 1;
 		return false;
 	}
 	case 1: {
 		unsigned converted = round((target->getFacingAngle() + M_PI_2) * this->_anims.size() / (M_PI * 2));
 
-		if (this->_currentDir != converted)
-			this->_updateTurn(converted);
-		else {
+		if (this->_currentDir != converted) {
 			this->pickupState = 2;
 			this->pickupOldAltitude = this->_altitude;
-		}
+		} else
+			this->_updateOrder(TurnOrder{converted});
 		return false;
 	}
 	case 2:
@@ -1885,8 +1983,13 @@ bool GameObject::_updatePickup(GameObject *target, Vector2f destination)
 		this->pickupState = 5;
 		[[fallthrough]];
 	case 5: {
-		auto d = destination - this->_getTileOffsetFromCenter() - target->_getTileOffsetFromCenter();
-		bool arrived = this->_updateMove(d, MOVEREASON_DELIVERY, false, target);
+		auto d = order.destination - this->_getTileOffsetFromCenter() - target->_getTileOffsetFromCenter();
+		bool arrived = this->_updateOrder(MoveOrder{
+			.destination = d,
+			.reason = MOVEREASON_DELIVERY,
+			.ignore = target,
+			.force = false
+		});
 
 		target->_currentDir = round((this->getFacingAngle() + M_PI_2) * target->_anims.size() / (M_PI * 2));
 		target->setPosition(this->getMiddle() + target->_getTileOffsetFromCenter());
@@ -1925,18 +2028,18 @@ bool GameObject::_updatePickup(GameObject *target, Vector2f destination)
 	}
 }
 
-bool GameObject::_updateWaitPickup(const std::vector<MoveReason> &targets, double dist, const Order *other)
+bool GameObject::_updateOrder(const WaitPickupOrder &order)
 {
-	if (other)
-		this->_handleOrder(*other);
+	if (order.other)
+		this->_updateOrder(*order.other);
 	if (this->_firstEvent) {
-		this->_pickupTargets = &targets;
-		this->_pickupDistMin = dist;
+		this->_pickupTargets = &order.targets;
+		this->_pickupDistMin = order.dist;
 	}
 	return false;
 }
 
-bool GameObject::_updateFinishMovement()
+bool GameObject::_updateOrder(const FinishMovementOrder &)
 {
 	if (!this->_boundToGrid || this->_pathCache.empty())
 		return true;
@@ -1958,11 +2061,20 @@ bool GameObject::_updateFinishMovement()
 	diff.y = std::fmod(diff.y, this->map->tileSize.y);
 	this->_cachedDest = pos + diff;
 	this->_pathCache.front() = this->_cachedDest + this->map->tileSize / 2;
-	return this->_updateMove(this->_cachedDest, MOVEREASON_FINISH_MOVE, false, nullptr);
+	return this->_updateOrder(MoveOrder{
+		.destination = this->_cachedDest,
+		.reason = MOVEREASON_FINISH_MOVE,
+		.ignore = nullptr,
+		.force = false
+	});
 }
 
-bool GameObject::_updateDelivery(const std::vector<std::string> &objects, const std::string &queue, const Position &destination, const MapState &state)
+bool GameObject::_updateOrder(const DeliveryOrder &order)
 {
+	const std::vector<std::string> &objects = order.objects;
+	const std::string &queue = order.queue;
+	const Position &destination = order.destination;
+	const MapState &state = *order.state;
 	GameObject *obj = this->owner->getSpawnBuilding(queue, false);
 	Vector2f dest = destination.getPosition(obj ? obj->getPosition() : Vector2i{0, 0}, state, {0, 0}) + state.tileSize / 2;
 
@@ -1990,7 +2102,12 @@ bool GameObject::_updateDelivery(const std::vector<std::string> &objects, const 
 		if (obj)
 			obj->producing(true);
 
-		bool arrived = this->_updateMove(dest - this->_getTileOffsetFromCenter(), MOVEREASON_DELIVERY, false, obj);
+		bool arrived = this->_updateOrder(MoveOrder{
+			.destination = dest - this->_getTileOffsetFromCenter(),
+			.reason = MOVEREASON_DELIVERY,
+			.ignore = obj,
+			.force = false
+		});
 
 		if (!arrived)
 			return false;
@@ -2055,83 +2172,22 @@ bool GameObject::_updateDelivery(const std::vector<std::string> &objects, const 
 	}
 }
 
-void GameObject::_reduceTimeControlTimer(unsigned dec)
+bool GameObject::_updateOrder(const ExecCbOrder &order)
 {
-	if (this->_takeControlTime == 0)
-		return;
-	if (this->_takeControlTime > dec) {
-		this->_takeControlTime -= dec;
-		return;
-	}
-	this->_takeControlTime = 0;
-	this->deinitGlobalGrid();
-	this->owner = this->_originalOwner;
-	this->_originalOwner = nullptr;
-	this->initGlobalGrid();
-	this->setColor(this->owner->getColor());
+	return order.cb();
 }
 
-void GameObject::_spawnUnits(const std::unordered_map<std::string, unsigned> &units)
+bool GameObject::_updateOrder(const DieOrder &)
 {
-	std::pair<Vector2f, std::vector<Vector2f>> offsets[] = {
-		{{1, 1}, { {-1,  1}, { 0,  1}, { 1,  1} }},
-		{{0, 0}, { {-1,  0}, {-1, -1}, { 0, -1} }},
-		{{2, 0}, { { 0, -1}, { 1, -1}, { 1,  0} }},
-		{{1, 0}, { {-1, -1}, { 0, -1}, { 1, -1} }},
-		{{0, 1}, { {-1, -1}, {-1,  0}, {-1,  1} }},
-		{{2, 1}, { { 1, -1}, { 1,  0}, { 1,  1} }},
-		{{1, 2}, { {-1,  1}, { 0,  1}, { 1,  1} }},
-		{{0, 2}, { {-1,  0}, {-1,  1}, { 0,  1} }},
-		{{2, 2}, { { 1,  0}, { 1,  1}, { 0,  1} }},
-	};
-	size_t i = 0;
-
-	for (auto [name, nb] : units) {
-		while (nb--) {
-			assert_exp(i < std::size(offsets));
-			auto pos = this->_gridPos + offsets[i].first;
-			auto obj = this->manager->spawnObject(this->owner->state.index, this->map->topLeftCoordToAbs(pos), "", name);
-			auto out = pos + offsets[i].second[game->gameRandom() % offsets[i].second.size()];
-
-			obj->moveTo(this->map->topLeftCoordToAbs(out), MOVEREASON_MOVE_SPAWN, true);
-			i++;
-		}
-	}
-}
-
-bool GameObject::_handleOrder(const Order &o)
-{
-	if (auto turn = std::get_if<TurnOrder>(&o))
-		return this->_updateTurn(turn->resultDir);
-	if (auto move = std::get_if<MoveOrder>(&o))
-		return this->_updateMove(move->destination, move->reason, move->force, nullptr);
-	if (auto cmove = std::get_if<MoveCheckOrder>(&o))
-		return this->_updateCheckMove(cmove->destination, cmove->fail);
-	if (std::holds_alternative<HarvestOrder>(o))
-		return this->_updateHarvest();
-	if (std::holds_alternative<HarvestCloseOrder>(o))
-		return this->_updateHarvestClose();
-	if (auto dump = std::get_if<DumpOrder>(&o))
-		return this->_updateDump(dump->target);
-	if (std::holds_alternative<DeployOrder>(o))
-		return this->_updateDeploy();
-	if (auto attack = std::get_if<AttackUnitOrder>(&o))
-		return this->_updateAttack(attack->target, attack->automatic, attack->force);
-	if (std::holds_alternative<FinishMovementOrder>(o))
-		return this->_updateFinishMovement();
-	if (auto spin = std::get_if<SpinOrder>(&o))
-		return this->_updateSpin(spin->angle);
-	if (auto pickup = std::get_if<PickupOrder>(&o))
-		return this->_updatePickup(pickup->target, pickup->destination);
-	if (auto wpickup = std::get_if<WaitPickupOrder>(&o))
-		return this->_updateWaitPickup(wpickup->targets, wpickup->dist, &*wpickup->other);
-	if (auto delivery = std::get_if<DeliveryOrder>(&o))
-		return this->_updateDelivery(delivery->objects, delivery->queue, delivery->destination, *delivery->state);
-	if (auto exec = std::get_if<ExecCbOrder>(&o))
-		return exec->cb();
-	if (std::holds_alternative<DieOrder>(o))
-		this->_disposable = true;
+	this->_disposable = true;
 	return true;
+}
+
+bool GameObject::_updateOrder(const Order &order)
+{
+	return std::visit([this](auto &&arg) {
+		return this->_updateOrder(arg);
+	}, order);
 }
 
 void GameObject::playBuiltSound(Vector2f pos) const
@@ -2188,7 +2244,7 @@ void GameObject::update()
 			this->_gpTimerF.fill(0);
 		} else
 			this->_firstEvent = false;
-		if (this->_handleOrder(this->_orderQueue.front())) {
+		if (this->_updateOrder(this->_orderQueue.front())) {
 			this->_orderQueue.pop_front();
 			this->_firstREvent = true;
 		} else
@@ -2202,7 +2258,7 @@ void GameObject::update()
 			this->_gpTimerF.fill(0);
 		} else
 			this->_firstEvent = false;
-		if (this->_handleOrder(*this->_idleOrder))
+		if (this->_updateOrder(*this->_idleOrder))
 			this->_firstIEvent = true;
 		else
 			this->_firstIEvent = false;
@@ -2811,7 +2867,10 @@ bool GameObject::canMove() const
 void GameObject::harvest(const Vector2i &pos, bool automatic, bool straight)
 {
 	this->moveTo(pos, automatic ? MOVEREASON_HARVEST : MOVEREASON_HARVEST_COMMAND, straight);
-	this->_orderQueue.emplace_back(MoveCheckOrder{&GameObject::_goToClosestResource, pos});
+	this->_orderQueue.emplace_back(MoveCheckOrder{
+		.fail = &GameObject::_goToClosestResource,
+		.destination = pos
+	});
 	this->_orderQueue.emplace_back(HarvestOrder{});
 }
 
@@ -2830,6 +2889,7 @@ void GameObject::moveOut(const Vector2i &pos)
 	this->_orderQueue.emplace_back(MoveOrder{
 		.destination = this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)),
 		.reason = MOVEREASON_DELIVERY,
+		.ignore = nullptr,
 		.force = true
 	});
 	this->_orderQueue.emplace_back(DieOrder{});
@@ -2842,17 +2902,19 @@ void GameObject::moveTo(const Vector2i &pos, MoveReason reason, bool straight)
 		this->_orderQueue.emplace_back(MoveOrder{
 			.destination = this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)),
 			.reason = reason,
+			.ignore = nullptr,
 			.force = straight
 		});
 	else
 		this->_orderQueue.emplace_back(MoveOrder{
 			.destination = pos + this->_size / 2,
 			.reason = reason,
+			.ignore = nullptr,
 			.force = straight
 		});
 }
 
-bool GameObject::moveAside(GameObject *asker)
+bool GameObject::moveAside(const GameObject *asker)
 {
 	assert_exp(this->canMove());
 	if (this->_dumpStart || this->_dumping || this->_dumpStop || this->_harvesting)
@@ -2867,7 +2929,7 @@ bool GameObject::moveAside(GameObject *asker)
 	// Prefer moving away from whoever asked us to move (compare centers, which
 	// are valid regardless of whether either unit is grid-bound).
 	Vector2f selfCenter = this->getMiddle();
-	Vector2f away = asker ? selfCenter - asker->getMiddle() : Vector2f{0, 0};
+	Vector2f away = selfCenter - asker->getMiddle();
 	Vector2i destination;
 	float bestScore = 0;
 	bool found = false;
@@ -2936,7 +2998,12 @@ bool GameObject::moveAside(GameObject *asker)
 	if (!found)
 		return false;
 
-	this->_orderQueue.emplace_front(MoveOrder{destination, MOVEREASON_MOVE_ASIDE, false});
+	this->_orderQueue.emplace_front(MoveOrder{
+		.destination = destination,
+		.reason = MOVEREASON_MOVE_ASIDE,
+		.ignore = nullptr,
+		.force = false
+	});
 	this->_firstREvent = true;
 	this->_pathCached = false;
 	this->_asideCooldown = waitBlocked;
@@ -2955,20 +3022,29 @@ void GameObject::dumpResourcesTo(GameObject *dump, bool automatic, bool straight
 	auto pos = dump->getPosition() + dump->getPoint();
 
 	this->moveTo(pos, automatic ? MOVEREASON_DUMP : MOVEREASON_DUMP_COMMAND, straight);
-	this->_orderQueue.emplace_back(MoveCheckOrder{&GameObject::_goToClosestResourceDump, pos});
-	this->_orderQueue.emplace_back(DumpOrder{dump});
+	this->_orderQueue.emplace_back(MoveCheckOrder{
+		.fail = &GameObject::_goToClosestResourceDump,
+		.destination = pos
+	});
+	this->_orderQueue.emplace_back(DumpOrder{.target = dump});
 }
 
 void GameObject::pickup(GameObject *target, Vector2f destination)
 {
-	this->_orderQueue.emplace_front(PickupOrder{target, destination});
+	this->_orderQueue.emplace_front(PickupOrder{
+		.target = target,
+		.destination = destination
+	});
 }
 
 void GameObject::deliverTo(const std::vector<GameObject *> &objects, Vector2f destination)
 {
 	// TODO: For now only handle carryalls
 	assert_exp(objects.size() == 1);
-	this->_orderQueue.emplace_back(PickupOrder{objects.front(), destination});
+	this->_orderQueue.emplace_back(PickupOrder{
+		.target = objects.front(),
+		.destination = destination
+	});
 	objects.front()->_pickup = this;
 	objects.front()->setAltitude(this->_altitude - 4);
 	this->pickupState = 4;

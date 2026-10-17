@@ -7,7 +7,7 @@
 
 
 #define ABI_VERSION 1
-#define SL_DECLARE_VERSION unsigned _ABI_VERSION = ABI_VERSION
+#define SL_DECLARE_VERSION SL_EXPORT unsigned _ABI_VERSION = ABI_VERSION
 
 #ifdef _WIN32
 #include <windows.h>
