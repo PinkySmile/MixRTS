@@ -74,7 +74,7 @@ void GameFixture::tick(unsigned steps)
 		this->manager->update();
 		this->manager->updateRender();
 
-		_game->screen->clear(sf::Color{0x80, 0xFF, 0x40});
+		_game->screen->clear(Color{0x80, 0xFF, 0x40});
 		this->manager->render();
 
 		_game->gui.draw();

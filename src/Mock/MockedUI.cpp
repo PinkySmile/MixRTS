@@ -5,7 +5,7 @@
 #include "MockedUI.hpp"
 
 MockedUI::MockedUI(UI *wrapped) :
-	UI(wrapped->getFaction()),
+	UI(wrapped->getFaction(), wrapped->state, wrapped->manager, wrapped->ownerState, wrapped->map),
 	orderQueue(this->_eventQueue),
 	_wrapped(wrapped)
 {

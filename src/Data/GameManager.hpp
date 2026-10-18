@@ -107,8 +107,12 @@ public:
 	void deregisterObject(GameObject *o);
 	void modUnitInArea(const MapState::Quad &quad, size_t player, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable);
 	void modUnitInArea(Vector2i rel, Vector2u tileSize, size_t player, int placementCount, pfGridType mask, char mod, bool isStatic, bool crushable);
-	std::optional<Vector2i> getFirstHarvestableTile(MapState &state, Vector2i pos) const;
-	std::optional<Vector2i> getClosestHarvestableTile(MapState &state, Vector2i pos) const;
+	//! Returns the first resource tile (in loaded map grid coordinates) in the tile at \a pos
+	//! (in the harvester's map coordinates) that \a harvester can currently stand on.
+	std::optional<Vector2i> getFirstHarvestableTile(const GameObject &harvester, Vector2i pos) const;
+	//! Returns the closest resource tile (in the harvester's map coordinates) to \a pos that
+	//! \a harvester can currently stand on.
+	std::optional<Vector2i> getClosestHarvestableTile(const GameObject &harvester, Vector2i pos) const;
 	GameObject *getClosestResourceDump(const std::vector<std::string> &preferredResources, size_t player, Vector2i pos);
 	MapResource &getResource(Vector2i pos);
 	void consumeResource(Vector2i pos);

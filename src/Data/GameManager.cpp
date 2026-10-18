@@ -935,7 +935,8 @@ noGrid:
 				if (exit) {
 					auto next = *exit + parent->getPosition();
 
-					obj->moveTo(next, MOVEREASON_MOVE_SPAWN, true);
+					// Both the spawn and exit points may be inside the factory: it must not block the unit.
+					obj->moveTo(next, MOVEREASON_MOVE_SPAWN, true, parent);
 					obj->setDirection(obj->getPosition().angle(next));
 				}
 			}
@@ -1223,18 +1224,19 @@ GameObject *GameManager::findPickup(size_t owner, MoveReason reason, double dist
 	return nullptr;
 }
 
-std::optional<Vector2i> GameManager::getFirstHarvestableTile(MapState &state, Vector2i pos) const
+std::optional<Vector2i> GameManager::getFirstHarvestableTile(const GameObject &harvester, Vector2i pos) const
 {
 	Vector2i topLeft;
 	Vector2i bottomRight;
 	auto &grid = this->_map.grid;
+	auto &state = *harvester.map;
 
 #define CHECK_RES(x_, y_) do {                                                                                          \
 	if ((x_) < 0 || (y_) < 0 || (x_) >= (int)grid.gridSize.x || (y_) >= (int)grid.gridSize.y)                       \
 		break;                                                                                                  \
 	auto r = GRID_RESOURCE_TYPE(grid.grid[(x_) + (y_) * grid.gridSize.x]);                                          \
 	if (r == 0) break;                                                                                              \
-	if (!this->isAreaFree({x_, y_}, grid.tileSize)) break;                                                          \
+	if (!this->isAreaFree(grid.topLeftCoordToAbs({x_, y_}), grid.tileSize)) break;                                  \
 	auto &re = this->_map.metadata.resources.at(r);                                                                 \
 	if (re.onlyAdjCollectible.empty()) break;                                                                       \
 	if (std::find(re.onlyAdjCollectible.begin(), re.onlyAdjCollectible.end(), tile) == re.onlyAdjCollectible.end()) \
@@ -1248,6 +1250,8 @@ std::optional<Vector2i> GameManager::getFirstHarvestableTile(MapState &state, Ve
 			auto tile = this->_map.displayedIndices[x + y * grid.gridSize.x];
 
 			if (res == 0)
+				continue;
+			if (!harvester.canStandOn(state.absToTileCoord(grid.topLeftCoordToAbs({x, y}))))
 				continue;
 			CHECK_RES(x - 1, y - 1);
 			CHECK_RES(x,     y - 1);
@@ -1264,16 +1268,23 @@ std::optional<Vector2i> GameManager::getFirstHarvestableTile(MapState &state, Ve
 	return {};
 }
 
-std::optional<Vector2i> GameManager::getClosestHarvestableTile(MapState &state, Vector2i pos) const
+std::optional<Vector2i> GameManager::getClosestHarvestableTile(const GameObject &harvester, Vector2i pos) const
 {
 	auto &grid = this->_map.grid;
-	int i = 1;
-	std::optional<Vector2i> result;
-	auto cb = [this, &grid, &state](int x, int y) -> std::optional<Vector2i> {
+	auto &state = *harvester.map;
+	int w = grid.gridSize.x;
+	int h = grid.gridSize.y;
+	auto cb = [this, &grid, &state, &harvester](int x, int y) -> std::optional<Vector2i> {
+		if (x < 0 || y < 0 || x >= static_cast<int>(grid.gridSize.x) || y >= static_cast<int>(grid.gridSize.y))
+			return {};
+
 		auto res = GRID_RESOURCE_TYPE(grid.grid[x + y * grid.gridSize.x]);
 		auto tile = this->_map.displayedIndices[x + y * grid.gridSize.x];
+		auto mapTile = state.absToTileCoord(grid.topLeftCoordToAbs({x, y}));
 
 		if (res == 0)
+			return {};
+		if (!harvester.canStandOn(mapTile))
 			return {};
 		CHECK_RES(x - 1, y - 1);
 		CHECK_RES(x,     y - 1);
@@ -1283,38 +1294,46 @@ std::optional<Vector2i> GameManager::getClosestHarvestableTile(MapState &state, 
 		CHECK_RES(x - 1, y + 1);
 		CHECK_RES(x,     y + 1);
 		CHECK_RES(x + 1, y + 1);
-		return state.absToTileCoord(grid.topLeftCoordToAbs({x, y}));
+		return mapTile;
 	keepGoing:
 		return {};
 	};
+	std::optional<Vector2i> result;
 
 	pos = grid.absToTileCoord(state.topLeftCoordToAbs(pos));
 	result = cb(pos.x, pos.y);
 	if (result) return result;
-	while (true) {
-		if (pos.x > i && pos.y > i && static_cast<unsigned>(pos.x + i) >= grid.gridSize.x && static_cast<unsigned>(pos.y + i) >= grid.gridSize.y)
+	for (int i = 1; ; i++) {
+		int x0 = pos.x - i;
+		int x1 = pos.x + i;
+		int y0 = pos.y - i;
+		int y1 = pos.y + i;
+
+		// The whole ring is outside of the grid: nothing left to search.
+		if (x0 < 0 && y0 < 0 && x1 >= w && y1 >= h)
 			return {};
-		if (pos.y >= i)
-			for (int j = std::max(0, pos.x - i); j < std::min<int>(pos.x + i, grid.gridSize.x); j++) {
-				result = cb(j, pos.y - i);
+		// Top and bottom sides (corners included).
+		for (int x = std::max(x0, 0); x <= std::min(x1, w - 1); x++) {
+			if (y0 >= 0) {
+				result = cb(x, y0);
 				if (result) return result;
 			}
-		if (static_cast<unsigned>(pos.y + i) < grid.gridSize.y)
-			for (int j = std::max(0, pos.x - i); j < std::min<int>(pos.x + i, grid.gridSize.x); j++) {
-				result = cb(j, pos.y + i);
+			if (y1 < h) {
+				result = cb(x, y1);
 				if (result) return result;
 			}
-		if (pos.x >= i)
-			for (int j = std::max(0, pos.y - i); j < std::min<int>(pos.y + i, grid.gridSize.y); j++) {
-				result = cb(pos.x - i, j);
+		}
+		// Left and right sides (corners already done).
+		for (int y = std::max(y0 + 1, 0); y <= std::min(y1 - 1, h - 1); y++) {
+			if (x0 >= 0) {
+				result = cb(x0, y);
 				if (result) return result;
 			}
-		if (static_cast<unsigned>(pos.x + i) < grid.gridSize.x)
-			for (int j = std::max(0, pos.y - i); j < std::min<int>(pos.y + i, grid.gridSize.y); j++) {
-				result = cb(pos.x + i, j);
+			if (x1 < w) {
+				result = cb(x1, y);
 				if (result) return result;
 			}
-		i++;
+		}
 	}
 #undef CHECK_RES
 }

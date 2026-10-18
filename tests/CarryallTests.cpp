@@ -31,6 +31,7 @@
 #include <stdexcept>
 #include <gtest/gtest.h>
 #include "GameFixture.hpp"
+#include "TestHelpers.hpp"
 #include "Mock/MockedUI.hpp"
 #include "Data/GameObject.hpp"
 #include "Data/GameManager.hpp"
@@ -44,89 +45,6 @@ namespace {
 //! becomes eligible for a carryall pickup. Tests place units well beyond
 //! this so a pickup is unambiguously expected.
 constexpr double CARRYALL_PICKUP_DIST = 320;
-
-Vector2i tileCenterAbs(const MapState &map, Vector2i tile)
-{
-	return map.topLeftCoordToAbs(tile) + Vector2i(map.tileSize.to<int>()) / 2;
-}
-
-//! Scans the whole map for a tile carrying spice (or any other harvestable
-//! resource) and returns its tile coordinates. Used instead of hardcoding
-//! map-specific coordinates so these tests keep working if the test map ever
-//! changes.
-Vector2i findResourceTile(const MapState &map)
-{
-	for (unsigned y = 0; y < map.gridSize.y; y++)
-		for (unsigned x = 0; x < map.gridSize.x; x++)
-			if (GRID_RESOURCE_TYPE(map.grid[x + y * map.gridSize.x]) != 0)
-				return {static_cast<int>(x), static_cast<int>(y)};
-	throw std::runtime_error("No resource tile found on the test map");
-}
-
-//! Searches outward (in growing square rings) from originTile for a tile
-//! whose footprintTiles x footprintTiles area is fully passable (per
-//! passFlags), isn't sitting on a resource, and is currently unoccupied.
-//! Used to place movers ("far away", "next to the field", etc.) without
-//! hardcoding coordinates specific to the test map. `borderMargin` rejects
-//! candidates too close to the map's edge, where terrain tends to be a
-//! narrow, easily fully-enclosed dead end (e.g. good for "put a unit
-//! somewhere passable" but bad for "and it should be able to walk all the
-//! way to some far away tile on its own").
-Vector2i findFreePassableTile(
-	GameManager &manager, const MapState &map, Vector2i originTile,
-	unsigned minRingTiles, Vector2u footprintTiles, uint32_t passFlags,
-	unsigned borderMargin = 0
-) {
-	unsigned maxRing = std::max(map.gridSize.x, map.gridSize.y);
-
-	for (unsigned r = minRingTiles; r < maxRing; r++) {
-		for (int dy = -static_cast<int>(r); dy <= static_cast<int>(r); dy++)
-			for (int dx = -static_cast<int>(r); dx <= static_cast<int>(r); dx++) {
-				if (std::max(std::abs(dx), std::abs(dy)) != static_cast<int>(r))
-					continue;
-
-				Vector2i topLeft = originTile + Vector2i{dx, dy};
-				bool ok = true;
-
-				for (unsigned ty = 0; ty < footprintTiles.y && ok; ty++)
-					for (unsigned tx = 0; tx < footprintTiles.x && ok; tx++) {
-						Vector2i t = topLeft + Vector2i{static_cast<int>(tx), static_cast<int>(ty)};
-
-						if (
-							t.x < static_cast<int>(borderMargin) || t.y < static_cast<int>(borderMargin) ||
-							static_cast<unsigned>(t.x) + borderMargin >= map.gridSize.x ||
-							static_cast<unsigned>(t.y) + borderMargin >= map.gridSize.y
-						) {
-							ok = false;
-							break;
-						}
-						auto v = map.grid[t.x + t.y * map.gridSize.x];
-						if (!(v & passFlags) || GRID_RESOURCE_TYPE(v) != 0) {
-							ok = false;
-							break;
-						}
-					}
-				if (!ok)
-					continue;
-
-				Vector2i absPos = map.topLeftCoordToAbs(topLeft);
-				Vector2u absSize = {footprintTiles.x * map.tileSize.x, footprintTiles.y * map.tileSize.y};
-
-				if (!manager.isAreaFree(absPos, absSize))
-					continue;
-				return topLeft;
-			}
-	}
-	throw std::runtime_error("No free passable tile found");
-}
-
-//! Same idea as findFreePassableTile(), but for a fully buildable (not just
-//! passable) footprint, used to place buildings (refineries, silos, ...)
-//! without hardcoding map-specific coordinates.
-Vector2i findFreeBuildableTile(GameManager &manager, const MapState &map, Vector2i originTile, unsigned minRingTiles, Vector2u footprintTiles)
-{
-	return findFreePassableTile(manager, map, originTile, minRingTiles, footprintTiles, GRIDMASK_CAN_BUILD);
-}
 
 //! d2k:carr uses "spawn_params": {"type": "appear", "x": "close_border", ...},
 //! meaning a freshly spawned carryall actually first appears at the map's
@@ -147,15 +65,6 @@ GameObject *spawnIdleCarryallAt(GameManager &manager, size_t owner, Vector2i abs
 		carryall->clearOrders();
 	}
 	return carryall;
-}
-
-MockedUI *installMockedUI(Player &player)
-{
-	auto &uis = player.getUIs();
-	auto *mockedUi = new MockedUI(uis[player.state.factionIndex].release());
-
-	uis[player.state.factionIndex].reset(mockedUi);
-	return mockedUi;
 }
 
 } // namespace
@@ -226,6 +135,15 @@ TEST_F(GameFixture, CarryallDumpOrderIsCarriedToRefinery)
 	// would otherwise immediately compete with our own harvester for the
 	// only carryall on the map (via its own "spawn_orders": ["harvest"]).
 	// Get rid of it so this test unambiguously exercises our harvester only.
+	// The refinery also spawns that harvester already being carried by a
+	// carryall of its own: that one has to go too (and first, with its
+	// orders dropped), otherwise it would keep a dangling pointer to the
+	// harvester once the latter is disposed of.
+	for (auto *c : this->player->getObjects("d2k:carr"))
+		if (c != carryall) {
+			c->clearOrders();
+			c->damage(999999, DMGTYPE_VOID);
+		}
 	for (auto *h : this->player->getObjects("d2k:harv"))
 		if (h != harvester) {
 			h->clearOrders();
@@ -459,8 +377,8 @@ TEST_F(GameFixture, BuildingCanBePlacedUnderAFlyingCarryall)
 			conyard = obj;
 	ASSERT_NE(conyard, nullptr) << "The MCV should have deployed into a construction yard";
 
-	ASSERT_TRUE(this->player->state.queues["d2k:building"].contains("d2k:wtra"));
-	auto &queue = this->player->state.queues["d2k:building"].at("d2k:wtra");
+	ASSERT_TRUE(this->player->state.queues["d2k:building"].entries.contains("d2k:wtra"));
+	auto &queue = this->player->state.queues["d2k:building"].entries.at("d2k:wtra");
 	ASSERT_TRUE(queue.unlocked) << "The wind trap should be unlocked once a construction yard has been built";
 
 	// Fast-forward straight to "fully built, waiting to be placed": how a
@@ -475,7 +393,7 @@ TEST_F(GameFixture, BuildingCanBePlacedUnderAFlyingCarryall)
 	Vector2i placementTile = findFreeBuildableTile(*this->manager, map, conyardTile, 1, {2, 2});
 	Vector2i placementAbs = map.topLeftCoordToAbs(placementTile);
 
-	ASSERT_TRUE(this->manager->canSpawnBuilding(this->player->state.index, placementAbs, "d2k:wtra", conyard->getPosition(), {}))
+	ASSERT_TRUE(this->manager->canSpawnBuilding(this->player->state.index, placementAbs, "d2k:wtra", {}))
 		<< "Setup issue: the wind trap should be placeable there before the carryall shows up";
 
 	// Park a flying carryall exactly over that spot.

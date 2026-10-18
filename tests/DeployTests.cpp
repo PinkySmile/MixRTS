@@ -37,7 +37,11 @@ TEST_F(GameFixture, DeployingMcvBuildsConstructionYardAndUnlocksBuildings)
 	// object in the "building" queue also needs an actual queue producer (i.e.
 	// a construction yard) before it can be unlocked: it must not be unlocked
 	// yet, since no construction yard has been built.
-	ASSERT_FALSE(this->player->state.queues["d2k:building"].contains("d2k:wtra"));
+	{
+		auto &entries = this->player->state.queues["d2k:building"].entries;
+
+		ASSERT_TRUE(!entries.contains("d2k:wtra") || !entries.at("d2k:wtra").unlocked);
+	}
 
 	// Replace the player's own UI with a MockedUI wrapping it, so we can inject
 	// a fake deploy event exactly like a real UI would generate when the
@@ -61,6 +65,6 @@ TEST_F(GameFixture, DeployingMcvBuildsConstructionYardAndUnlocksBuildings)
 	ASSERT_NE(conyard, nullptr) << "The MCV should have deployed into a construction yard";
 	EXPECT_EQ(this->getMcv(), nullptr) << "The MCV should be gone once it has deployed";
 
-	ASSERT_TRUE(this->player->state.queues["d2k:building"].contains("d2k:wtra"));
-	EXPECT_TRUE(this->player->state.queues["d2k:building"].at("d2k:wtra").unlocked) << "The wind trap should be unlocked once a construction yard has been built";
+	ASSERT_TRUE(this->player->state.queues["d2k:building"].entries.contains("d2k:wtra"));
+	EXPECT_TRUE(this->player->state.queues["d2k:building"].entries.at("d2k:wtra").unlocked) << "The wind trap should be unlocked once a construction yard has been built";
 }

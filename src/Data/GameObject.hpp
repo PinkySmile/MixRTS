@@ -68,7 +68,14 @@ struct MYDLL_API MoveOrder {
 	bool force;
 };
 struct MYDLL_API FinishMovementOrder {};
-struct MYDLL_API HarvestOrder {};
+//! Walks to \a destination (the tile to harvest) and harvests it. If the
+//! destination can't be reached (blocked by something that won't leave), the
+//! order re-targets the closest harvestable tile instead.
+struct MYDLL_API HarvestOrder {
+	Vector2i destination = {0, 0};
+	MoveReason reason = MOVEREASON_HARVEST;
+	bool force = false;
+};
 struct MYDLL_API HarvestCloseOrder {};
 struct MYDLL_API DeployOrder {};
 struct MYDLL_API DieOrder {};
@@ -113,7 +120,15 @@ struct MYDLL_API WaitPickupOrder {
 enum CollisionResolution {
 	COLLISION_PROCEED, // The way ahead is clear (possibly on a freshly found path).
 	COLLISION_WAIT,    // Blocked for now; keep the order and retry next frame.
-	COLLISION_ABORT    // Nothing can be done; the unit must stop here.
+	COLLISION_ABORT,   // Nothing can be done; the unit must stop here.
+	COLLISION_DEST_BLOCKED // The final destination tile is taken and won't be freed; stop next to it.
+};
+
+// Result of one step of a movement order.
+enum MoveResult {
+	MOVE_IN_PROGRESS,  // Still moving (or waiting).
+	MOVE_DONE,         // The movement is over (arrived, no path, or aborted).
+	MOVE_DEST_BLOCKED  // The movement is over because the destination tile is occupied.
 };
 
 struct MYDLL_API DumpInfo {
@@ -303,6 +318,10 @@ protected:
 	Vector2i _point;
 	Vector2f _position;
 	Vector2i _gridPos;
+	//! Tile this unit currently holds in the pathfinding grid. For grid-bound
+	//! units this is the tile they are stepping into (reserved as soon as the
+	//! step starts), which may differ from _gridPos until they get there.
+	Vector2i _occupiedTile = {0, 0};
 	Vector2i _oldPos = {-1, -1};
 	std::optional<ExtraSpawn> _extraSpawn;
 	std::vector<std::string> _spawnOrders;
@@ -359,6 +378,8 @@ protected:
 	bool _stackable = false;
 	bool _solid = true;
 	bool _harvesting = false;
+	//! True while _occupiedTile is a tile we are still stepping into.
+	bool _tileReserved = false;
 	bool _fake = false;
 	bool _central = false;
 	bool _canCrush = false;
@@ -427,7 +448,8 @@ public:
 	void harvest();
 	void attack(GameObject *obj, bool automatic, bool force);
 	void moveOut(const Vector2i &pos);
-	void moveTo(const Vector2i &pos, MoveReason reason, bool straight = false);
+	//! \param ignore Object that is never considered an obstacle on the way (e.g. the building a unit just came out of).
+	void moveTo(const Vector2i &pos, MoveReason reason, bool straight = false, GameObject *ignore = nullptr);
 	bool moveAside(const GameObject *asker);
 	void dumpResourcesTo(GameObject *dump, bool automatic, bool straight = false);
 	void pickup(GameObject *target, Vector2f destination);
@@ -512,6 +534,11 @@ public:
 	[[nodiscard]] unsigned getPassFlags() const;
 	[[nodiscard]] bool isSolid() const;
 	[[nodiscard]] bool isStackable() const;
+	//! Tile (in this->map coordinates) currently held by this unit in the pathfinding grid.
+	[[nodiscard]] Vector2i getOccupiedTile() const;
+	//! Whether this unit could stand on \a tile (in this->map coordinates)
+	//! right now: terrain, free space, stacking and crushing rules included.
+	[[nodiscard]] bool canStandOn(Vector2i tile) const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getCost() const;
 	[[nodiscard]] const std::set<Vector2i> &getCheckTiles() const;
 	[[nodiscard]] const std::optional<std::string> &getBuildQueue() const;
@@ -546,14 +573,23 @@ protected:
 	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);
 	bool _tileAvailableFor(Vector2i tile) const;
 	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size, const GameObject *ignoreObject) const;
+	//! Finds what holds \a tile in the pathfinding grid (units that reserved it included).
+	GameObject *_findTileBlocker(Vector2i tile, const GameObject *ignoreObject) const;
+	//! Whether this unit is on its way somewhere other than \a tile (so it will free it up).
+	[[nodiscard]] bool _isLeavingTile(Vector2i tile) const;
+	void _reserveTile(Vector2i tile);
+	[[nodiscard]] Vector2i _getFacingTile() const;
+	MoveResult _updateMove(const MoveOrder &order);
 	[[nodiscard]] Vector2i _findLandingSpot(GameObject *target, Vector2i preferredTile) const;
-	CollisionResolution _resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject);
+	//! \param pushBlockers When the final destination is held by an allied unit, ask it to move aside
+	//!                    (instead of giving up). Used by units coming out of a building.
+	CollisionResolution _resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject, bool pushBlockers = false);
 	CollisionResolution _resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject);
 
 	bool _updateOrder(const TurnOrder &order);
 	bool _updateOrder(const MoveOrder &order);
 	bool _updateOrder(const MoveCheckOrder &order);
-	bool _updateOrder(const HarvestOrder &order);
+	bool _updateOrder(HarvestOrder &order);
 	bool _updateOrder(const HarvestCloseOrder &order);
 	bool _updateOrder(const DumpOrder &order);
 	bool _updateOrder(const DeployOrder &order);
@@ -565,13 +601,12 @@ protected:
 	bool _updateOrder(const DeliveryOrder &order);
 	bool _updateOrder(const ExecCbOrder &order);
 	bool _updateOrder(const DieOrder &order);
-	bool _updateOrder(const Order &order);
+	bool _updateOrder(Order &order);
 
 	void _reduceTimeControlTimer(unsigned dec);
 	void _spawnUnits(const std::unordered_map<std::string, unsigned> &units);
 	void _harvestClosestResource();
 	void _dumpInClosestResourceDump();
-	void _goToClosestResource();
 	void _goToClosestResourceDump();
 	bool _shortenOrder(Order &o);
 	void _displayAnim(Animation &anim, Vector2f offset = {}) const;

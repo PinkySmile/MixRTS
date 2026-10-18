@@ -48,10 +48,11 @@ public:
 	//! file to be complete before process exit must call this explicitly.
 	void finishRecording();
 
-	unsigned load(const std::filesystem::path &file);
+	unsigned load(const std::filesystem::path &file, bool directionalSound = false);
 	void addRef(unsigned id);
 	void remove(unsigned id);
-	void play(unsigned id, float volume) const;
+	void play(unsigned id, float volume, Vector2f pos = {}) const;
+	void setCamera(Vector2f pos, Vector2f size);
 	//! See the class doc: only ever true in MODE_DEBUG.
 	bool isPlaying(unsigned id) const;
 	void setVolume(float volume);
@@ -85,7 +86,7 @@ private:
 
 	MockMode _mode;
 	std::filesystem::path _wavPath;
-	SoundManager _real;
+	mutable SoundManager _real;
 	//! Only ever opened in MODE_RECORD, by the first play() call (mutable since
 	//! play() is otherwise a const, side-effect-free query on the real
 	//! SoundManager side).

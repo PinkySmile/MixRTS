@@ -37,10 +37,10 @@ const std::filesystem::path &MockedSoundManager::getWavPath() const
 	return this->_wavPath;
 }
 
-unsigned MockedSoundManager::load(const std::filesystem::path &file)
+unsigned MockedSoundManager::load(const std::filesystem::path &file, bool directionalSound)
 {
 	if (this->_mode != MODE_NORMAL)
-		return this->_real.load(file);
+		return this->_real.load(file, directionalSound);
 	return 1;
 }
 
@@ -66,17 +66,23 @@ bool MockedSoundManager::isPlaying(unsigned id) const
 	return false;
 }
 
+void MockedSoundManager::setCamera(Vector2f pos, Vector2f size)
+{
+	if (this->_mode != MODE_NORMAL)
+		this->_real.setCamera(pos, size);
+}
+
 void MockedSoundManager::setVolume(float volume)
 {
 	if (this->_mode != MODE_NORMAL)
 		this->_real.setVolume(volume);
 }
 
-void MockedSoundManager::play(unsigned id, float volume) const
+void MockedSoundManager::play(unsigned id, float volume, Vector2f pos) const
 {
 	switch (this->_mode) {
 	case MODE_DEBUG:
-		this->_real.play(id, volume);
+		this->_real.play(id, volume, pos);
 		break;
 	case MODE_RECORD:
 		this->_queueVoice(id, volume);

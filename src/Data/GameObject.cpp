@@ -27,6 +27,7 @@
 #define harvestDelaying _gpTimerU[2]
 #define blockTimer _gpTimerU[3]
 #define turnTimer _gpTimerU[4]
+#define harvestArrived _gpTimerU[5]
 #define dropTimer _gpTimerU[12]
 #define dropLast _gpTimerU[13]
 #define currentDrop _gpTimerU[14]
@@ -108,7 +109,15 @@ bool GameObject::_shortenOrder(Order &o)
 	if (std::holds_alternative<MoveOrder>(o) || std::holds_alternative<AttackUnitOrder>(o)) {
 		this->_orderQueue.emplace_front(FinishMovementOrder{});
 		return false;
-	} else if (std::holds_alternative<HarvestOrder>(o) || std::holds_alternative<DumpOrder>(o)) {
+	} else if (std::holds_alternative<HarvestOrder>(o)) {
+		if (!this->harvestArrived) {
+			// Still on the way to the resource: just finish the current step.
+			this->_orderQueue.emplace_front(FinishMovementOrder{});
+			return false;
+		}
+		this->cancel = true;
+		return false;
+	} else if (std::holds_alternative<DumpOrder>(o)) {
 		this->cancel = true;
 		return false;
 	}
@@ -1125,18 +1134,125 @@ bool GameObject::_tileAvailableFor(Vector2i tile) const
 {
 	auto &grid = this->map->pathFindingGrid;
 
-	assert_exp(tile.x >= 0 && tile.y >= 0);
-	assert_exp(tile.x < static_cast<int>(grid.gridSize.x) && tile.y < static_cast<int>(grid.gridSize.y));
+	if (tile.x < 0 || tile.y < 0)
+		return false;
+	if (tile.x >= static_cast<int>(grid.gridSize.x) || tile.y >= static_cast<int>(grid.gridSize.y))
+		return false;
 
 	auto attrs = grid.grid[tile.x + tile.y * grid.gridSize.x];
 
 	if (!(attrs & this->_passFlags))
 		return false;
+	// The tile we hold ourselves is, of course, available to us.
+	if (this->_boundToGrid && this->_initGrid && tile == this->_occupiedTile)
+		return true;
 	if (PFGRIDMASK_FREE_NB(attrs) != 0)
 		return false;
 	if (this->_stackable)
 		return PFGRIDMASK_STACK_COUNT(attrs) < PATHFINDING_STACK_LIMIT;
 	return PFGRIDMASK_STACK_COUNT(attrs) == 0;
+}
+
+Vector2i GameObject::getOccupiedTile() const
+{
+	return this->_occupiedTile;
+}
+
+bool GameObject::canStandOn(Vector2i tile) const
+{
+	if (this->_tileAvailableFor(tile))
+		return true;
+	if (!this->_canCrush)
+		return false;
+
+	auto &grid = this->map->pathFindingGrid;
+
+	if (tile.x < 0 || tile.y < 0)
+		return false;
+	if (tile.x >= static_cast<int>(grid.gridSize.x) || tile.y >= static_cast<int>(grid.gridSize.y))
+		return false;
+
+	auto index = tile.x + tile.y * grid.gridSize.x;
+	auto attrs = grid.grid[index];
+
+	// Crushing only helps if the terrain allows us there in the first place,
+	// nothing on the tile is static or uncrushable, and nothing from our own
+	// team (which we obviously can't crush) is there.
+	if (!(attrs & this->_passFlags) || PFGRIDMASK_IS_STATIC(attrs))
+		return false;
+	if (PFGRIDMASK_GET_NON_CRUSHABLE(attrs) != 0)
+		return false;
+	return grid.usedSpaces[this->owner->state.team][index] == 0;
+}
+
+GameObject *GameObject::_findTileBlocker(Vector2i tile, const GameObject *ignoreObject) const
+{
+	std::vector<GameObject *> objects;
+	GameObject *fallback = nullptr;
+	Vector2i abs = this->map->topLeftCoordToAbs(tile);
+
+	// Look one tile further in every direction: a unit that reserved the tile
+	// is not necessarily (or entirely) on it yet.
+	this->manager->getObjectsInArea(abs - this->map->tileSize.to<int>(), this->map->tileSize * 3, objects);
+	for (auto *o : objects) {
+		if (o == this || o == ignoreObject || !o->isSolid())
+			continue;
+
+		bool holds;
+
+		if (o->_boundToGrid && !o->_tiles)
+			holds = o->_occupiedTile == tile;
+		else {
+			auto pos = o->getPosition();
+			auto size = o->getSize();
+
+			holds =
+				pos.x < abs.x + static_cast<int>(this->map->tileSize.x) &&
+				pos.y < abs.y + static_cast<int>(this->map->tileSize.y) &&
+				pos.x + static_cast<int>(size.x) > abs.x &&
+				pos.y + static_cast<int>(size.y) > abs.y;
+		}
+		if (!holds)
+			continue;
+		if (o->canMove())
+			return o;
+		fallback = o;
+	}
+	return fallback;
+}
+
+bool GameObject::_isLeavingTile(Vector2i tile) const
+{
+	if (!this->_boundToGrid || !this->_pathCached || this->_pathCache.empty() || this->_orderQueue.empty())
+		return false;
+	// Already waiting on someone else: don't make others wait on us (this
+	// breaks deadlocks where two units want each other's tile).
+	if (this->blockTimer != 0)
+		return false;
+
+	auto &front = this->_orderQueue.front();
+
+	if (std::holds_alternative<HarvestOrder>(front)) {
+		if (this->harvestArrived)
+			return false;
+	} else if (!std::holds_alternative<MoveOrder>(front) && !std::holds_alternative<AttackUnitOrder>(front))
+		return false;
+	return this->map->absToTileCoord(this->_cachedDest) != tile;
+}
+
+void GameObject::_reserveTile(Vector2i tile)
+{
+	if (tile == this->_occupiedTile || this->_altitude != 0)
+		return;
+
+	this->deinitGlobalGrid();
+	this->_occupiedTile = tile;
+	this->_tileReserved = tile != this->_gridPos;
+	if (this->_stackable) {
+		this->_currentTilePosition = PFGRIDMASK_FIND_FREE_SLOT(this->map->pathFindingGrid, tile.x, tile.y);
+		assert_exp(this->_currentTilePosition);
+	}
+	this->initGlobalGrid();
 }
 
 GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size, const GameObject *ignoreObject) const
@@ -1155,13 +1271,13 @@ GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size, const 
 	return fallback;
 }
 
-CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject)
+CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject, bool pushBlockers)
 {
 	Vector2i nextTile = this->map->absToTileCoord(this->_pathCache.back());
 
 	if (this->_altitude)
 		return COLLISION_PROCEED;
-	if (nextTile == this->_gridPos) {
+	if (nextTile == this->_gridPos || nextTile == this->_occupiedTile) {
 		this->blockTimer = 0;
 		return COLLISION_PROCEED;
 	}
@@ -1177,10 +1293,38 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 		return COLLISION_WAIT;
 	}
 
+	// Final destination: never push whoever is there. Crush it if we can,
+	// wait if it's about to leave, otherwise give up and stop next to it.
+	if (nextTile == this->map->absToTileCoord(this->_cachedDest)) {
+		GameObject *blocker = this->_findTileBlocker(nextTile, ignoreObject);
+
+		if (blocker == nullptr)
+			return COLLISION_PROCEED;
+		if (this->canStandOn(nextTile)) {
+			while (auto *b = this->_findTileBlocker(nextTile, ignoreObject)) {
+				if (!b->isCrushable())
+					break;
+				b->crushedBy(this);
+			}
+			return COLLISION_PROCEED;
+		}
+		if (blocker->_isLeavingTile(nextTile)) {
+			this->blockTimer = 1;
+			return COLLISION_WAIT;
+		}
+		// A unit coming out of a building has nowhere else to go: the allied
+		// units standing in front of the exit have to make room.
+		if (pushBlockers && blocker->canMove() && blocker->owner->state.team == this->owner->state.team && blocker->moveAside(this)) {
+			this->blockTimer = 1;
+			return COLLISION_WAIT;
+		}
+		return COLLISION_DEST_BLOCKED;
+	}
+
 	std::vector<Vector2i> saved;
 
 	if (ignoreSolid) {
-		GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize, ignoreObject);
+		GameObject *blocker = this->_findTileBlocker(nextTile, ignoreObject);
 
 		if (!blocker || !blocker->canMove())
 			return COLLISION_PROCEED;
@@ -1199,7 +1343,7 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 		if (!this->_pathCache.empty()) {
 			Vector2i newNext = this->map->absToTileCoord(this->_pathCache.back());
 
-			if (newNext == this->_gridPos || this->_tileAvailableFor(newNext))
+			if (newNext == this->_gridPos || newNext == this->_occupiedTile || this->_tileAvailableFor(newNext))
 				return COLLISION_PROCEED;
 		}
 		this->_pathCache = saved;
@@ -1211,12 +1355,12 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 		if (!this->_pathCache.empty()) {
 			Vector2i newNext = this->map->absToTileCoord(this->_pathCache.back());
 
-			if (newNext == this->_gridPos || this->_tileAvailableFor(newNext))
+			if (newNext == this->_gridPos || newNext == this->_occupiedTile || this->_tileAvailableFor(newNext))
 				return COLLISION_PROCEED;
 		}
 		this->_pathCache = saved;
 
-		GameObject *blocker = this->_findBlockingUnit(this->map->topLeftCoordToAbs(nextTile), this->map->tileSize, ignoreObject);
+		GameObject *blocker = this->_findTileBlocker(nextTile, ignoreObject);
 
 		if (blocker == nullptr)
 			return COLLISION_PROCEED;
@@ -1299,7 +1443,7 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid, const Ga
 	return COLLISION_ABORT;
 }
 
-void GameObject::_harvestClosestResource()
+Vector2i GameObject::_getFacingTile() const
 {
 	auto pos = this->_gridPos;
 
@@ -1323,57 +1467,19 @@ void GameObject::_harvestClosestResource()
 		pos.y++;
 	else if (this->_currentDir == 6 * this->_anims.size() / 8)
 		pos.x--;
-
-	auto tile = this->manager->getFirstHarvestableTile(*this->map, pos);
-	if (tile) return this->harvest(this->map->topLeftCoordToAbs(pos), true);
-	tile = this->manager->getClosestHarvestableTile(*this->map, this->_gridPos);
-	if (tile) return this->harvest(this->manager->getLoadedMap().grid.topLeftCoordToAbs(*tile), true);
+	return pos;
 }
 
-void GameObject::_goToClosestResource()
+void GameObject::_harvestClosestResource()
 {
-	auto pos = this->_gridPos;
+	auto pos = this->_getFacingTile();
+	auto tile = this->manager->getFirstHarvestableTile(*this, pos);
 
-	if (this->_currentDir == 1 * this->_anims.size() / 8) {
-		pos.x++;
-		pos.y--;
-	} else if (this->_currentDir == 3 * this->_anims.size() / 8) {
-		pos.x++;
-		pos.y++;
-	} else if (this->_currentDir == 5 * this->_anims.size() / 8) {
-		pos.x--;
-		pos.y++;
-	} else if (this->_currentDir == 7 * this->_anims.size() / 8) {
-		pos.x--;
-		pos.y--;
-	} else if (this->_currentDir == 0 * this->_anims.size() / 8)
-		pos.y--;
-	else if (this->_currentDir == 2 * this->_anims.size() / 8)
-		pos.x++;
-	else if (this->_currentDir == 4 * this->_anims.size() / 8)
-		pos.y++;
-	else if (this->_currentDir == 6 * this->_anims.size() / 8)
-		pos.x--;
-
-	auto tile = this->manager->getFirstHarvestableTile(*this->map, pos);
-
-	if (!tile) {
-		tile = this->manager->getClosestHarvestableTile(*this->map, this->_gridPos);
-		if (!tile)
-			return;
-		pos = this->manager->getLoadedMap().grid.topLeftCoordToAbs(*tile);
-	} else
-		pos = this->map->topLeftCoordToAbs(pos);
-	this->_orderQueue.emplace_front(MoveCheckOrder{
-		.fail = &GameObject::_goToClosestResource,
-		.destination = pos
-	});
-	this->_orderQueue.emplace_front(MoveOrder{
-		.destination = pos,
-		.reason = MOVEREASON_HARVEST,
-		.ignore = nullptr,
-		.force = false
-	});
+	if (tile)
+		return this->harvest(this->map->topLeftCoordToAbs(pos), true);
+	tile = this->manager->getClosestHarvestableTile(*this, this->_gridPos);
+	if (tile)
+		return this->harvest(this->map->topLeftCoordToAbs(*tile), true);
 }
 
 void GameObject::_dumpInClosestResourceDump()
@@ -1439,6 +1545,10 @@ Vector2i GameObject::_findLandingSpot(GameObject *target, Vector2i preferredTile
 				// Nothing else already sitting on target's own tile(s).
 				if (!this->manager->isAreaFree(tileAbs, targetSize, {target->index}, target->_stackable))
 					continue;
+				// isAreaFree only sees units that are physically there: also
+				// skip tiles another unit already reserved but hasn't entered yet.
+				if (!target->canStandOn(tile))
+					continue;
 				return tile;
 			}
 	}
@@ -1483,7 +1593,7 @@ void GameObject::_spawnUnits(const std::unordered_map<std::string, unsigned> &un
 			auto obj = this->manager->spawnObject(this->owner->state.index, this->map->topLeftCoordToAbs(pos), "", name);
 			auto out = pos + offsets[i].second[game->gameRandom() % offsets[i].second.size()];
 
-			obj->moveTo(this->map->topLeftCoordToAbs(out), MOVEREASON_MOVE_SPAWN, true);
+			obj->moveTo(this->map->topLeftCoordToAbs(out), MOVEREASON_MOVE_SPAWN, true, this);
 			i++;
 		}
 	}
@@ -1508,18 +1618,23 @@ bool GameObject::_updateOrder(const TurnOrder &order)
 
 bool GameObject::_updateOrder(const MoveOrder &order)
 {
+	return this->_updateMove(order) != MOVE_IN_PROGRESS;
+}
+
+MoveResult GameObject::_updateMove(const MoveOrder &order)
+{
 	if (this->_firstEvent)
 		this->currentSpeed = this->_speed;
 	if (this->_pickup) {
 		this->_pathCached = false;
-		return false;
+		return MOVE_IN_PROGRESS;
 	}
 	if (!this->_pathCached) {
 		this->_cachedDest = order.destination;
 		this->_computeMovePath(order.destination, order.force, order.ignore);
 		this->_pathCached = true;
 		if (this->_pathCache.empty())
-			return true;
+			return MOVE_DONE;
 
 		this->_cachedDist = this->_position.distance(this->_pathCache.back() + this->_getTileOffsetFromCenter());
 
@@ -1532,12 +1647,12 @@ bool GameObject::_updateOrder(const MoveOrder &order)
 		turret.shotTimer = 0;
 	}
 	if (this->_pathCache.empty())
-		return true;
+		return MOVE_DONE;
 
 	this->_pickup = this->manager->findPickup(this->owner->state.index, order.reason, this->_cachedDist, this);
 	if (this->_pickup) {
 		this->_pickup->pickup(this, order.destination);
-		return false;
+		return MOVE_IN_PROGRESS;
 	}
 
 	auto dest = this->_pathCache.back() + this->_getTileOffsetFromCenter();
@@ -1546,7 +1661,8 @@ bool GameObject::_updateOrder(const MoveOrder &order)
 	while (this->_position == dest) {
 		this->_pathCache.pop_back();
 		if (this->_pathCache.empty())
-			return true;
+			return MOVE_DONE;
+		dest = this->_pathCache.back() + this->_getTileOffsetFromCenter();
 	}
 
 	if (this->_boundToGrid) {
@@ -1565,7 +1681,7 @@ bool GameObject::_updateOrder(const MoveOrder &order)
 		angle %= this->_anims.size();
 		if (angle != this->_currentDir) {
 			if (!this->_updateOrder(TurnOrder{angle}) && !this->_moveWhileTurn)
-				return false;
+				return MOVE_IN_PROGRESS;
 			*a = this->getFacingAngle();
 			dest = {
 				std::cos(*a) * this->currentSpeed * 2,
@@ -1574,13 +1690,29 @@ bool GameObject::_updateOrder(const MoveOrder &order)
 		}
 	}
 
-	switch (this->_boundToGrid ? this->_resolveGridCollision(order.force, order.ignore) : this->_resolveFreeCollision(order.force, order.ignore)) {
+	Vector2i expectedNext = this->_pathCache.back();
+
+	switch (this->_boundToGrid ? this->_resolveGridCollision(order.force, order.ignore, order.reason == MOVEREASON_MOVE_SPAWN) : this->_resolveFreeCollision(order.force, order.ignore)) {
 	case COLLISION_ABORT:
-		return true;
+		return MOVE_DONE;
+	case COLLISION_DEST_BLOCKED:
+		return MOVE_DEST_BLOCKED;
 	case COLLISION_WAIT:
-		return false;
+		return MOVE_IN_PROGRESS;
 	case COLLISION_PROCEED:
 		break;
+	}
+
+	if (this->_boundToGrid && this->_altitude == 0) {
+		// The path may have been recomputed while resolving the collision:
+		// start over (turning included) towards the new next tile.
+		if (this->_pathCache.empty() || this->_pathCache.back() != expectedNext)
+			return MOVE_IN_PROGRESS;
+
+		// Claim the tile we are about to step into (and free the one we leave).
+		this->_reserveTile(this->map->absToTileCoord(this->_pathCache.back()));
+		if (this->_stackable)
+			dest = this->_pathCache.back() + this->_getTileOffsetFromCenter();
 	}
 
 	auto pos = this->_position;
@@ -1615,7 +1747,7 @@ bool GameObject::_updateOrder(const MoveOrder &order)
 		this->_pathCache.pop_back();
 	}
 	this->setPosition(pos);
-	return false;
+	return MOVE_IN_PROGRESS;
 }
 
 bool GameObject::_updateOrder(const MoveCheckOrder &order)
@@ -1630,8 +1762,38 @@ bool GameObject::_updateOrder(const MoveCheckOrder &order)
 	return true;
 }
 
-bool GameObject::_updateOrder(const HarvestOrder &)
+bool GameObject::_updateOrder(HarvestOrder &order)
 {
+	if (!this->harvestArrived) {
+		MoveResult result = this->_updateMove(MoveOrder{
+			.destination = order.destination,
+			.reason = order.reason,
+			.ignore = nullptr,
+			.force = order.force
+		});
+
+		if (result == MOVE_IN_PROGRESS)
+			return false;
+
+		Vector2i destTile = this->map->absToTileCoord(order.destination);
+
+		if (result == MOVE_DONE && this->_gridPos == destTile) {
+			this->harvestArrived = 1;
+			return false;
+		}
+
+		// We couldn't get onto the resource tile (someone else is on it or
+		// we were stopped on the way): go for another resource instead.
+		auto tile = this->manager->getClosestHarvestableTile(*this, this->_gridPos);
+
+		if (!tile || *tile == destTile)
+			return true;
+		order.destination = this->map->topLeftCoordToAbs(*tile);
+		this->_pathCached = false;
+		this->_firstEvent = true;
+		this->blockTimer = 0;
+		return false;
+	}
 	if (this->harvestDelaying) {
 		this->harvestTimer++;
 		if (this->harvestTimer >= this->_harvestDelay) {
@@ -1644,7 +1806,7 @@ bool GameObject::_updateOrder(const HarvestOrder &)
 				return true;
 			}
 
-			auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
+			auto tile = this->manager->getFirstHarvestableTile(*this, this->_gridPos);
 
 			if (tile)
 				return false;
@@ -1657,7 +1819,7 @@ bool GameObject::_updateOrder(const HarvestOrder &)
 			return true;
 		}
 
-		auto tile = this->manager->getFirstHarvestableTile(*this->map, this->_gridPos);
+		auto tile = this->manager->getFirstHarvestableTile(*this, this->_gridPos);
 
 		if (!tile) {
 			this->_harvestClosestResource();
@@ -2174,7 +2336,7 @@ bool GameObject::_updateOrder(const DieOrder &)
 	return true;
 }
 
-bool GameObject::_updateOrder(const Order &order)
+bool GameObject::_updateOrder(Order &order)
 {
 	return std::visit([this](auto &&arg) {
 		return this->_updateOrder(arg);
@@ -2513,7 +2675,12 @@ void GameObject::setPosition(const Vector2f &pos)
 		this->_gridPos = this->map->absToTileCoord(pos);
 	else if (this->_stackable) {
 		this->_gridPos = this->map->absToTileCoord(pos - this->_getTileOffsetFromCenter());
-		if (this->_stackable && !PFGRIDMASK_IS_SLOT_FREE(this->map->pathFindingGrid, this->_gridPos.x, this->_gridPos.y, this->_currentTilePosition)) {
+		// While stepping into a reserved tile, the slot was already chosen
+		// when the tile got reserved.
+		if (
+			!this->_tileReserved &&
+			!PFGRIDMASK_IS_SLOT_FREE(this->map->pathFindingGrid, this->_gridPos.x, this->_gridPos.y, this->_currentTilePosition)
+		) {
 			auto old = this->_getTileOffsetFromCenter();
 
 			this->_currentTilePosition = PFGRIDMASK_FIND_FREE_SLOT(this->map->pathFindingGrid, this->_gridPos.x, this->_gridPos.y);
@@ -2523,6 +2690,17 @@ void GameObject::setPosition(const Vector2f &pos)
 		}
 	} else
 		this->_gridPos = this->map->absToTileCoord(pos + this->_size / 2);
+
+	// A reservation ends when we get to the tile, or if we were moved
+	// somewhere else without walking there (carried, teleported...).
+	if (this->_tileReserved) {
+		Vector2i d = this->_gridPos - this->_occupiedTile;
+
+		if (this->_altitude != 0 || std::abs(d.x) > 1 || std::abs(d.y) > 1 || d == Vector2i{0, 0})
+			this->_tileReserved = false;
+	}
+	if (!this->_tileReserved)
+		this->_occupiedTile = this->_gridPos;
 	this->initGlobalGrid();
 	this->manager->registerObject(this);
 	this->_registered = true;
@@ -2536,6 +2714,11 @@ void GameObject::setAltitude(int altitude)
 	this->_registered = false;
 	this->deinitGlobalGrid();
 	this->_altitude = altitude;
+	if (altitude != 0 || !this->_tileReserved) {
+		// Airborne units (e.g. being carried) don't hold any tile.
+		this->_tileReserved = false;
+		this->_occupiedTile = this->_gridPos;
+	}
 	this->initGlobalGrid();
 	this->manager->registerObject(this);
 	this->_registered = true;
@@ -2857,12 +3040,14 @@ bool GameObject::canMove() const
 
 void GameObject::harvest(const Vector2i &pos, bool automatic, bool straight)
 {
-	this->moveTo(pos, automatic ? MOVEREASON_HARVEST : MOVEREASON_HARVEST_COMMAND, straight);
-	this->_orderQueue.emplace_back(MoveCheckOrder{
-		.fail = &GameObject::_goToClosestResource,
-		.destination = pos
+	assert_exp(this->canMove());
+	this->_orderQueue.emplace_back(HarvestOrder{
+		.destination = this->_boundToGrid ?
+			this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)) :
+			Vector2i(pos + this->_size / 2),
+		.reason = automatic ? MOVEREASON_HARVEST : MOVEREASON_HARVEST_COMMAND,
+		.force = straight
 	});
-	this->_orderQueue.emplace_back(HarvestOrder{});
 }
 
 void GameObject::harvest()
@@ -2886,21 +3071,21 @@ void GameObject::moveOut(const Vector2i &pos)
 	this->_orderQueue.emplace_back(DieOrder{});
 }
 
-void GameObject::moveTo(const Vector2i &pos, MoveReason reason, bool straight)
+void GameObject::moveTo(const Vector2i &pos, MoveReason reason, bool straight, GameObject *ignore)
 {
 	assert_exp(this->canMove());
 	if (this->_boundToGrid)
 		this->_orderQueue.emplace_back(MoveOrder{
 			.destination = this->map->topLeftCoordToAbs(this->map->absToTileCoord(pos)),
 			.reason = reason,
-			.ignore = nullptr,
+			.ignore = ignore,
 			.force = straight
 		});
 	else
 		this->_orderQueue.emplace_back(MoveOrder{
 			.destination = pos + this->_size / 2,
 			.reason = reason,
-			.ignore = nullptr,
+			.ignore = ignore,
 			.force = straight
 		});
 }
@@ -2929,7 +3114,7 @@ bool GameObject::moveAside(const GameObject *asker)
 		auto &grid = this->map->pathFindingGrid;
 
 		for (auto &d : dirs) {
-			Vector2i tile = this->_gridPos + d;
+			Vector2i tile = this->_occupiedTile + d;
 
 			if (tile.x < 0 || tile.y < 0)
 				continue;
@@ -3119,7 +3304,7 @@ void GameObject::initGlobalGrid()
 
 		if (this->_boundToGrid)
 			this->manager->modUnitInArea(
-				this->map->topLeftCoordToAbs(this->_gridPos),
+				this->map->topLeftCoordToAbs(this->_occupiedTile),
 				this->map->tileSize,
 				this->owner->state.index, 0,
 				this->_currentTilePosition,
@@ -3186,7 +3371,7 @@ void GameObject::deinitGlobalGrid()
 
 		if (this->_boundToGrid)
 			this->manager->modUnitInArea(
-				this->map->topLeftCoordToAbs(this->_gridPos),
+				this->map->topLeftCoordToAbs(this->_occupiedTile),
 				this->map->tileSize,
 				this->owner->state.index, 0,
 				this->_stackable ? static_cast<pfGridType>(this->_currentTilePosition) : 0,

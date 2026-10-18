@@ -19,7 +19,7 @@
 //! exposed publicly here as _orderQueue - so that tests can inject fake UI
 //! events directly. Player::handleUiEvents() will then pick them up and act
 //! on them exactly as if a real player had triggered them from the UI.
-class MockedUI : public UI {
+class MYDLL_API MockedUI : public UI {
 public:
 	//! Takes ownership of wrapped: every call (other than pollEvent()) made on
 	//! this MockedUI is forwarded to it.

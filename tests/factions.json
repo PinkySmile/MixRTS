@@ -26,6 +26,7 @@
 	"dummy": {
 		"objects": [ "objects.json" ],
 		"animations": [ "animations.json" ],
-		"ui": {}
+		"ui_path": "ui.lua",
+		"ui_params": {}
 	}
 }

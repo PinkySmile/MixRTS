@@ -184,12 +184,7 @@ else ()
 	endif (NOT NO_TRACE)
 endif()
 
-# Game engine sources, shared between the MixRTS executable and the MixRTSTests
-# target below. Kept in a single variable so both targets always compile the
-# exact same engine code.
-add_library(
-	MixRTS_Core SHARED
-
+set(MIXRTS_CORE_SOURCES
 	src/Data/Animation.cpp
 	src/Data/Animation.hpp
 	src/Data/ConditionalAnim.cpp
@@ -277,6 +272,7 @@ add_library(
 	src/Utils.hpp
 	src/Data/SharedLibrary.hpp
 )
+add_library(MixRTS_Core SHARED ${MIXRTS_CORE_SOURCES})
 target_link_libraries(
 	MixRTS_Core
 	SFML::Graphics
@@ -301,39 +297,15 @@ add_executable(
 target_link_libraries(MixRTS MixRTS_Core)
 add_custom_command(TARGET MixRTS POST_BUILD COMMAND cmake -E copy_directory_if_different "${CMAKE_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/assets")
 
-set(MODS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mods")
-file(GLOB MOD_PATHS RELATIVE "${MODS_DIR}" "${MODS_DIR}/*")
-foreach(MOD_NAME ${MOD_PATHS})
-	set(FULL_PATH "${MODS_DIR}/${MOD_NAME}")
-
-	# Check if it is a directory and contains its own CMakeLists.txt
-	if (IS_DIRECTORY "${FULL_PATH}" AND EXISTS "${FULL_PATH}/CMakeLists.txt")
-		message(STATUS "Adding mod: ${MOD_NAME}")
-		set(MOD_DEST_PATH "${CMAKE_CURRENT_BINARY_DIR}/mods/${MOD_NAME}")
-		add_subdirectory("mods/${MOD_NAME}")
-		add_dependencies(MixRTS "${MOD_NAME}")
-	endif()
-endforeach()
-
-if (WIN32)
-	add_custom_command(
-		TARGET MixRTS POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		$<TARGET_FILE:cpptrace::cpptrace>
-		$<TARGET_FILE_DIR:MixRTS>
-	)
-endif()
-
-# Test target: same engine sources, but with the Screen/TextureManager/SoundManager
-# classes swapped out for MockedScreen/MockedTextureManager/MockedSoundManager (see
-# SCREEN_CLASS_IMPLEM/TEXTURE_MANAGER_CLASS_IMPLEM/SOUND_MANAGER_CLASS_IMPLEM usage
-# in src/Resources/Game.hpp) so that tests can run fast and headless: without a
-# real, visible window, without decoding real texture files, and without needing a
-# real audio device. Entirely skipped when NO_TEST is set (this also means
-# GoogleTest is never even fetched, see above).
 if (NOT NO_TEST)
-	add_executable(
-		MixRTS-tests
+	# The engine again, but built with MOCK defined (the mocked Screen,
+	# TextureManager, SoundManager and UI replace the real ones, see
+	# src/Resources/Game.hpp). The mocks live in this library (and not in the
+	# test executable) because Game itself needs them.
+	add_library(
+		MixRTS_Core_Mock SHARED
+
+		${MIXRTS_CORE_SOURCES}
 
 		src/Mock/MockedScreen.cpp
 		src/Mock/MockedScreen.hpp
@@ -343,11 +315,31 @@ if (NOT NO_TEST)
 		src/Mock/MockedTextureManager.hpp
 		src/Mock/MockedUI.cpp
 		src/Mock/MockedUI.hpp
+	)
+	target_link_libraries(
+		MixRTS_Core_Mock
+		SFML::Graphics
+		SFML::Audio
+		SFML::Network
+		TGUI::TGUI
+		sol2::sol2
+		${LUA_LIBRARIES}
+		${EXTRA_LIBS}
+	)
+	target_compile_definitions(MixRTS_Core_Mock PRIVATE MYDLL_EXPORTS MOCK)
+	if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+		target_link_options(MixRTS_Core_Mock PRIVATE -Wl,--exclude-all-symbols)
+	endif ()
+
+	add_executable(
+		MixRTS-tests
 
 		tests/GameFixture.hpp
 		tests/GameFixture.cpp
 		tests/DeployTests.cpp
 		tests/CarryallTests.cpp
+		tests/MovementTests.cpp
+		tests/TestHelpers.hpp
 		tests/WeaponTests.cpp
 		tests/main.cpp
 	)
@@ -360,7 +352,7 @@ if (NOT NO_TEST)
 	# tests/main.cpp for the exact flags).
 	target_link_libraries(
 		MixRTS-tests
-		MixRTS_Core
+		MixRTS_Core_Mock
 		GTest::gtest
 	)
 
@@ -381,4 +373,32 @@ if (NOT NO_TEST)
 	# Tests load mods/fonts using paths relative to the repo root, so make sure
 	# ctest runs the binary from there regardless of the build directory.
 	add_test(NAME MixRTS-tests COMMAND MixRTS-tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+	add_custom_command(TARGET MixRTS-tests POST_BUILD COMMAND cmake -E copy_directory_if_different "${CMAKE_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/tests_env/assets")
 endif ()
+
+set(MODS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/mods")
+file(GLOB MOD_PATHS RELATIVE "${MODS_DIR}" "${MODS_DIR}/*")
+foreach(MOD_NAME ${MOD_PATHS})
+	set(FULL_PATH "${MODS_DIR}/${MOD_NAME}")
+
+	# Check if it is a directory and contains its own CMakeLists.txt
+	if (IS_DIRECTORY "${FULL_PATH}" AND EXISTS "${FULL_PATH}/CMakeLists.txt")
+		message(STATUS "Adding mod: ${MOD_NAME}")
+		set(MOD_DEST_PATH "${CMAKE_CURRENT_BINARY_DIR}/mods/${MOD_NAME}")
+		set(TEST_MOD_DEST_PATH "${CMAKE_CURRENT_BINARY_DIR}/tests_env/mods/${MOD_NAME}")
+		add_subdirectory("mods/${MOD_NAME}")
+		add_dependencies(MixRTS "${MOD_NAME}")
+		if (NOT NO_TEST)
+			add_dependencies(MixRTS-tests "${MOD_NAME}_test")
+		endif ()
+	endif()
+endforeach()
+
+if (WIN32)
+	add_custom_command(
+		TARGET MixRTS POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		$<TARGET_FILE:cpptrace::cpptrace>
+		$<TARGET_FILE_DIR:MixRTS>
+	)
+endif()
