@@ -2381,6 +2381,12 @@ void GameObject::update()
 		if (this->_repairTimer >= this->_repairDelay)
 			this->_repairTimer = 0;
 	}
+	if (this->_decayTimer >= 8) {
+		if (this->_decayTarget < this->_hp)
+			this->damage(1, DMGTYPE_TRUE);
+		this->_decayTimer = 0;
+	} else
+		this->_decayTimer++;
 	for (auto &turret : this->_turrets)
 		turret.update();
 	this->_reduceTimeControlTimer(1);
@@ -2790,7 +2796,8 @@ void GameObject::damage(unsigned amount, DamageType type)
 	if (this->_crouchTimer)
 		amount /= 2;
 	this->setHealth(std::max<int>(this->_hp - amount, 0));
-	if (this->_resourceStorage != 0)
+	if (type == DMGTYPE_TRUE);
+	else if (this->_resourceStorage != 0)
 		this->owner->playEVA(UI::EVA_HARV_UNDER_ATTACK, 300, 3, 600, this->_id);
 	else if (this->_tiles)
 		this->owner->playEVA(UI::EVA_BUILDING_ATTACKED, 300, 3, 600, this->_id);

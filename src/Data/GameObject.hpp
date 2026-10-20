@@ -340,6 +340,7 @@ protected:
 	unsigned _maxHp;
 	unsigned _hp;
 	unsigned _decayTarget;
+	unsigned _decayTimer = 0;
 	unsigned _sight = 0;
 	unsigned _limit = UINT32_MAX;
 	std::array<unsigned, 16> _gpTimerU = {};
