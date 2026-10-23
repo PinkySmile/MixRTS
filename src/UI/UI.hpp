@@ -80,6 +80,7 @@ public:
 		CURSOR_HORZ_LEFT,
 
 		CURSOR_NORMAL = 0,
+		CURSOR_START_SELECT,
 		CURSOR_MOVE,
 		CURSOR_MOVE_RESTRICT,
 		CURSOR_NO_MOVE,
@@ -240,22 +241,11 @@ protected:
 
 	CursorAnimation &_getCurrentCursor();
 
-	// Explicit, unambiguous helpers to push one of the UI::Event alternatives
-	// into _eventQueue from a script. Deliberately not a single generic
-	// "push any Event" method: several Event alternatives are structurally
-	// identical (e.g. StartBuildEvent/CancelBuildEvent are both just
-	// {id, queue}, and DeployUnitEvent/SetPrimaryEvent/RepairEvent/SellEvent
-	// are all just {index}), so there is no reliable way to tell from a
-	// plain Lua table alone which alternative was intended.
 	void _queueStartBuild(const std::string &id, const std::string &queue);
 	void _queueCancelBuild(const std::string &id, const std::string &queue);
 	void _queueOpenQueue(const std::string &queue);
 	void _queueCloseQueue(const std::string &queue);
 
-	// Explicit setters for the raw std::array-backed protected members below,
-	// taking a normal (0-based, matching their C++ enum/index) argument
-	// rather than requiring scripts to reason about sol2's container
-	// wrapping (which, for fixed-size arrays, is 1-indexed on the Lua side).
 	void _loadEvaSound(EVASound sound, const std::string &path, bool relativeToCamera);
 	void _loadSelectCorner(unsigned index, const std::string &path);
 	void _setCursorMapping(Cursor cursor, const std::string &name);
@@ -274,14 +264,13 @@ protected:
 	void _displaySelectBox(Vector2i pos, Vector2u size);
 	virtual void _displaySelectedObjectUI(const GameObject &object) = 0;
 
-	bool _dragging = false;
 	const Faction &_faction;
 	std::optional<Vector2i> _startDrag;
 	std::array<sf::Texture, 4> _selectCorners;
 	unsigned _placementAnimation[3] = {0, 0, 0};
+	unsigned _globalEvaCooldown = 0;
 	Vector2i _placementPos;
 	const GameObject *_placementBuilding = nullptr;
-	unsigned _globalEvaCooldown = 0;
 	std::list<EVAQueue> _evaQueue;
 	std::array<unsigned, EVA_COUNT> _evaCooldown{0};
 	std::array<Sound, EVA_COUNT> _evaSounds;
@@ -296,6 +285,7 @@ protected:
 	Cursor _cursor = CURSOR_NORMAL;
 	Vector2f _minimapPos;
 	Vector2f _minimapSize;
+	bool _dragging = false;
 	bool _enabled = false;
 	bool _hasLowPower = false;
 	bool _hasRadar = false;

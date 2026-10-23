@@ -294,6 +294,65 @@ void handleCrash(Stacktrace st, const std::exception &e)
 	delete background;
 }
 
+template <size_t size>
+void genSpawns(std::array<size_t, size> &array, const std::vector<Vector2u> &areas)
+{
+	static_assert(size != 0);
+
+	assert_exp(areas.size() >= size);
+	array[0] = game->random() % areas.size();
+	if (size == 1) return;
+
+	double maxDist = -1.0;
+	std::array<size_t, size - 1> bestSub{};
+
+	// Recursive lambda to generate all combinations of (size - 1) indices from nb (excluding array[0])
+	auto findBestCombination = [&](auto &self, size_t depth, size_t startIdx, std::array<size_t, size - 1> &currentSub) -> void {
+		if (depth == size - 1) {
+			// Find the minimum pairwise distance among all points: array[0] and all elements in currentSub
+			double minDist = std::numeric_limits<double>::infinity();
+
+			// Distance from array[0] to each chosen spawn
+			for (size_t i = 0; i < size - 1; ++i) {
+				double d = areas[array[0]].distance2(areas[currentSub[i]]);
+				if (d < minDist) {
+					minDist = d;
+				}
+			}
+
+			// Distance between all pairs within the chosen spawns
+			for (size_t i = 0; i < size - 1; ++i) {
+				for (size_t j = i + 1; j < size - 1; ++j) {
+					double d = areas[currentSub[i]].distance2(areas[currentSub[j]]);
+					if (d < minDist) {
+						minDist = d;
+					}
+				}
+			}
+
+			// We want to maximize the minimum distance found across the set
+			if (minDist > maxDist) {
+				maxDist = minDist;
+				bestSub = currentSub;
+			}
+			return;
+		}
+
+		for (size_t j = startIdx; j < areas.size(); ++j) {
+			if (j == array[0]) continue;
+			currentSub[depth] = j;
+			self(self, depth + 1, j + 1, currentSub);
+		}
+	};
+
+	std::array<size_t, size - 1> currentSub{};
+
+	findBestCombination(findBestCombination, 0, 0, currentSub);
+	// Copy the best combination into the remaining slots of the array
+	for (size_t i = 0; i < size - 1; ++i)
+		array[i + 1] = bestSub[i];
+}
+
 int main(int argc, char **argv)
 {
 	if (argc != 0 && strcmp(argv[0], "crash_handler") == 0)
@@ -317,67 +376,57 @@ int main(int argc, char **argv)
 		ShowWindow(game->screen->getNativeHandle(), SW_MAXIMIZE);
 	#endif
 		game->modManager.loadMod("mods/dune2000/");
+		game->modManager.loadMod("mods/starcraft_broodwar/");
 		game->screen->setMouseCursorVisible(false);
 		game->locale = "fr";
 
+		std::filesystem::directory_iterator d2kMusics{"mods/dune2000/music_game"};
+		std::filesystem::directory_iterator scbwMusics{"mods/starcraft_broodwar/music_game"};
+		std::vector<std::filesystem::path> musics;
+
+		musics.insert(musics.end(), begin(d2kMusics), end(d2kMusics));
+		musics.insert(musics.end(), begin(scbwMusics), end(scbwMusics));
+
 		sf::Clock clock;
 		sf::Text text{game->font};
-		Mod &mod = game->modManager.get("d2k");
+		Mod &modD2K = game->modManager.get("d2k");
+		Mod &modSCBW = game->modManager.get("scbw");
 		std::unordered_map<std::string, Faction> factions;
-		sf::Music music{"mods/dune2000/music/AMBUSH.ogg"};
+		sf::Music music{musics[game->random() % musics.size()]};
 
-		mod.loadFactions("factions.json", factions);
+		modD2K.loadFactions("factions.json", factions);
+		modSCBW.loadFactions("factions.json", factions);
 
 		std::vector allFactions{
 			factions.at("d2k:atreides"),
 			factions.at("d2k:harkonnen"),
-			factions.at("d2k:ordos")
+			factions.at("d2k:ordos"),
+			factions.at("scbw:terran"),
+			factions.at("scbw:zerg"),
+			factions.at("scbw:protoss")
 		};
 		float timer = 0;
-		GameManager manager{allFactions, 3};
+		GameManager manager{allFactions, 6};
 		auto &players = manager.getPlayers();
 		auto &map = manager.getLoadedMap();
-		std::array<size_t, 3> spawn{};
+		std::array<size_t, 6> spawn{};
 		unsigned currentPlayer = 0;
 
-		manager.loadMap(mod, "mods/dune2000/maps/8PLAY1");
-		const auto &areas = map.grid.startAreas;
-		size_t numAreas = areas.size();
-		assert_exp(numAreas >= 3);
-		spawn[0] = game->random() % numAreas;
+		manager.loadMap(modD2K, "mods/dune2000/maps/8PLAY1");
+		genSpawns(spawn, map.grid.startAreas);
 
-		double maxDist = -1.0;
-		size_t bestJ = 0;
-		size_t bestK = 0;
-
-		for (size_t j = 0; j < numAreas; j++) {
-			if (j == spawn[0]) continue;
-
-			for (size_t k = j + 1; k < numAreas; k++) {
-				if (k == spawn[0]) continue;
-
-				auto d01 = areas[spawn[0]].distance2(areas[j]); // P1 to P2
-				auto d02 = areas[spawn[0]].distance2(areas[k]); // P1 to P3
-				auto d12 = areas[j].distance2(areas[k]);        // P2 to P3
-
-				auto currentMinDist = std::min({d01, d02, d12});
-
-				if (currentMinDist > maxDist) {
-					maxDist = currentMinDist;
-					bestJ = j;
-					bestK = k;
-				}
-			}
-		}
-
-		spawn[1] = bestJ;
-		spawn[2] = bestK;
 		manager.addPlayer(0, HSLColor{214, 375, 919}, spawn[0], 0); // Atreides blue
 		manager.addPlayer(1, HSLColor{  0, 800, 750}, spawn[1], 1); // Harkonen's red
 		manager.addPlayer(2, HSLColor{145, 250, 900}, spawn[2], 2); // Ordos's green
+		manager.addPlayer(3, HSLColor{239,1000, 500}, spawn[3], 3); // Terran's blue
+		manager.addPlayer(4, HSLColor{299,1000, 500}, spawn[4], 4); // Zerg's purple
+		manager.addPlayer(5, HSLColor{158,1000, 500}, spawn[5], 5); // Protoss's green
 		players[0].setEnabled(true);
 		players[1].setEnabled(false);
 		players[2].setEnabled(false);
+		players[3].setEnabled(false);
+		players[4].setEnabled(false);
+		players[5].setEnabled(false);
 		if (args.noLazyLoad)
 			manager.preloadAllSprites();
 		else if (args.preload)

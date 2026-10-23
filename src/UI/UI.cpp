@@ -319,6 +319,7 @@ void UI::pushUserType(sol::state &state)
 		{ "CURSOR_HORZ_RIGHT",             CURSOR_HORZ_RIGHT },
 		{ "CURSOR_HORZ_LEFT",              CURSOR_HORZ_LEFT },
 		{ "CURSOR_NORMAL",                 CURSOR_NORMAL },
+		{ "CURSOR_START_SELECT",           CURSOR_START_SELECT },
 		{ "CURSOR_MOVE",                   CURSOR_MOVE },
 		{ "CURSOR_MOVE_RESTRICT",          CURSOR_MOVE_RESTRICT },
 		{ "CURSOR_NO_MOVE",                CURSOR_NO_MOVE },
@@ -597,6 +598,11 @@ void UI::updateRender()
 
 void UI::_updateCursorNormal()
 {
+	if (this->_dragging) {
+		this->_cursor = CURSOR_START_SELECT;
+		return;
+	}
+
 	Vector2i pos = this->map->absToTileCoord(this->_placementPos);
 
 	this->_cursorName.reset();
@@ -893,9 +899,10 @@ void UI::_handleTryPlace()
 		return;
 	}
 
+	assert_exp(this->_placementBuilding->getBuildQueue());
 	this->_eventQueue.emplace_back(PlaceBuildEvent{
 		this->_placementBuilding->getId(),
-		this->_faction.getBase().getName() + ":building",
+		*this->_placementBuilding->getBuildQueue(),
 		sf::Vector2u(this->_placementPos.x, this->_placementPos.y)
 	});
 	this->_placementBuilding = nullptr;
