@@ -367,6 +367,8 @@ protected:
 	PFFreeMask _currentTilePosition;
 	unsigned char _buildMaxDistance = 0;
 	mutable bool _cachedDebugTexLoaded = false;
+	bool _countsForGame;
+	bool _countsForShortGame;
 	bool _requiresPlacement = false;
 	bool _boundToGrid = false;
 	bool _disposable = false;
@@ -474,6 +476,8 @@ public:
 	void disconnectFrom(const GameObject *object);
 	void disposeOf();
 
+	[[nodiscard]] bool countsForGame() const;
+	[[nodiscard]] bool countsForShortGame() const;
 	[[nodiscard]] const ObjectWeapon *getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree) const;
 	[[nodiscard]] ObjectWeapon *getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree);
 	[[nodiscard]] bool isWall() const;

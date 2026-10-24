@@ -291,6 +291,11 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 	}
 }
 
+bool Player::lost() const
+{
+	return this->_lost;
+}
+
 void Player::_clean()
 {
 	auto it = this->state.myObjects.begin();
@@ -562,6 +567,21 @@ void Player::update()
 		q.update();
 	if (this->state.producedPower < this->state.consumedPower)
 		this->playEVA(UI::EVA_LOW_POWER, EXPIRE_POWER, PRIORITY_POWER, COOLDOWN_POWER);
+	this->_lost = !std::ranges::any_of(this->state.myObjects, [](const GameObject *object) {
+		return object->countsForGame();
+	});
+}
+
+void Player::checkWon()
+{
+	this->_won = std::ranges::all_of(this->parent.getPlayers(), [this](const Player &p) {
+		return this->state.team == p.state.team || p.lost();
+	});
+	for (auto &ui : this->_uis)
+		if (ui) {
+			ui->won = this->_won;
+			ui->lost = this->_lost;
+		}
 }
 
 void Player::render()

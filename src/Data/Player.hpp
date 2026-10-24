@@ -155,7 +155,9 @@ public:
 	};
 
 	Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &state);
+	bool lost() const;
 	void update();
+	void checkWon();
 	void updateRender();
 	void render();
 	void renderAbove();
@@ -197,6 +199,8 @@ public:
 
 private:
 	bool _enabled = false;
+	bool _lost = false;
+	bool _won = false;
 	size_t _currentUi;
 	HSLColor _color;
 	const Faction &_primaryFaction;

@@ -206,6 +206,8 @@ public:
 	PlayerState *ownerState;
 	MapState *map;
 	std::optional<Cursor> forcedCursor;
+	bool lost = false;
+	bool won = false;
 
 	UI(const Faction &faction, UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map);
 	virtual ~UI();
@@ -240,6 +242,7 @@ protected:
 	};
 
 	CursorAnimation &_getCurrentCursor();
+	void _openEndGameDialog(const std::filesystem::path &path);
 
 	void _queueStartBuild(const std::string &id, const std::string &queue);
 	void _queueCancelBuild(const std::string &id, const std::string &queue);
@@ -276,6 +279,7 @@ protected:
 	std::array<Sound, EVA_COUNT> _evaSounds;
 	std::vector<const GameObject *> _objectBuffer;
 	Sound *_currentEvaSound = nullptr;
+	Sound _soundButton;
 	std::deque<Event> _eventQueue;
 	tgui::Panel::Ptr _settings;
 	tgui::Panel::Ptr _panel = tgui::Panel::create();

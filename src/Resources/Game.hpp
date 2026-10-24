@@ -55,6 +55,7 @@ struct MYDLL_API Game {
 	ModManager modManager;
 	Vector2u mousePos;
 	sol::state lua;
+	std::unique_ptr<GameManager> game;
 
 	static void pushUserType(sol::state &state);
 

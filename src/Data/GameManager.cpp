@@ -51,8 +51,9 @@ ShakeParams::ShakeParams(const nlohmann::json &j)
 		this->freezeTime = j["freeze_time"];
 }
 
-GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers) :
+GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers, LobbySettings settings) :
 	_text{game->font},
+	_settings(settings),
 	_factions(factions)
 {
 	std::vector<std::string> allFactions;
@@ -210,8 +211,18 @@ void GameManager::update()
 		o->update();
 	for (auto &p : this->_liveProjectiles)
 		p.update();
-	for (auto &player : this->_players)
+	for (auto &player : this->_players) {
 		player.update();
+		if (
+			this->_settings.shortGame && !player.lost() &&
+			!std::ranges::any_of(player.state.myObjects, [](const GameObject *obj) { return obj->countsForShortGame(); })
+		)
+			for (GameObject *obj : player.state.myObjects)
+				if (!obj->isDead() && obj->countsForGame())
+					obj->damage(obj->getHealth(), DMGTYPE_GENERIC);
+	}
+	for (auto &player : this->_players)
+		player.checkWon();
 	for (auto &player : this->_players)
 		player.handleUiEvents();
 	if (isMouseOverUI())
@@ -1511,6 +1522,11 @@ void GameManager::preloadSprites()
 		for (auto &vec : player.getPrimaryFaction().getAnimations() | std::ranges::views::values)
 			for (auto &sprite : vec)
 				this->_preloadedSprites.push_back(sprite.preload(player.getColor()));
+}
+
+const GameManager::LobbySettings &GameManager::getSettings() const
+{
+	return this->_settings;
 }
 
 void GameManager::centerCameraOn(Vector2f target)

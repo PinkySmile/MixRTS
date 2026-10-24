@@ -285,6 +285,8 @@ GameObject::GameObject(
 	assert_exp(!json.contains("limit") || json["limit"].is_number_unsigned());
 	assert_exp(json.contains("hp") && json["hp"].is_number());
 	assert_exp(json.contains("cost") && json["cost"].is_object());
+	assert_exp(json.contains("counts_for_game") && json["counts_for_game"].is_boolean());
+	assert_exp(json.contains("counts_for_short_game") && json["counts_for_short_game"].is_boolean());
 	for (auto &[key, value] : json["cost"].items())
 		assert_msg(value.is_number(), "json[\"cost\"][\"" + key + "\"]");
 	assert_exp(!json.contains("turrets") || json["turrets"].is_array());
@@ -463,6 +465,8 @@ GameObject::GameObject(
 	this->_size = {json["size"]["x"], json["size"]["y"]};
 	this->_tags = json["tags"];
 	this->_armor = RESOURCE(base.getName(), json["armor"].get<std::string>());
+	this->_countsForGame = json["counts_for_game"];
+	this->_countsForShortGame = json["counts_for_short_game"];
 	// TODO: Apply right any_ flag
 	this->_tags.emplace_back("any_ground");
 	this->_tags.emplace_back("any");
@@ -2796,7 +2800,10 @@ void GameObject::damage(unsigned amount, DamageType type)
 	if (this->_crouchTimer)
 		amount /= 2;
 	this->setHealth(std::max<int>(this->_hp - amount, 0));
-	if (type == DMGTYPE_TRUE);
+	if (type == DMGTYPE_TRUE)
+		;
+	else if (this->_hp == 0)
+		;
 	else if (this->_resourceStorage != 0)
 		this->owner->playEVA(UI::EVA_HARV_UNDER_ATTACK, 300, 3, 600, this->_id);
 	else if (this->_tiles)
@@ -3772,6 +3779,16 @@ void GameObject::disconnectFrom(const GameObject *object)
 void GameObject::disposeOf()
 {
 	this->deinitGlobalGrid();
+}
+
+bool GameObject::countsForGame() const
+{
+	return this->_countsForGame;
+}
+
+bool GameObject::countsForShortGame() const
+{
+	return this->_countsForShortGame;
 }
 
 bool GameObject::isWall() const

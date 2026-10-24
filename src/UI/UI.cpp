@@ -571,6 +571,32 @@ CursorAnimation &UI::_getCurrentCursor()
 	return it->second;
 }
 
+void UI::_openEndGameDialog(const std::filesystem::path &path)
+{
+	auto panel = tgui::Panel::create({"100%", "100%"});
+
+	panel->loadWidgetsFromFile(path.string());
+	panel->getRenderer()->setBackgroundColor(tgui::Color::Transparent);
+
+	auto cont = panel->get<tgui::Button>("Continue");
+	auto title = panel->get<tgui::Button>("Title");
+
+	cont->onMousePress([this] {
+		this->_soundButton.play();
+	});
+	title->onMousePress([this] {
+		this->_soundButton.play();
+	});
+	cont->onClick([this, panel = std::weak_ptr(panel)] {
+		this->_panel->remove(panel.lock());
+	});
+	title->onClick([this, panel = std::weak_ptr(panel)] {
+		this->_panel->remove(panel.lock());
+		this->manager->finished = true;
+	});
+	this->_panel->add(panel);
+}
+
 void UI::renderAbove()
 {
 	this->_getCurrentCursor().render();

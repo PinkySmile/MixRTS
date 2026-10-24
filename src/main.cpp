@@ -220,8 +220,8 @@ void handleCrash(Stacktrace st, const std::exception &e)
 	sf::RenderWindow *window;
 	tgui::Gui *gui;
 	tgui::ChildWindow::Ptr out;
-	sf::Texture *background;
-	sf::Sprite *sprite;
+	sf::Texture *background = nullptr;
+	sf::Sprite *sprite = nullptr;
 
 	guiScale = 1;
 	if (game) {
@@ -406,21 +406,21 @@ int main(int argc, char **argv)
 			factions.at("scbw:protoss")
 		};
 		float timer = 0;
-		GameManager manager{allFactions, 6};
-		auto &players = manager.getPlayers();
-		auto &map = manager.getLoadedMap();
+		game->game = std::make_unique<GameManager>(allFactions, 6, GameManager::LobbySettings{true});
+		auto &players = game->game->getPlayers();
+		auto &map = game->game->getLoadedMap();
 		std::array<size_t, 6> spawn{};
 		unsigned currentPlayer = 0;
 
-		manager.loadMap(modD2K, "mods/dune2000/maps/8PLAY1");
+		game->game->loadMap(modD2K, "mods/dune2000/maps/8PLAY1");
 		genSpawns(spawn, map.grid.startAreas);
 
-		manager.addPlayer(0, HSLColor{214, 375, 919}, spawn[0], 0); // Atreides blue
-		manager.addPlayer(1, HSLColor{  0, 800, 750}, spawn[1], 1); // Harkonen's red
-		manager.addPlayer(2, HSLColor{145, 250, 900}, spawn[2], 2); // Ordos's green
-		manager.addPlayer(3, HSLColor{239,1000, 500}, spawn[3], 3); // Terran's blue
-		manager.addPlayer(4, HSLColor{299,1000, 500}, spawn[4], 4); // Zerg's purple
-		manager.addPlayer(5, HSLColor{158,1000, 500}, spawn[5], 5); // Protoss's green
+		game->game->addPlayer(0, HSLColor{214, 375, 919}, spawn[0], 0); // Atreides blue
+		game->game->addPlayer(1, HSLColor{  0, 800, 750}, spawn[1], 1); // Harkonen's red
+		game->game->addPlayer(2, HSLColor{145, 250, 900}, spawn[2], 2); // Ordos's green
+		game->game->addPlayer(3, HSLColor{239,1000, 500}, spawn[3], 3); // Terran's blue
+		game->game->addPlayer(4, HSLColor{299,1000, 500}, spawn[4], 4); // Zerg's purple
+		game->game->addPlayer(5, HSLColor{158,1000, 500}, spawn[5], 5); // Protoss's green
 		players[0].setEnabled(true);
 		players[1].setEnabled(false);
 		players[2].setEnabled(false);
@@ -428,9 +428,9 @@ int main(int argc, char **argv)
 		players[4].setEnabled(false);
 		players[5].setEnabled(false);
 		if (args.noLazyLoad)
-			manager.preloadAllSprites();
+			game->game->preloadAllSprites();
 		else if (args.preload)
-			manager.preloadSprites();
+			game->game->preloadSprites();
 
 		music.play();
 		music.setLooping(true);
@@ -452,15 +452,15 @@ int main(int argc, char **argv)
 					}
 				#endif
 				}
-				manager.consumeEvent(*event);
-				manager.consumeGeneralEvent(*event);
+				game->game->consumeEvent(*event);
+				game->game->consumeGeneralEvent(*event);
 				game->gui.handleEvent(*event);
 			}
 
 			TRY {
 				timer += args.speed;
 				while (timer >= 1) {
-					manager.update();
+					game->game->update();
 					timer -= 1;
 				}
 			} CPPTRACE_CATCH(const std::exception &e) {
@@ -479,19 +479,22 @@ int main(int argc, char **argv)
 			#endif
 				panel->setSize("100%", "100%");
 				win->add(panel);
-				manager.setPaused();
+				game->game->setPaused();
 				game->gui.add(win);
 				timer = 0;
 			}
-			manager.updateRender();
+			game->game->updateRender();
 			game->screen->clear(sf::Color{0x80, 0xFF, 0x40});
-			manager.render();
+			game->game->render();
 
 			game->gui.draw();
-			manager.renderAbove();
+			game->game->renderAbove();
 			dispFPS(clock.restart().asSeconds());
 			game->screen->display();
 			game->screen->setMouseCursorGrabbed(!game->paused);
+
+			if (game->game->finished)
+				game->screen->close();
 		}
 		return 0;
 	} CPPTRACE_CATCH(const std::exception &e) {

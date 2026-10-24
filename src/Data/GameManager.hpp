@@ -34,51 +34,14 @@ struct MYDLL_API ShakeParams {
 };
 
 class MYDLL_API GameManager {
-private:
-	sf::Text _text;
-	ShakeParams _shake;
-	unsigned _shakeTimer = 0;
-	float _cameraZoom = 1;
-	Vector2f _cameraTranslate = {0, 0};
-	LoadedMap _map;
-	std::vector<MapState> _mapStates;
-	std::vector<Faction> _factions;
-	std::vector<Player> _players;
-	std::array<std::vector<Effect>, 5> _effects;
-	std::list<Projectile> _liveProjectiles;
-	std::list<std::unique_ptr<GameObject>> _liveObjects;
-	unsigned _lastObjectId = 0;
-	std::unordered_map<unsigned, GameObject *> _objectMap;
-	std::map<int64_t, std::list<GameObject *>> _renderObjects;
-	std::vector<unsigned> _preloadedSprites;
-
-	// DEBUG
-	unsigned char _debugGrid = 255;
-	bool _isDebugUnlocked = false;
-	bool _limitCamera = true;
-	bool _paused = false;
-	bool _forceStep = false;
-
-	template<typename T>
-	void _checkObjectLocked(const std::string &name, T &object, Player &owner);
-	void _validateArmors() const;
-	void _unlockAll();
-	void _recomputeLocked();
-
-	GameObject *_spawnExtra(GameObject &parent, const ExtraSpawn &extra);
-
-	void _checkScroll();
-	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1}, bool drawGrid = false);
-	void _initObject(MapState &map, Player &owner, GameObject &obj);
-	void _onObjectSpawned(Vector2i pos, GameObject &obj);
-	void _modUnitInArea(const MapState::Quad &quad, LoadedMap &state, Vector2u tileSize, size_t player, char mod);
-	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, size_t team, char mod, bool isStatic, bool crushable);
-	void _pushOrder(GameObject &obj, const std::string &order);
-
-	static bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size, bool onlySolid, bool partial);
-
 public:
-	GameManager(const std::vector<Faction> &factions, size_t nbPlayers);
+	struct LobbySettings {
+		bool shortGame;
+	};
+
+	bool finished = false;
+
+	GameManager(const std::vector<Faction> &factions, size_t nbPlayers, LobbySettings settings);
 	~GameManager();
 	void loadMap(Mod &mod, const std::filesystem::path &path);
 	void addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea, unsigned team);
@@ -127,6 +90,7 @@ public:
 	void shakeScreen(const ShakeParams &params);
 	void preloadAllSprites();
 	void preloadSprites();
+	const LobbySettings &getSettings() const;
 
 	inline void centerCameraOn(const GameObject &object)
 	{
@@ -134,6 +98,50 @@ public:
 	}
 
 	static void pushUserType(sol::state &state);
+
+private:
+	sf::Text _text;
+	LobbySettings _settings;
+	ShakeParams _shake;
+	unsigned _shakeTimer = 0;
+	float _cameraZoom = 1;
+	Vector2f _cameraTranslate = {0, 0};
+	LoadedMap _map;
+	std::vector<MapState> _mapStates;
+	std::vector<Faction> _factions;
+	std::vector<Player> _players;
+	std::array<std::vector<Effect>, 5> _effects;
+	std::list<Projectile> _liveProjectiles;
+	std::list<std::unique_ptr<GameObject>> _liveObjects;
+	unsigned _lastObjectId = 0;
+	std::unordered_map<unsigned, GameObject *> _objectMap;
+	std::map<int64_t, std::list<GameObject *>> _renderObjects;
+	std::vector<unsigned> _preloadedSprites;
+
+	// DEBUG
+	unsigned char _debugGrid = 255;
+	bool _isDebugUnlocked = false;
+	bool _limitCamera = true;
+	bool _paused = false;
+	bool _forceStep = false;
+
+	template<typename T>
+	void _checkObjectLocked(const std::string &name, T &object, Player &owner);
+	void _validateArmors() const;
+	void _unlockAll();
+	void _recomputeLocked();
+
+	GameObject *_spawnExtra(GameObject &parent, const ExtraSpawn &extra);
+
+	void _checkScroll();
+	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1}, bool drawGrid = false);
+	void _initObject(MapState &map, Player &owner, GameObject &obj);
+	void _onObjectSpawned(Vector2i pos, GameObject &obj);
+	void _modUnitInArea(const MapState::Quad &quad, LoadedMap &state, Vector2u tileSize, size_t player, char mod);
+	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, size_t team, char mod, bool isStatic, bool crushable);
+	void _pushOrder(GameObject &obj, const std::string &order);
+
+	static bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size, bool onlySolid, bool partial);
 };
 
 #include "MapState.inl"

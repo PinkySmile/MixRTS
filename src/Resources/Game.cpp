@@ -59,7 +59,7 @@ void Game::pushUserType(sol::state &state)
 			rect.setOutlineColor(*outlineColor);
 		if (outlineThickness)
 			rect.setOutlineThickness(*outlineThickness);
-		game->screen->draw(rect);
+		::game->screen->draw(rect);
 	};
 	type["render_sprite"] = [](
 		const tgui::Texture &texture, Vector2f position, sol::optional<Color> tint
@@ -81,7 +81,7 @@ void Game::pushUserType(sol::state &state)
 		sprite.setPosition(position);
 		if (tint)
 			sprite.setColor(*tint);
-		game->screen->draw(sprite);
+		::game->screen->draw(sprite);
 	};
 	// Lists the direct (non-recursive) contents of a directory. Returns an
 	// array of {name = <filename stem, no extension>, path = <full path>}.
@@ -144,8 +144,8 @@ void Game::init()
 	Game::pushUserType(this->lua);
 	this->screen->setFramerateLimit(50);
 	this->screen->setFont(this->font);
-	assert_exp(!game);
-	game = this;
+	assert_exp(!::game);
+	::game = this;
 	this->lua["game"] = this;
 }
 
