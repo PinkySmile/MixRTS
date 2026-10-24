@@ -14,6 +14,8 @@ class Upgrade;
 class ConditionalAnim;
 class Cursor;
 class CursorAnimation;
+class DebugOverlay;
+class DebugPanel;
 class Mod;
 class Faction;
 class Player;

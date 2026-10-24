@@ -11,6 +11,7 @@
 #include <deque>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <sol/forward.hpp>
 #include "Vector.hpp"
 #include "forward.hpp"
@@ -412,6 +413,8 @@ protected:
 	GameObjectData(const GameObjectData &);
 };
 
+typedef std::vector<std::pair<std::string, std::string>> DebugInfoList;
+
 class MYDLL_API GameObject : public GameObjectData {
 public:
 	GameObject(const GameObject &b);
@@ -462,6 +465,11 @@ public:
 	void playBuiltSound(Vector2f pos) const;
 	void clearOrders();
 	void renderPathFindingPath() const;
+	//! Fills \a out with the internal values of this object (debug tool).
+	//! \param alive Set of the objects currently alive, used to avoid following dangling pointers.
+	void getDebugInfo(DebugInfoList &out, const std::unordered_set<const GameObject *> &alive) const;
+	//! Short description of what the object is doing (debug tool).
+	[[nodiscard]] std::string getDebugOrderSummary(const std::unordered_set<const GameObject *> &alive) const;
 	void playDoSound();
 	void clearPrimaryDump();
 	void produced();

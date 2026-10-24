@@ -354,8 +354,7 @@ UI *Faction::createUI(UIState *state, GameManager *manager, PlayerState *ownerSt
 		this->_sl = dlopen(p.string().c_str(), RTLD_LAZY);
 		assert_msg(this->_sl, p.string() + ": " + dlerror());
 
-		auto vsym = reinterpret_cast<void *>(dlsym(this->_sl, "_ABI_VERSION"));
-		auto version = reinterpret_cast<unsigned *>(vsym);
+		auto version = reinterpret_cast<unsigned *>(dlsym(this->_sl, "_ABI_VERSION"));
 		assert_exp(version && *version == ABI_VERSION);
 	}
 

@@ -7,6 +7,8 @@
 		"tags": ["capturable_building", "building"],
 		"cost": { "base:credits": 225 },
 		"hp": 3000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 224, "y": 224 },
 		"tiles": [
@@ -26,6 +28,8 @@
 		"tags": [],
 		"cost": {},
 		"hp": 500,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 32, "y": 32 },
 		"tiles": [[1]]
@@ -37,6 +41,8 @@
 		"tags": [],
 		"cost": {},
 		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 32, "y": 32 }
 	},
@@ -47,6 +53,8 @@
 		"tags": ["mtag_ground"],
 		"cost": {},
 		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 32, "y": 32 }
 	},
@@ -57,6 +65,8 @@
 		"tags": ["mtag_air"],
 		"cost": {},
 		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 32, "y": 32 },
 		"altitude": 64
@@ -68,6 +78,8 @@
 		"tags": [],
 		"cost": {},
 		"hp": 500,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 32, "y": 32 },
 		"barrels": [
@@ -81,6 +93,8 @@
 		"tags": [],
 		"cost": {},
 		"hp": 500,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 32, "y": 32 },
 		"barrels": [
@@ -94,6 +108,8 @@
 		"tags": [],
 		"cost": {},
 		"hp": 500,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 32, "y": 32 },
 		"barrels": [
@@ -107,6 +123,8 @@
 		"tags": [],
 		"cost": {},
 		"hp": 500,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 32, "y": 32 },
 		"barrels": [
@@ -120,6 +138,8 @@
 		"tags": [],
 		"cost": {},
 		"hp": 500,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 32, "y": 32 },
 		"barrels": [
@@ -138,6 +158,8 @@
 		"tags": [],
 		"cost": {},
 		"hp": 500,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
 		"requirements": [],
 		"size": { "x": 32, "y": 32 },
 		"barrels": [

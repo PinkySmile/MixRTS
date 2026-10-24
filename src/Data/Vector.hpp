@@ -93,6 +93,18 @@ public:
 	}
 
 	template<typename T2>
+	[[nodiscard]] auto operator+(const sf::Vector2<T2> &vec) const noexcept
+	{
+		return Vector2<decltype(this->x + vec.x)>(this->x + vec.x, this->y + vec.y);
+	}
+
+	template<typename T2>
+	[[nodiscard]] auto operator+(const tgui::Vector2<T2> &vec) const noexcept
+	{
+		return Vector2<decltype(this->x + vec.x)>(this->x + vec.x, this->y + vec.y);
+	}
+
+	template<typename T2>
 	Vector2 &operator-=(const Vector2<T2> &vec) noexcept
 	{
 		this->x -= vec.x;

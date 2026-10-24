@@ -17,6 +17,7 @@
 #include "Utils.hpp"
 #include "GameObject.hpp"
 #include "Map.hpp"
+#include "Debug/DebugOptions.hpp"
 
 // #define QUADRANT_SIZE_X 128
 // #define QUADRANT_SIZE_Y 128
@@ -33,6 +34,32 @@ struct MYDLL_API ShakeParams {
 	static void pushUserType(sol::state &state);
 };
 
+//! One object touched by a warhead (debug tool).
+struct MYDLL_API WarheadTarget {
+	unsigned objectId;
+	Vector2f hitPoint;
+	double distance;
+	float multiplier;
+	unsigned damage;
+};
+
+//! One warhead application (debug tool).
+struct MYDLL_API WarheadHit {
+	//! Tick of the first contact
+	uint64_t tick;
+	//! Tick of the last contact (differs from \a tick for hitTravel projectiles)
+	uint64_t lastTick;
+	Vector2f position;
+	unsigned radius;
+	unsigned baseDamage;
+	unsigned hits;
+	DamageType damageType;
+	size_t owner;
+	const Weapon *weapon;
+	const Projectile *source;
+	std::vector<WarheadTarget> targets;
+};
+
 class MYDLL_API GameManager {
 public:
 	struct LobbySettings {
@@ -40,6 +67,10 @@ public:
 	};
 
 	bool finished = false;
+	//! Debug tools settings, driven by the debug panel (F3).
+	DebugOptions debugOptions;
+	//! Set by projectiles around their calls to weaponUsedAt so that the debug tools know where a hit comes from.
+	const Projectile *hitSource = nullptr;
 
 	GameManager(const std::vector<Faction> &factions, size_t nbPlayers, LobbySettings settings);
 	~GameManager();
@@ -92,6 +123,30 @@ public:
 	void preloadSprites();
 	const LobbySettings &getSettings() const;
 
+	// Debug tools
+	//! Opens/closes the debug panel
+	void toggleDebugPanel();
+	[[nodiscard]] bool isDebugPanelOpen() const;
+	//! Toggles the "everything unlocked" debug mode
+	void toggleDebugUnlock();
+	[[nodiscard]] bool isDebugUnlocked() const;
+	//! Makes the given player the one being controlled (the only enabled one)
+	void setControlledPlayer(size_t index);
+	//! Controls the next player (wraps around)
+	void debugNextPlayer();
+	//! Index of the first enabled player (0 if none)
+	[[nodiscard]] size_t getControlledPlayer() const;
+	//! Rotates all the objects selected by enabled players
+	void debugRotateSelected();
+	[[nodiscard]] bool isPaused() const;
+	//! Runs a single tick while paused
+	void requestStep();
+	[[nodiscard]] uint64_t getTick() const;
+	//! Number of selectable grid views (see DebugOptions::gridView)
+	[[nodiscard]] size_t getGridViewCount() const;
+	[[nodiscard]] std::string getGridViewLabel(unsigned char view) const;
+	[[nodiscard]] const std::deque<WarheadHit> &getWarheadHits() const;
+
 	inline void centerCameraOn(const GameObject &object)
 	{
 		this->centerCameraOn(object.getPosition() + object.getSize() / 2.f);
@@ -119,9 +174,13 @@ private:
 	std::vector<unsigned> _preloadedSprites;
 
 	// DEBUG
-	unsigned char _debugGrid = 255;
+	std::unique_ptr<DebugOverlay> _debugOverlay;
+	std::unique_ptr<DebugPanel> _debugPanel;
+	std::deque<WarheadHit> _warheadHits;
+	WarheadHit *_currentHit = nullptr;
+	uint64_t _tick = 0;
+	bool _hitThisTick = false;
 	bool _isDebugUnlocked = false;
-	bool _limitCamera = true;
 	bool _paused = false;
 	bool _forceStep = false;
 
@@ -141,7 +200,20 @@ private:
 	void _modUnitInArea(const MapState::Quad &quad, PathFindingGrid &state, Vector2u tileSize, pfGridType mask, size_t team, char mod, bool isStatic, bool crushable);
 	void _pushOrder(GameObject &obj, const std::string &order);
 
+	void _recordWarheadHit(const Weapon *weapon, Vector2f position, unsigned damage, size_t owner);
+	void _recordWarheadTarget(const Weapon *weapon, const GameObject &obj, Vector2f impact, double dist, float multiplier, unsigned damage, size_t owner);
+	//! Mouse position in world coordinates
+	[[nodiscard]] Vector2f _getWorldMouse() const;
+	//! Returns the render order key the cursor stands at
+	[[nodiscard]] int64_t _getCursorRenderKey() const;
+	//! Calls \a fct on each object that passes the render order filter
+	template<typename F>
+	void _forEachRenderObject(F fct);
+
 	static bool _isInArea(const GameObject &obj, const Vector2i &pos, const Vector2u &size, bool onlySolid, bool partial);
+
+	friend class DebugOverlay;
+	friend class DebugPanel;
 };
 
 #include "MapState.inl"

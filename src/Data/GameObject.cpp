@@ -15,6 +15,7 @@
 #include "Upgrade.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
+#include "Debug/Profiler.hpp"
 
 #define currentSpeed _gpTimerF[0]
 #define currentAngle _gpTimerF[0]
@@ -1076,6 +1077,9 @@ Vector2f GameObject::_getTileOffsetFromCenter() const
 
 void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject)
 {
+	PROFILE_SCOPE("computeMovePath");
+	PROFILE_COUNT(PROFCOUNTER_PATHFINDS, 1);
+
 	ObstructionContext ctx;
 	Vector2i target;
 	Vector2i pos;
@@ -2587,7 +2591,7 @@ void GameObject::render(int layer)
 		if (this->_deathAnim->anim)
 			return;
 	}
-	if (layer == -1)
+	if (layer == -1 && this->manager->debugOptions.showSkirts)
 		this->drawSkirt();
 
 	bool display = true;

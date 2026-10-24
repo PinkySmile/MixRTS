@@ -18,6 +18,9 @@
 #include "UI/UI.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
+#include "Debug/Profiler.hpp"
+#include "Debug/DebugOverlay.hpp"
+#include "Debug/DebugPanel.hpp"
 
 static bool isMouseOverUI()
 {
@@ -26,11 +29,17 @@ static bool isMouseOverUI()
 	pos.x /= guiScale;
 	pos.y /= guiScale;
 	for (auto widget : game->gui.getWidgets()) {
-		if (!widget->isVisible())
+		if (!widget->isVisible() || widget->getIgnoreMouseEvents())
 			continue;
+		// Floating windows (debug panel, ...) count fully
+		if (widget->getWidgetType() == "ChildWindow") {
+			if (widget->isMouseOnWidget(pos))
+				return true;
+			continue;
+		}
 		if (auto container = widget->cast<tgui::Container>())
 			for (auto w : container->getWidgets())
-				if (w->isVisible() && w->isMouseOnWidget(pos))
+				if (w->isVisible() && w->isMouseOnWidget(pos + container->getPosition()))
 					return true;
 	}
 	return false;
@@ -71,6 +80,7 @@ GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers,
 	}
 	this->_validateArmors();
 	this->_players.reserve(nbPlayers);
+	this->_debugOverlay = std::make_unique<DebugOverlay>(*this);
 }
 
 GameManager::~GameManager()
@@ -173,7 +183,7 @@ void GameManager::_checkScroll()
 	size /= this->_cameraZoom;
 	// TODO: Hardcoded UI offset
 	size.x -= 160 * guiScale;
-	if (this->_limitCamera) {
+	if (this->debugOptions.limitCamera) {
 		this->_cameraTranslate.x = std::max<float>(this->_cameraTranslate.x, 0);
 		this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -20 * guiScale);
 		this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x);
@@ -197,7 +207,10 @@ void GameManager::update()
 {
 	if (this->_paused && !this->_forceStep)
 		return;
+	PROFILE_SCOPE("update");
 	this->_forceStep = false;
+	this->_tick++;
+	this->_hitThisTick = false;
 	if (this->_shake.time) {
 		this->_shakeTimer++;
 		if (this->_shakeTimer >= this->_shake.interval) {
@@ -207,37 +220,50 @@ void GameManager::update()
 		if (this->_shake.freezeTime)
 			return;
 	}
-	for (auto &o : this->_liveObjects)
-		o->update();
-	for (auto &p : this->_liveProjectiles)
-		p.update();
-	for (auto &player : this->_players) {
-		player.update();
-		if (
-			this->_settings.shortGame && !player.lost() &&
-			!std::ranges::any_of(player.state.myObjects, [](const GameObject *obj) { return obj->countsForShortGame(); })
-		)
-			for (GameObject *obj : player.state.myObjects)
-				if (!obj->isDead() && obj->countsForGame())
-					obj->damage(obj->getHealth(), DMGTYPE_GENERIC);
+	{
+		PROFILE_SCOPE("objects");
+		for (auto &o : this->_liveObjects)
+			o->update();
 	}
-	for (auto &player : this->_players)
-		player.checkWon();
-	for (auto &player : this->_players)
-		player.handleUiEvents();
-	if (isMouseOverUI())
-		for (auto &p: this->_players)
-			p.mouseOnUi();
-
-	for (auto &arr : this->_effects) {
-		auto ite = arr.begin();
-		while (ite != arr.end())
-			if (ite->update())
-				ite = arr.erase(ite);
-			else
-				++ite;
+	{
+		PROFILE_SCOPE("projectiles");
+		for (auto &p : this->_liveProjectiles)
+			p.update();
+	}
+	{
+		PROFILE_SCOPE("players");
+		for (auto &player : this->_players) {
+			player.update();
+			if (
+				this->_settings.shortGame && !player.lost() &&
+				!std::ranges::any_of(player.state.myObjects, [](const GameObject *obj) { return obj->countsForShortGame(); })
+			)
+				for (GameObject *obj : player.state.myObjects)
+					if (!obj->isDead() && obj->countsForGame())
+						obj->damage(obj->getHealth(), DMGTYPE_GENERIC);
+		}
+		for (auto &player : this->_players)
+			player.checkWon();
+		for (auto &player : this->_players)
+			player.handleUiEvents();
+		if (isMouseOverUI())
+			for (auto &p: this->_players)
+				p.mouseOnUi();
 	}
 
+	{
+		PROFILE_SCOPE("effects");
+		for (auto &arr : this->_effects) {
+			auto ite = arr.begin();
+			while (ite != arr.end())
+				if (ite->update())
+					ite = arr.erase(ite);
+				else
+					++ite;
+		}
+	}
+
+	PROFILE_SCOPE("cleanup");
 	for (auto &list : this->_renderObjects | std::ranges::views::values) {
 		auto it = list.begin();
 
@@ -271,13 +297,24 @@ void GameManager::update()
 			++itb;
 	for (auto p : toRecompute)
 		p->recomputeLocked();
+
+	PROFILE_SET(PROFCOUNTER_OBJECTS, this->_liveObjects.size());
+	PROFILE_SET(PROFCOUNTER_PROJECTILES, this->_liveProjectiles.size());
+	PROFILE_SET(PROFCOUNTER_EFFECTS, this->_effects[0].size() + this->_effects[1].size() + this->_effects[2].size() + this->_effects[3].size() + this->_effects[4].size());
+#ifdef _DEBUG
+	if (this->_hitThisTick && this->debugOptions.pauseOnWarhead)
+		this->_paused = true;
+#endif
 }
 
 void GameManager::updateRender()
 {
+	PROFILE_SCOPE("updateRender");
 	this->_checkScroll();
 	for (auto &player : this->_players)
 		player.updateRender();
+	if (this->_debugPanel)
+		this->_debugPanel->refresh();
 }
 
 void GameManager::_renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale, bool drawGrid)
@@ -419,8 +456,72 @@ static void displayGrid(const MapState &state)
 	}
 }
 
+template<typename F>
+void GameManager::_forEachRenderObject(F fct)
+{
+	auto first = this->_renderObjects.begin();
+	auto last = this->_renderObjects.end();
+
+	if (this->debugOptions.renderFilter != RENDERFILTER_ALL) {
+		int64_t key = this->_getCursorRenderKey();
+		int64_t tolerance = this->debugOptions.renderFilterTolerance;
+
+		switch (this->debugOptions.renderFilter) {
+		case RENDERFILTER_BELOW:
+			last = this->_renderObjects.upper_bound(key);
+			break;
+		case RENDERFILTER_ABOVE:
+			first = this->_renderObjects.lower_bound(key);
+			break;
+		case RENDERFILTER_AT:
+			first = this->_renderObjects.lower_bound(key - tolerance);
+			last = this->_renderObjects.upper_bound(key + tolerance);
+			break;
+		default:
+			break;
+		}
+	}
+	for (; first != last; ++first)
+		for (auto b : first->second)
+			fct(b);
+}
+
+Vector2f GameManager::_getWorldMouse() const
+{
+	Vector2f pos = Vector2f(game->screen->getMousePosition());
+
+	pos.x /= this->_cameraZoom;
+	pos.y /= this->_cameraZoom;
+	pos += this->_cameraTranslate;
+	return pos;
+}
+
+int64_t GameManager::_getCursorRenderKey() const
+{
+	return std::floor(this->_getWorldMouse().y);
+}
+
 void GameManager::render()
 {
+	PROFILE_SCOPE("render");
+
+	static const char *const layerNames[] = {"layer -2", "layer -1", "layer 0", "layer 1", "layer 2"};
+	auto &opts = this->debugOptions;
+	auto renderLayer = [this, &opts](int layer) {
+		if (!opts.isLayerVisible(layer))
+			return;
+		PROFILE_SCOPE(layerNames[layer + 2]);
+		if (opts.showObjects)
+			this->_forEachRenderObject([layer](GameObject *b) {
+				b->render(layer);
+			});
+		if (opts.showEffects)
+			for (auto &e : this->_effects[layer + 2])
+				e.render();
+		if (opts.showProjectiles)
+			for (auto &p : this->_liveProjectiles)
+				p.render(layer);
+	};
 	sf::View old = game->screen->getView();
 	sf::Sprite sprite{this->_map.renderCache.getTexture()};
 	bool dPFGrid = false;
@@ -442,42 +543,36 @@ void GameManager::render()
 			old.getSize().y * this->_cameraZoom
 		}
 	}});
-	game->screen->draw(sprite);
-	for (int layer = -2; layer <= 0; layer++) {
-		for (auto &list : this->_renderObjects | std::ranges::views::values)
-			for (auto b : list)
-				b->render(layer);
-		for (auto &e : this->_effects[layer + 2])
-			e.render();
-		for (auto &p : this->_liveProjectiles)
-			p.render(layer);
+	if (opts.showTerrain) {
+		PROFILE_SCOPE("terrain");
+		game->screen->draw(sprite);
 	}
-	if (this->_debugGrid == 0) {
+	for (int layer = -2; layer <= 0; layer++)
+		renderLayer(layer);
+
+	unsigned char gridView = opts.gridView;
+
+	if (gridView != 255 && gridView >= this->getGridViewCount())
+		gridView = opts.gridView = 255;
+	if (gridView == 0) {
 		this->_renderPathFindingGrid(this->_map.pathFindingGrid);
 		dPFGrid = true;
-	} else if (this->_debugGrid == 1)
+	} else if (gridView == 1)
 		displayGrid(this->_map.grid);
-	else if (this->_debugGrid == 2) {
+	else if (gridView == 2) {
 		this->_renderPathFindingGrid(this->_map.grid.pathFindingGrid, this->_map.grid.tileSize, true);
 		dPFGrid = true;
-	} else if (this->_debugGrid != 255) {
-		if ((this->_debugGrid - 3) % 2 == 1) {
-			auto &map = this->_mapStates[(this->_debugGrid - 3) / 2];
+	} else if (gridView != 255) {
+		if ((gridView - 3) % 2 == 1) {
+			auto &map = this->_mapStates[(gridView - 3) / 2];
 
 			this->_renderPathFindingGrid(map.pathFindingGrid, map.tileSize, true);
 			dPFGrid = true;
 		} else
-			displayGrid(this->_mapStates[(this->_debugGrid - 3) / 2]);
+			displayGrid(this->_mapStates[(gridView - 3) / 2]);
 	}
-	for (int layer = 1; layer <= 2; layer++) {
-		for (auto &[top, list] : this->_renderObjects)
-			for (auto b : list)
-				b->render(layer);
-		for (auto &e : this->_effects[layer + 2])
-			e.render();
-		for (auto &p : this->_liveProjectiles)
-			p.render(layer);
-	}
+	for (int layer = 1; layer <= 2; layer++)
+		renderLayer(layer);
 
 	if (dPFGrid) {
 		for (auto &list : this->_renderObjects | std::ranges::views::values)
@@ -494,16 +589,25 @@ void GameManager::render()
 				game->screen->draw(shape);
 			}
 	}
-	for (auto &player : this->_players)
-		player.render();
+	if (opts.showPlayerOverlays) {
+		PROFILE_SCOPE("playerOverlays");
+		for (auto &player : this->_players)
+			player.render();
+	}
+	{
+		PROFILE_SCOPE("debugWorld");
+		this->_debugOverlay->renderWorld();
+	}
 	game->screen->setView(old);
 }
 
 void GameManager::renderAbove()
 {
-	for (auto &player : this->_players)
-		player.renderAbove();
-	if (this->_debugGrid != 255) {
+	PROFILE_SCOPE("renderAbove");
+	if (this->debugOptions.showPlayerOverlays)
+		for (auto &player : this->_players)
+			player.renderAbove();
+	if (this->debugOptions.gridView != 255) {
 		sf::View old = game->screen->getView();
 		sf::View v = sf::View{sf::FloatRect{
 			{0, 0},
@@ -513,20 +617,112 @@ void GameManager::renderAbove()
 			}
 		}};
 
-		if (this->_debugGrid == 0)
-			this->_text.setString("Path finding grid");
-		else if (this->_debugGrid == 1)
-			this->_text.setString("Original map grid");
-		else if (this->_debugGrid == 2)
-			this->_text.setString("Original map grid (path finding)");
-		else if ((this->_debugGrid - 3) % 2 == 0)
-			this->_text.setString("Map for " + this->_factions[(this->_debugGrid - 3) / 2].getName());
-		else
-			this->_text.setString("Map for " + this->_factions[(this->_debugGrid - 3) / 2].getName() + " (path finding)");
+		this->_text.setString(this->getGridViewLabel(this->debugOptions.gridView));
 		game->screen->setView(v);
 		game->screen->draw(this->_text);
 		game->screen->setView(old);
 	}
+	PROFILE_SCOPE("debugScreen");
+	this->_debugOverlay->renderScreen();
+}
+
+size_t GameManager::getGridViewCount() const
+{
+	return this->_mapStates.size() * 2 + 3;
+}
+
+std::string GameManager::getGridViewLabel(unsigned char view) const
+{
+	if (view == 255)
+		return "None";
+	if (view == 0)
+		return "Path finding grid";
+	if (view == 1)
+		return "Original map grid";
+	if (view == 2)
+		return "Original map grid (path finding)";
+	if (view >= this->getGridViewCount())
+		return "?";
+	if ((view - 3) % 2 == 0)
+		return "Map for " + this->_factions[(view - 3) / 2].getName();
+	return "Map for " + this->_factions[(view - 3) / 2].getName() + " (path finding)";
+}
+
+const std::deque<WarheadHit> &GameManager::getWarheadHits() const
+{
+	return this->_warheadHits;
+}
+
+uint64_t GameManager::getTick() const
+{
+	return this->_tick;
+}
+
+bool GameManager::isPaused() const
+{
+	return this->_paused;
+}
+
+void GameManager::requestStep()
+{
+	this->_forceStep = true;
+}
+
+bool GameManager::isDebugUnlocked() const
+{
+	return this->_isDebugUnlocked;
+}
+
+void GameManager::toggleDebugUnlock()
+{
+#ifdef _DEBUG
+	if (this->_isDebugUnlocked)
+		this->_recomputeLocked();
+	else
+		this->_unlockAll();
+	this->_isDebugUnlocked = !this->_isDebugUnlocked;
+	DEBUG_MODE = this->_isDebugUnlocked;
+#endif
+}
+
+void GameManager::setControlledPlayer(size_t index)
+{
+	for (size_t i = 0; i < this->_players.size(); i++)
+		if (this->_players[i].isEnabled() != (index == i))
+			this->_players[i].setEnabled(index == i);
+}
+
+void GameManager::debugNextPlayer()
+{
+	this->setControlledPlayer((this->getControlledPlayer() + 1) % this->_players.size());
+}
+
+size_t GameManager::getControlledPlayer() const
+{
+	for (size_t i = 0; i < this->_players.size(); i++)
+		if (this->_players[i].isEnabled())
+			return i;
+	return UINT32_MAX;
+}
+
+void GameManager::debugRotateSelected()
+{
+	for (auto &p : this->_players)
+		if (p.isEnabled())
+			for (auto o : p.uiState.selectedObjects)
+				const_cast<GameObject *>(o)->nextDirection();
+}
+
+bool GameManager::isDebugPanelOpen() const
+{
+	return this->_debugPanel && this->_debugPanel->isVisible();
+}
+
+void GameManager::toggleDebugPanel()
+{
+	if (!this->_debugPanel)
+		this->_debugPanel = std::make_unique<DebugPanel>(*this);
+	this->_debugPanel->toggle();
 }
 
 void GameManager::setPaused(bool paused)
@@ -629,6 +825,7 @@ void GameManager::_recomputeLocked()
 
 void GameManager::consumeEvent(const Event &event)
 {
+	PROFILE_SCOPE("manager");
 	if (auto keyPressed = event.getIf<sf::Event::KeyPressed>()) {
 		for (auto &p : this->_players)
 			p.keyPressed(*keyPressed);
@@ -680,33 +877,17 @@ void GameManager::consumeEvent(const Event &event)
 
 void GameManager::consumeGeneralEvent(const sf::Event &event)
 {
+	PROFILE_SCOPE("debug");
 	if (auto keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+		// F3 opens the debug panel in every build (it only contains the profiler in release builds).
+		if (keyPressed->code == sf::Keyboard::Key::F3)
+			this->toggleDebugPanel();
 	#ifdef _DEBUG
-		if (keyPressed->code == sf::Keyboard::Key::F1) {
-			if (this->_debugGrid == this->_mapStates.size() * 2 + 3 - 1)
-				this->_debugGrid = 255;
-			else
-				this->_debugGrid++;
-		} else if (keyPressed->code == sf::Keyboard::Key::F2) {
-			if (this->_debugGrid == 255)
-				this->_debugGrid = this->_mapStates.size() * 2 + 3 - 1;
-			else
-				this->_debugGrid--;
-		} else if (keyPressed->code == sf::Keyboard::Key::F3) {
-			if (this->_isDebugUnlocked)
-				this->_recomputeLocked();
-			else
-				this->_unlockAll();
-			this->_isDebugUnlocked = !this->_isDebugUnlocked;
-			DEBUG_MODE = this->_isDebugUnlocked;
-		} else if (keyPressed->code == sf::Keyboard::Key::F5)
-			this->_limitCamera = !this->_limitCamera;
-		else if (keyPressed->code == sf::Keyboard::Key::F6) {
-			for (auto &p : this->_players)
-				if (p.isEnabled())
-					for (auto o : p.uiState.selectedObjects)
-						const_cast<GameObject *>(o)->nextDirection();
-		} else if (keyPressed->code == sf::Keyboard::Key::F11)
+		else if (keyPressed->code == sf::Keyboard::Key::F1)
+			this->toggleDebugUnlock();
+		else if (keyPressed->code == sf::Keyboard::Key::F2)
+			this->debugNextPlayer();
+		else if (keyPressed->code == sf::Keyboard::Key::F11)
 			this->_paused = !this->_paused;
 		else if (keyPressed->code == sf::Keyboard::Key::F12)
 			this->_forceStep = true;
@@ -1061,6 +1242,9 @@ bool GameManager::_isInArea(const GameObject &obj, const Vector2i &absPos, const
 
 bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const std::vector<unsigned> &exclusion, bool stackable, bool notSolid) const
 {
+	PROFILE_SCOPE("isAreaFree");
+	PROFILE_COUNT(PROFCOUNTER_AREA_QUERIES, 1);
+	PROFILE_COUNT(PROFCOUNTER_OBJECTS_QUERIED, this->_liveObjects.size());
 	// OPTIMIZE: Split the map into quadrants
 	unsigned stackCount = 0;
 
@@ -1081,6 +1265,9 @@ bool GameManager::isAreaFree(const Vector2i &absPos, const Vector2u &size, const
 
 GameObject *GameManager::getObjectInArea(const Vector2i &absPos, const Vector2u &size, bool partial, const std::function<bool(GameObject *)> &fct)
 {
+	PROFILE_SCOPE("getObjectInArea");
+	PROFILE_COUNT(PROFCOUNTER_AREA_QUERIES, 1);
+	PROFILE_COUNT(PROFCOUNTER_OBJECTS_QUERIED, this->_liveObjects.size());
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)
 		if ((!fct || fct(&*b)) && GameManager::_isInArea(*b, absPos, size, false, partial))
@@ -1090,6 +1277,9 @@ GameObject *GameManager::getObjectInArea(const Vector2i &absPos, const Vector2u 
 
 void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<GameObject *> &objects, bool partial, const std::function<bool (GameObject *)> &fct)
 {
+	PROFILE_SCOPE("getObjectsInArea");
+	PROFILE_COUNT(PROFCOUNTER_AREA_QUERIES, 1);
+	PROFILE_COUNT(PROFCOUNTER_OBJECTS_QUERIED, this->_liveObjects.size());
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)
 		if ((!fct || fct(&*b)) && GameManager::_isInArea(*b, absPos, size, false, partial))
@@ -1098,6 +1288,9 @@ void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size,
 
 void GameManager::getObjectsInArea(const Vector2i &absPos, const Vector2u &size, std::vector<const GameObject *> &objects, bool partial, const std::function<bool (const GameObject *)> &fct)
 {
+	PROFILE_SCOPE("getObjectsInArea");
+	PROFILE_COUNT(PROFCOUNTER_AREA_QUERIES, 1);
+	PROFILE_COUNT(PROFCOUNTER_OBJECTS_QUERIED, this->_liveObjects.size());
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects)
 		if ((!fct || fct(&*b)) && GameManager::_isInArea(*b, absPos, size, false, partial))
@@ -1446,12 +1639,68 @@ Projectile &GameManager::spawnProjectile(const GameObject *parent, const Weapon 
 	return this->_liveProjectiles.back();
 }
 
+void GameManager::_recordWarheadHit(const Weapon *weapon, Vector2f position, unsigned damage, size_t owner)
+{
+	const Warhead *warhead = weapon->getWarhead();
+
+	this->_hitThisTick = true;
+	// Projectiles hitting every tick (hitTravel) only get one record
+	if (this->hitSource) {
+		size_t checked = 0;
+
+		for (auto it = this->_warheadHits.rbegin(); it != this->_warheadHits.rend() && checked < 32; ++it, ++checked)
+			if (it->source == this->hitSource && it->weapon == weapon && it->lastTick + 1 >= this->_tick) {
+				if (it->lastTick != this->_tick)
+					it->hits++;
+				it->lastTick = this->_tick;
+				this->_currentHit = &*it;
+				this->_currentHit->position = position;
+				return;
+			}
+	}
+	this->_warheadHits.push_back(WarheadHit{
+		this->_tick, this->_tick, position, warhead->getRadius(), damage, 1,
+		warhead->getDmgType(), owner, weapon, this->hitSource, {}
+	});
+	if (this->_warheadHits.size() > DEBUG_WARHEAD_LOG_SIZE)
+		this->_warheadHits.pop_front();
+	this->_currentHit = &this->_warheadHits.back();
+}
+
+void GameManager::_recordWarheadTarget(const Weapon *weapon, const GameObject &obj, Vector2f impact, double dist, float multiplier, unsigned damage, size_t owner)
+{
+	Vector2f hitPoint = obj.getHitboxCenter(impact);
+
+	// Direct application on an object (enter weapons): no area, create a record for it
+	if (!this->_currentHit) {
+		this->_recordWarheadHit(weapon, hitPoint, weapon->getDamage(), owner);
+		this->_currentHit->hits = 1;
+	}
+	for (auto &t : this->_currentHit->targets)
+		if (t.objectId == obj.index) {
+			t.damage += damage;
+			t.distance = std::min(t.distance, dist);
+			t.hitPoint = hitPoint;
+			return;
+		}
+	this->_currentHit->targets.push_back({obj.index, hitPoint, dist, multiplier, damage});
+}
+
 void GameManager::weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f position, size_t owner)
 {
+	PROFILE_SCOPE("weaponUsedAt");
+
 	const Warhead *warhead = weapon->getWarhead();
 	unsigned radius = warhead->getRadius();
 	double dist = radius * radius;
 
+#ifdef _DEBUG
+	WarheadHit *previousHit = this->_currentHit;
+
+	this->_currentHit = nullptr;
+	if (this->debugOptions.warheads || this->debugOptions.pauseOnWarhead)
+		this->_recordWarheadHit(weapon, position, damage, owner);
+#endif
 	// OPTIMIZE: Split the map into quadrants
 	for (auto &b : this->_liveObjects) {
 		if (b->isDisposable() || b->isDead())
@@ -1462,6 +1711,9 @@ void GameManager::weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f p
 		if (d < dist)
 			this->weaponUsedOn(damage, weapon, sqrt(d), owner, *b);
 	}
+#ifdef _DEBUG
+	this->_currentHit = previousHit;
+#endif
 }
 
 void GameManager::weaponUsedOn(unsigned damage, const Weapon *weapon, double dist, size_t owner, GameObject &obj)
@@ -1477,6 +1729,20 @@ void GameManager::weaponUsedOn(unsigned damage, const Weapon *weapon, double dis
 	if (result < 0)
 		result = 0;
 	obj.damage(std::ceil(result), warhead->getDmgType());
+#ifdef _DEBUG
+	if (this->debugOptions.warheads || this->debugOptions.pauseOnWarhead) {
+		WarheadHit *previousHit = this->_currentHit;
+
+		this->_recordWarheadTarget(
+			weapon, obj,
+			this->_currentHit ? this->_currentHit->position : Vector2f(obj.getMiddle()),
+			dist, mult, std::ceil(result), owner
+		);
+		// A record created for a direct application must not leak into the next calls
+		if (!previousHit)
+			this->_currentHit = nullptr;
+	}
+#endif
 
 	if (auto &takeControl = weapon->getTakeControl()) {
 		bool canTakeControl = false;

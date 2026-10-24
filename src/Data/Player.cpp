@@ -14,6 +14,7 @@
 #include "GameManager.hpp"
 #include "../Resources/Game.hpp"
 #include "../UI/UI.hpp"
+#include "Debug/Profiler.hpp"
 #include "Resources/Assert.hpp"
 
 #define PRIORITY_BUILD 3
@@ -548,23 +549,29 @@ void Player::_tryEndBuildAutoTick(PlayerQueueEntry &entry)
 
 void Player::update()
 {
+	PROFILE_SCOPE("update");
 	if (this->_primaryFaction.hasRadar())
 		this->state.hasRadar = true;
 	else if (this->state.producedPower < this->state.consumedPower && this->_primaryFaction.isRadarPowered())
 		this->state.hasRadar = false;
 	else
 		this->state.hasRadar = std::ranges::any_of(this->state.radars, [](const GameObject *o) { return !o->isDead(); });
-	for (auto &ui : this->_uis)
+	for (auto &ui : this->_uis) {
+		PROFILE_SCOPE("ui_update");
 		if (ui)
 			ui->update();
+	}
 	this->_clean();
 	for (auto &q : this->state.buildQueues | std::ranges::views::values) {
+		PROFILE_SCOPE("update_queue");
 		if (!q)
 			continue;
 		this->_updateQueue(*q);
 	}
-	for (auto &q : this->state.queues | std::ranges::views::values)
+	for (auto &q : this->state.queues | std::ranges::views::values) {
+		PROFILE_SCOPE("queue_update");
 		q.update();
+	}
 	if (this->state.producedPower < this->state.consumedPower)
 		this->playEVA(UI::EVA_LOW_POWER, EXPIRE_POWER, PRIORITY_POWER, COOLDOWN_POWER);
 	this->_lost = !std::ranges::any_of(this->state.myObjects, [](const GameObject *object) {
@@ -1072,10 +1079,10 @@ std::vector<std::unique_ptr<UI>> &Player::getUIs()
 
 GameObject *Player::getPrimaryBuilding(const std::string &queue)
 {
-	auto parent = this->state.primaryBuildings[queue];
+	auto it = this->state.primaryBuildings.find(queue);
 
-	if (parent)
-		return parent;
+	if (it != this->state.primaryBuildings.end() && it->second)
+		return it->second;
 	if (this->state.queueBuildings.contains(queue))
 		for (auto p: this->state.queueBuildings[queue])
 			return p;
@@ -1084,10 +1091,10 @@ GameObject *Player::getPrimaryBuilding(const std::string &queue)
 
 GameObject *Player::getSpawnBuilding(const std::string &queue, bool stackable)
 {
-	auto parent = this->state.primaryBuildings[queue];
+	auto it = this->state.primaryBuildings.find(queue);
 
-	if (parent && !parent->isObstructed(stackable))
-		return parent;
+	if (it != this->state.primaryBuildings.end() && it->second && !it->second->isObstructed(stackable))
+		return it->second;
 	if (this->state.queueBuildings.contains(queue))
 		for (auto p: this->state.queueBuildings[queue])
 			if (!p->isObstructed(stackable))

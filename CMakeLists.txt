@@ -134,6 +134,10 @@ endif ()
 # built at all.
 option(NO_TEST "Disable fetching GoogleTest and building the test target" OFF)
 option(NO_TRACE "Disable fetching cpptrace" OFF)
+option(NO_PROFILER "Compile out the scoped profiler" OFF)
+if (NO_PROFILER)
+	add_compile_definitions(NO_PROFILER)
+endif ()
 
 if (NOT NO_TRACE)
 	include(FetchContent)
@@ -206,6 +210,7 @@ set(MIXRTS_CORE_SOURCES
 	src/Data/GameManager.hpp
 	src/Data/GameObject.cpp
 	src/Data/GameObject.hpp
+	src/Data/GameObjectDebug.cpp
 	src/Data/GridMask.hpp
 	src/Data/JsonLua.cpp
 	src/Data/JsonLua.hpp
@@ -239,6 +244,13 @@ set(MIXRTS_CORE_SOURCES
 	src/Data/Warhead.hpp
 	src/Data/Weapon.cpp
 	src/Data/Weapon.hpp
+	src/Debug/DebugOptions.hpp
+	src/Debug/DebugOverlay.cpp
+	src/Debug/DebugOverlay.hpp
+	src/Debug/DebugPanel.cpp
+	src/Debug/DebugPanel.hpp
+	src/Debug/Profiler.cpp
+	src/Debug/Profiler.hpp
 	src/forward.hpp
 	src/Resources/Assert.cpp
 	src/Resources/Assert.hpp
@@ -338,6 +350,7 @@ if (NOT NO_TEST)
 		tests/GameFixture.cpp
 		tests/DeployTests.cpp
 		tests/CarryallTests.cpp
+		tests/DebugToolsTests.cpp
 		tests/MovementTests.cpp
 		tests/TestHelpers.hpp
 		tests/WeaponTests.cpp

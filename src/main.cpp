@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cstdio>
 #include <cfenv>
 #include <SFML/Graphics.hpp>
 #include <nlohmann/json.hpp>
@@ -14,6 +15,7 @@
 #include "Data/GameManager.hpp"
 #include "UI/UI.hpp"
 #include "Debug/Crash.hpp"
+#include "Debug/Profiler.hpp"
 #include "Utils.hpp"
 
 #ifdef _WIN32
@@ -32,6 +34,7 @@ struct Args {
 
 void reloadViews(sf::RenderWindow &win, tgui::Gui &gui, Vector2u size, Vector2f offset)
 {
+	PROFILE_SCOPE("reload views");
 	sf::View view{sf::FloatRect{
 		offset,
 		{
@@ -54,7 +57,13 @@ void reloadViews(sf::RenderWindow &win, tgui::Gui &gui, Vector2u size, Vector2f 
 void dispFPS(float frameTime)
 {
 	auto old = game->screen->getView();
-	auto str = sf::String(std::to_string(static_cast<unsigned>(round(1 / frameTime))) + "FPS");
+	auto stats = Profiler::get().getFrameStats(60);
+	char details[64] = "";
+
+	if (stats.averageMs > 0)
+		snprintf(details, sizeof(details), " (avg %.1f / worst %.1f ms)", stats.averageMs, stats.worstMs);
+
+	auto str = sf::String(std::to_string(static_cast<unsigned>(round(1 / frameTime))) + "FPS" + details);
 	Vector2u size = game->screen->getSize();
 	sf::View view{sf::FloatRect{
 		{0, 0},
@@ -62,7 +71,7 @@ void dispFPS(float frameTime)
 	}};
 
 	game->screen->setView(view);
-	game->screen->displayElement(str, {0, size.y - 30.f}, size.x, Screen::ALIGN_RIGHT);
+	game->screen->displayElement(str, {0, size.y - 35.f}, size.x, Screen::ALIGN_RIGHT);
 	game->screen->setView(old);
 }
 
@@ -364,12 +373,6 @@ int main(int argc, char **argv)
 
 	if (ret != 0)
 		return ret;
-#ifdef __linux__
-	feenableexcept(FE_INVALID);
-#elif defined(_WIN32) || defined(_WIN64)
-	unsigned int current_word;
-	_controlfp_s(&current_word, 0, _EM_INVALID);
-#endif
 	TRY {
 		new Game("assets/NotoSans-Regular.ttf");
 	#ifdef _WIN32
@@ -410,7 +413,6 @@ int main(int argc, char **argv)
 		auto &players = game->game->getPlayers();
 		auto &map = game->game->getLoadedMap();
 		std::array<size_t, 6> spawn{};
-		unsigned currentPlayer = 0;
 
 		game->game->loadMap(modD2K, "mods/dune2000/maps/8PLAY1");
 		genSpawns(spawn, map.grid.startAreas);
@@ -438,23 +440,21 @@ int main(int argc, char **argv)
 		if (args.loadingOnly)
 			game->screen->close();
 		while (game->screen->isOpen()) {
-			while (auto event = game->screen->pollEvent()) {
-				if (event->is<sf::Event::Closed>())
-					game->screen->close();
-				else if (auto resized = event->getIf<sf::Event::Resized>())
-					reloadViews(*game->screen, game->gui, resized->size, {0, -20 * guiScale});
-				else if (auto key = event->getIf<sf::Event::KeyPressed>()) {
-				#ifdef _DEBUG
-					if (key->code == sf::Keyboard::Key::F4) {
-						players[currentPlayer].setEnabled(false);
-						currentPlayer = (currentPlayer + 1) % players.size();
-						players[currentPlayer].setEnabled(true);
+			Profiler::get().beginFrame();
+			{
+				PROFILE_SCOPE("events");
+				while (auto event = game->screen->pollEvent()) {
+					if (event->is<sf::Event::Closed>())
+						game->screen->close();
+					else if (auto resized = event->getIf<sf::Event::Resized>())
+						reloadViews(*game->screen, game->gui, resized->size, {0, -20 * guiScale});
+					game->game->consumeEvent(*event);
+					game->game->consumeGeneralEvent(*event);
+					{
+						PROFILE_SCOPE("gui");
+						game->gui.handleEvent(*event);
 					}
-				#endif
 				}
-				game->game->consumeEvent(*event);
-				game->game->consumeGeneralEvent(*event);
-				game->gui.handleEvent(*event);
 			}
 
 			TRY {
@@ -487,14 +487,22 @@ int main(int argc, char **argv)
 			game->screen->clear(sf::Color{0x80, 0xFF, 0x40});
 			game->game->render();
 
-			game->gui.draw();
+			{
+				PROFILE_SCOPE("gui_draw");
+				game->gui.draw();
+			}
 			game->game->renderAbove();
 			dispFPS(clock.restart().asSeconds());
-			game->screen->display();
+			{
+				// Includes waiting for the vertical synchronization
+				PROFILE_SCOPE("display");
+				game->screen->display();
+			}
 			game->screen->setMouseCursorGrabbed(!game->paused);
 
 			if (game->game->finished)
 				game->screen->close();
+			Profiler::get().endFrame();
 		}
 		return 0;
 	} CPPTRACE_CATCH(const std::exception &e) {

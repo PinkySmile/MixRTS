@@ -47,7 +47,7 @@ void GameFixture::SetUp()
 		_factions.at("test:dummy"),
 	};
 
-	this->manager = std::make_unique<GameManager>(allFactions, 1);
+	this->manager = std::make_unique<GameManager>(allFactions, 2, GameManager::LobbySettings{false});
 	this->manager->loadMap(*_mod, "mods/dune2000/maps/8PLAY1");
 	this->manager->addPlayer(0, HSLColor{214, 375, 919}, 0, 0);
 	this->player = &this->manager->getPlayers()[0];

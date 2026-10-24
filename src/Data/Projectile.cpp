@@ -2,6 +2,7 @@
 // Created by PinkySmile on 15/08/2026.
 //
 
+#include <algorithm>
 #include <sol/sol.hpp>
 #include "ConditionalAnim.hpp"
 #include "Animation.hpp"
@@ -61,8 +62,22 @@ Projectile::Projectile(const GameObject *parent, const Weapon *weapon, Vector2f 
 	}
 }
 
+void Projectile::_hit()
+{
+	this->manager->hitSource = this;
+	this->manager->weaponUsedAt(this->_damage, this->_weapon, this->_position, this->_ownerIndex);
+	this->manager->hitSource = nullptr;
+}
+
 void Projectile::update()
 {
+#ifdef _DEBUG
+	if (this->manager && this->manager->debugOptions.projectiles) {
+		this->_history.push_back({this->_position, this->_height || !this->_arc ? this->_height : this->getArcHeight(this->_position)});
+		if (this->_history.size() > DEBUG_PROJECTILE_TRAIL)
+			this->_history.pop_front();
+	}
+#endif
 	this->_trailTimer++;
 	if (this->_trail && this->_trailTimer > this->_trailInterval) {
 		this->_trailTimer = 0;
@@ -97,7 +112,7 @@ void Projectile::update()
 				this->_disposable = false;
 				if (hitEffect)
 					this->manager->spawnEffect(*hitEffect, this->_position, this->_owner);
-				this->manager->weaponUsedAt(this->_damage, this->_weapon, this->_position, this->_ownerIndex);
+				this->_hit();
 				this->_disposable = true;
 			} else {
 				this->_velocity *= -0.5;
@@ -119,12 +134,12 @@ void Projectile::update()
 		this->_disposable = false;
 		if (hitEffect)
 			this->manager->spawnEffect(*hitEffect, this->_position, this->_owner);
-		this->manager->weaponUsedAt(this->_damage, this->_weapon, this->_position, this->_ownerIndex);
+		this->_hit();
 		this->_disposable = true;
 		return;
 	}
 	if (this->_hitTravel)
-		this->manager->weaponUsedAt(this->_damage, this->_weapon, this->_position, this->_ownerIndex);
+		this->_hit();
 
 	float angle = this->_position.angle(this->_targetPos);
 	unsigned direction = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
@@ -155,14 +170,7 @@ void Projectile::_displayAnim(Animation &anim, Vector2f offset) const
 			pos.y + this->_position.y + offset.y - this->_height
 		});
 	} else if (this->_arc) {
-		const double a = 16;
-		auto fullDist = this->_targetPos.distance(this->_startPos);
-		auto dist = this->_targetPos.distance(this->_position);
-
-		double x = dist;
-		double b = fullDist;
-		double xmb2 = x - b / 2;
-		float height = a - a * ((xmb2 * xmb2) / (b / 4) / b);
+		float height = this->getArcHeight(this->_position);
 
 		sprite.setPosition({
 			pos.x + this->_position.x + offset.x,
@@ -205,6 +213,125 @@ void Projectile::render(int layer)
 bool Projectile::isDisposable() const
 {
 	return this->_disposable;
+}
+
+const GameObject *Projectile::getParent() const
+{
+	return this->_parent;
+}
+
+const GameObject *Projectile::getTarget() const
+{
+	return this->_target;
+}
+
+const Weapon *Projectile::getWeapon() const
+{
+	return this->_weapon;
+}
+
+Vector2f Projectile::getPosition() const
+{
+	return this->_position;
+}
+
+Vector2f Projectile::getStartPosition() const
+{
+	return this->_startPos;
+}
+
+Vector2f Projectile::getTargetPosition() const
+{
+	return this->_targetPos;
+}
+
+float Projectile::getHeight() const
+{
+	return this->_height;
+}
+
+float Projectile::getSpeed() const
+{
+	return this->_speed;
+}
+
+unsigned Projectile::getDamage() const
+{
+	return this->_damage;
+}
+
+unsigned Projectile::getRange() const
+{
+	return this->_range;
+}
+
+bool Projectile::isHoming() const
+{
+	return this->_homing;
+}
+
+bool Projectile::isArc() const
+{
+	return this->_arc;
+}
+
+bool Projectile::isFalling() const
+{
+	return this->_falling;
+}
+
+bool Projectile::isHitTravel() const
+{
+	return this->_hitTravel;
+}
+
+const std::deque<Projectile::TrailPoint> &Projectile::getTrail() const
+{
+	return this->_history;
+}
+
+float Projectile::getArcHeight(Vector2f position) const
+{
+	const double a = 16;
+	double b = this->_targetPos.distance(this->_startPos);
+
+	if (b <= 0)
+		return 0;
+
+	double x = this->_targetPos.distance(position);
+	double xmb2 = x - b / 2;
+
+	return a - a * ((xmb2 * xmb2) / (b / 4) / b);
+}
+
+std::vector<Projectile::TrailPoint> Projectile::simulateFall() const
+{
+	std::vector<TrailPoint> result;
+	Vector2f pos = this->_position;
+	float height = this->_height;
+	float velocity = this->_velocity;
+	unsigned bounce = this->_bounce;
+
+	for (unsigned i = 0; i < 1000; i++) {
+		Vector2f diff = this->_targetPos - pos;
+
+		if (diff.magnitude2() > 0) {
+			diff.normalize();
+			diff *= this->_speed;
+			pos += diff;
+		}
+		height += velocity;
+		velocity -= this->_gravity;
+		result.push_back({pos, std::max(height, 0.f)});
+		if (height <= 0) {
+			if (bounce == 0)
+				break;
+			velocity *= -0.5;
+			height = 0;
+			bounce--;
+		}
+	}
+	return result;
 }
 
 void Projectile::pushUserType(sol::state &state)
