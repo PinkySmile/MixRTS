@@ -125,6 +125,15 @@ enum CollisionResolution {
 	COLLISION_DEST_BLOCKED // The final destination tile is taken and won't be freed; stop next to it.
 };
 
+// Result of getting rid of everything that stands in the way of a unit.
+enum BlockerClearResult {
+	BLOCKERS_NONE,      // Nothing is in the way.
+	BLOCKERS_IMMOVABLE, // Only things that can't move (buildings...) are in the way.
+	BLOCKERS_CRUSHED,   // Everything in the way has been crushed.
+	BLOCKERS_ASKED,     // The units in the way have been asked to move aside: wait for them.
+	BLOCKERS_STUCK      // Something in the way can neither be crushed nor pushed.
+};
+
 // Result of one step of a movement order.
 enum MoveResult {
 	MOVE_IN_PROGRESS,  // Still moving (or waiting).
@@ -370,7 +379,6 @@ protected:
 	mutable bool _cachedDebugTexLoaded = false;
 	bool _countsForGame;
 	bool _countsForShortGame;
-	bool _requiresPlacement = false;
 	bool _boundToGrid = false;
 	bool _disposable = false;
 	bool _pathCached = false;
@@ -456,7 +464,9 @@ public:
 	void moveOut(const Vector2i &pos);
 	//! \param ignore Object that is never considered an obstacle on the way (e.g. the building a unit just came out of).
 	void moveTo(const Vector2i &pos, MoveReason reason, bool straight = false, GameObject *ignore = nullptr);
-	bool moveAside(const GameObject *asker);
+	//! \param claimed Spots (tiles for grid bound units) already picked by other units asked to move aside
+	//!                at the same time. The one picked by this unit is added to it.
+	bool moveAside(const GameObject *asker, std::vector<Vector2i> *claimed = nullptr);
 	void dumpResourcesTo(GameObject *dump, bool automatic, bool straight = false);
 	void pickup(GameObject *target, Vector2f destination);
 	void deliverTo(const std::vector<GameObject *> &objects, Vector2f destination);
@@ -584,10 +594,15 @@ protected:
 	void _recomputeConnectedMask();
 	unsigned char _getConnectionSide(const GameObject *);
 	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);
-	bool _tileAvailableFor(Vector2i tile) const;
-	GameObject *_findBlockingUnit(Vector2i absPos, Vector2u size, const GameObject *ignoreObject) const;
-	//! Finds what holds \a tile in the pathfinding grid (units that reserved it included).
-	GameObject *_findTileBlocker(Vector2i tile, const GameObject *ignoreObject) const;
+	//! \param extraClaims Number of (stackable) units that are about to go to \a tile and are not on it yet.
+	bool _tileAvailableFor(Vector2i tile, unsigned extraClaims = 0) const;
+	//! Finds everything that holds an area (free moving units).
+	[[nodiscard]] std::vector<GameObject *> _findBlockingUnits(Vector2i absPos, Vector2u size, const GameObject *ignoreObject) const;
+	//! Finds everything that holds \a tile in the pathfinding grid (units that reserved it included).
+	[[nodiscard]] std::vector<GameObject *> _findTileBlockers(Vector2i tile, const GameObject *ignoreObject) const;
+	//! Gets rid of all the \a blockers at once: allied units are asked to move aside and
+	//! enemy ones are crushed (when \a allowCrush is set and we are able to).
+	BlockerClearResult _clearBlockers(const std::vector<GameObject *> &blockers, bool allowCrush);
 	//! Whether this unit is on its way somewhere other than \a tile (so it will free it up).
 	[[nodiscard]] bool _isLeavingTile(Vector2i tile) const;
 	void _reserveTile(Vector2i tile);

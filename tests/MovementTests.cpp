@@ -15,6 +15,7 @@
 #include <array>
 #include <cmath>
 #include <functional>
+#include <stdexcept>
 #include <gtest/gtest.h>
 #include "GameFixture.hpp"
 #include "TestHelpers.hpp"
@@ -343,4 +344,204 @@ TEST_F(GameFixture, TwoUnitsCanLeaveTheSameLightFactory)
 TEST_F(GameFixture, TwoUnitsCanLeaveTheSameHeavyFactory)
 {
 	checkSecondFactoryUnitCanLeaveTheBuilding(*this->manager, *this->player, *this->getMcv()->map, [this] { this->tick(); }, "d2k:a_hfac", "d2k:heavy_vehicle", "d2k:misl");
+}
+
+namespace {
+
+//! Horizontal lane of 4 tiles, walled in on every side (the mover starts on
+//! the first tile and wants to go to the last one). Without walls the units
+//! would simply walk around whatever stands in the lane, and nothing would
+//! ever have to be pushed or crushed.
+using Lane = std::array<Vector2i, 4>;
+
+constexpr unsigned BLOB_SIZE = 5;
+constexpr uint32_t LANE_PASS_FLAGS = GRIDMASK_VEHICLES_CAN_PASS | GRIDMASK_INFANTRY_CAN_PASS;
+
+//! Finds a free spot for a lane (and its walls) and builds the walls out of
+//! unmovable "test:target" objects.
+Lane buildLane(GameManager &manager, Player &wallOwner, MapState &map)
+{
+	// The region is 6x3 tiles: the lane is its middle row without the first
+	// and last tiles, which, like the rest, are walls.
+	constexpr int W = 6;
+	constexpr int H = 3;
+	Vector2u tileSize = map.tileSize;
+
+	for (int ty = 0; ty + H <= static_cast<int>(map.gridSize.y); ty++)
+		for (int tx = 0; tx + W <= static_cast<int>(map.gridSize.x); tx++) {
+			bool ok = true;
+
+			for (int y = 0; y < H && ok; y++)
+				for (int x = 0; x < W && ok; x++) {
+					Vector2i tile = {tx + x, ty + y};
+					bool isLane = y == 1 && x >= 1 && x < W - 1;
+					auto attrs = map.grid[tile.x + tile.y * map.gridSize.x];
+
+					if (!manager.isAreaFree(map.topLeftCoordToAbs(tile), tileSize))
+						ok = false;
+					else if (isLane && ((attrs & LANE_PASS_FLAGS) != LANE_PASS_FLAGS || GRID_RESOURCE_TYPE(attrs) != 0))
+						ok = false;
+				}
+			if (!ok)
+				continue;
+
+			Lane lane;
+
+			for (int y = 0; y < H; y++)
+				for (int x = 0; x < W; x++) {
+					Vector2i tile = {tx + x, ty + y};
+
+					if (y == 1 && x >= 1 && x < W - 1) {
+						lane[x - 1] = tile;
+						continue;
+					}
+					if (!manager.spawnObject(wallOwner.state.index, map.topLeftCoordToAbs(tile), "", "test:target"))
+						throw std::runtime_error("Cannot spawn wall");
+				}
+			return lane;
+		}
+	throw std::runtime_error("No free space for a lane found");
+}
+
+}
+
+//! Common setup for the tests on units blocked by a blob of 5 stackable units
+//! (infantry sharing the second tile of a lane).
+class BlobMovementTests : public GameFixture {
+protected:
+	Player *enemy = nullptr;
+	Lane lane;
+	std::array<GameObject *, BLOB_SIZE> blob;
+
+	void SetUp() override
+	{
+		GameFixture::SetUp();
+		// Harkonnen, on the second starting area, in another team.
+		this->manager->addPlayer(1, HSLColor{0, 800, 750}, 1, 1);
+		// GameManager::getPlayers() can reallocate when a player is added.
+		this->player = &this->manager->getPlayers()[0];
+		this->enemy = &this->manager->getPlayers()[1];
+	}
+
+	MapState &map()
+	{
+		return *this->getMcv()->map;
+	}
+
+	//! Builds the lane and puts the blob (owned by the player) on its second tile.
+	void setupBlob()
+	{
+		this->lane = buildLane(*this->manager, *this->player, this->map());
+		for (auto &b : this->blob) {
+			b = this->manager->spawnObject(this->player->state.index, tileCenterAbs(this->map(), this->lane[1]), "", "d2k:engi");
+			ASSERT_NE(b, nullptr);
+			ASSERT_EQ(b->getOccupiedTile(), this->lane[1]);
+			ASSERT_TRUE(b->isStackable());
+			ASSERT_TRUE(b->isCrushable());
+		}
+	}
+
+	GameObject *spawnOnLane(Player &owner, const std::string &id)
+	{
+		GameObject *obj = this->manager->spawnObject(owner.state.index, tileCenterAbs(this->map(), this->lane[0]), "", id);
+
+		if (obj) {
+			// Don't let the spawn orders do their own thing.
+			obj->clearOrders();
+			obj->moveTo(tileCenterAbs(this->map(), this->lane[3]), MOVEREASON_MOVE_COMMAND);
+		}
+		return obj;
+	}
+
+	//! An allied unit crosses the blob: everyone in the blob must get out of the way at once.
+	void checkAlliedMoverPushesWholeBlob(const std::string &moverId)
+	{
+		this->setupBlob();
+		if (this->HasFatalFailure())
+			return;
+
+		GameObject *mover = this->spawnOnLane(*this->player, moverId);
+
+		ASSERT_NE(mover, nullptr);
+		ASSERT_EQ(mover->getOccupiedTile(), this->lane[0]);
+
+		std::array<int, BLOB_SIZE> leftAt;
+		int enteredAt = -1;
+
+		leftAt.fill(-1);
+		for (int i = 0; i < 1500 && enteredAt < 0; i++) {
+			this->tick();
+			for (size_t j = 0; j < BLOB_SIZE; j++)
+				if (leftAt[j] < 0 && this->blob[j]->getOccupiedTile() != this->lane[1])
+					leftAt[j] = i;
+			if (mover->getOccupiedTile() == this->lane[1])
+				enteredAt = i;
+		}
+
+		for (size_t j = 0; j < BLOB_SIZE; j++) {
+			EXPECT_GE(leftAt[j], 0) << "Unit " << j << " of the blob never moved out of the way";
+			EXPECT_GT(this->blob[j]->getHealth(), 0) << "Allied unit " << j << " should never have been hurt";
+		}
+		ASSERT_GE(enteredAt, 0) << "The unit never made it through the blob";
+
+		int first = *std::ranges::min_element(leftAt);
+		int last = *std::ranges::max_element(leftAt);
+
+		// Asking them one after the other takes a full blocked delay (60 ticks) per unit.
+		EXPECT_LE(last - first, 10) << "The blob should move out of the way all at once (first one left at tick " << first << ", last one at tick " << last << ")";
+		EXPECT_GE(enteredAt, last) << "The unit went in before the whole blob was out of the way";
+	}
+};
+
+//! A unit that can't stack (a trike) is blocked by 5 allied stackable units:
+//! all 5 have to move out of the way at the same time.
+TEST_F(BlobMovementTests, NonStackableAllyPushesWholeBlobAtOnce)
+{
+	this->checkAlliedMoverPushesWholeBlob("d2k:trik");
+}
+
+//! Same, but the unit is stackable too. It has to ask all 5 to move as well
+//! instead of taking the place of the first one to leave.
+TEST_F(BlobMovementTests, StackableAllyPushesWholeBlobAtOnce)
+{
+	this->checkAlliedMoverPushesWholeBlob("d2k:engi");
+}
+
+//! An enemy harvester (that can crush) goes through 5 stackable units: all 5
+//! have to be crushed at the same time, and not just the first one before
+//! driving over the other four.
+TEST_F(BlobMovementTests, EnemyCrusherCrushesWholeBlobAtOnce)
+{
+	this->setupBlob();
+	if (this->HasFatalFailure())
+		return;
+
+	GameObject *crusher = this->spawnOnLane(*this->enemy, "d2k:harv");
+
+	ASSERT_NE(crusher, nullptr);
+	ASSERT_EQ(crusher->getOccupiedTile(), this->lane[0]);
+
+	std::array<int, BLOB_SIZE> crushedAt;
+	int enteredAt = -1;
+
+	crushedAt.fill(-1);
+	for (int i = 0; i < 1500 && enteredAt < 0; i++) {
+		this->tick();
+		for (size_t j = 0; j < BLOB_SIZE; j++)
+			// Crushed units get removed some ticks after: never look at one again once crushed.
+			if (crushedAt[j] < 0 && this->blob[j]->getHealth() == 0)
+				crushedAt[j] = i;
+		if (crusher->getOccupiedTile() == this->lane[1])
+			enteredAt = i;
+	}
+
+	for (size_t j = 0; j < BLOB_SIZE; j++)
+		EXPECT_GE(crushedAt[j], 0) << "Unit " << j << " of the blob was never crushed";
+	ASSERT_GE(enteredAt, 0) << "The crusher never went through the blob";
+
+	int first = *std::ranges::min_element(crushedAt);
+	int last = *std::ranges::max_element(crushedAt);
+
+	EXPECT_EQ(first, last) << "The whole blob should be crushed at once (first one at tick " << first << ", last one at tick " << last << ")";
+	EXPECT_LE(last, enteredAt) << "The crusher went in before the whole blob was crushed";
 }

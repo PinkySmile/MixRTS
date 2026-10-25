@@ -541,8 +541,6 @@ GameObject::GameObject(
 		this->_spawnOffset = {json["spawn_offset"]["x"], json["spawn_offset"]["y"]};
 	if (json.contains("point"))
 		this->_point = {json["point"]["x"], json["point"]["y"]};
-	if (json.contains("requires_placement"))
-		this->_requiresPlacement = json["requires_placement"];
 	if (json.contains("queue"))
 		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);
 	if (json.contains("fake"))
@@ -1138,7 +1136,7 @@ void GameObject::_computeMovePath(Vector2i destination, bool ignoreSolid, const 
 		this->_pathCache.pop_back();
 }
 
-bool GameObject::_tileAvailableFor(Vector2i tile) const
+bool GameObject::_tileAvailableFor(Vector2i tile, unsigned extraClaims) const
 {
 	auto &grid = this->map->pathFindingGrid;
 
@@ -1157,8 +1155,8 @@ bool GameObject::_tileAvailableFor(Vector2i tile) const
 	if (PFGRIDMASK_FREE_NB(attrs) != 0)
 		return false;
 	if (this->_stackable)
-		return PFGRIDMASK_STACK_COUNT(attrs) < PATHFINDING_STACK_LIMIT;
-	return PFGRIDMASK_STACK_COUNT(attrs) == 0;
+		return PFGRIDMASK_STACK_COUNT(attrs) + extraClaims < PATHFINDING_STACK_LIMIT;
+	return PFGRIDMASK_STACK_COUNT(attrs) + extraClaims == 0;
 }
 
 Vector2i GameObject::getOccupiedTile() const
@@ -1193,10 +1191,10 @@ bool GameObject::canStandOn(Vector2i tile) const
 	return grid.usedSpaces[this->owner->state.team][index] == 0;
 }
 
-GameObject *GameObject::_findTileBlocker(Vector2i tile, const GameObject *ignoreObject) const
+std::vector<GameObject *> GameObject::_findTileBlockers(Vector2i tile, const GameObject *ignoreObject) const
 {
 	std::vector<GameObject *> objects;
-	GameObject *fallback = nullptr;
+	std::vector<GameObject *> blockers;
 	Vector2i abs = this->map->topLeftCoordToAbs(tile);
 
 	// Look one tile further in every direction: a unit that reserved the tile
@@ -1222,11 +1220,57 @@ GameObject *GameObject::_findTileBlocker(Vector2i tile, const GameObject *ignore
 		}
 		if (!holds)
 			continue;
-		if (o->canMove())
-			return o;
-		fallback = o;
+		if (std::ranges::find(blockers, o) == blockers.end())
+			blockers.push_back(o);
 	}
-	return fallback;
+	return blockers;
+}
+
+BlockerClearResult GameObject::_clearBlockers(const std::vector<GameObject *> &blockers, bool allowCrush)
+{
+	if (blockers.empty())
+		return BLOCKERS_NONE;
+
+	std::vector<GameObject *> allies;
+	std::vector<GameObject *> crushables;
+	bool anyMovable = false;
+	bool stuck = false;
+
+	for (auto *b : blockers) {
+		if (!b->canMove())
+			continue;
+		anyMovable = true;
+		if (b->owner->state.team == this->owner->state.team)
+			allies.push_back(b);
+		else if (allowCrush && this->_canCrush && b->isCrushable())
+			crushables.push_back(b);
+		else
+			stuck = true;
+	}
+	if (!anyMovable)
+		return BLOCKERS_IMMOVABLE;
+	// Something we neither can crush nor push is there: don't bother
+	// disturbing the others, we are not getting through anyway.
+	if (stuck)
+		return BLOCKERS_STUCK;
+
+	// Everyone in the way is dealt with at once (and not one after the other),
+	// otherwise we would be waiting for each of them in turn.
+	std::vector<Vector2i> claimed;
+	bool asked = false;
+
+	for (auto *ally : allies)
+		if (ally->moveAside(this, &claimed))
+			asked = true;
+		else
+			stuck = true;
+	if (stuck && !asked)
+		return BLOCKERS_STUCK;
+	for (auto *b : crushables)
+		b->crushedBy(this);
+	if (asked)
+		return BLOCKERS_ASKED;
+	return BLOCKERS_CRUSHED;
 }
 
 bool GameObject::_isLeavingTile(Vector2i tile) const
@@ -1263,20 +1307,19 @@ void GameObject::_reserveTile(Vector2i tile)
 	this->initGlobalGrid();
 }
 
-GameObject *GameObject::_findBlockingUnit(Vector2i absPos, Vector2u size, const GameObject *ignoreObject) const
+std::vector<GameObject *> GameObject::_findBlockingUnits(Vector2i absPos, Vector2u size, const GameObject *ignoreObject) const
 {
 	std::vector<GameObject *> objects;
-	GameObject *fallback = nullptr;
+	std::vector<GameObject *> blockers;
 
 	this->manager->getObjectsInArea(absPos, size, objects);
 	for (auto *o : objects) {
 		if (o == this || o == ignoreObject || !o->isSolid())
 			continue;
-		if (o->canMove())
-			return o;
-		fallback = o;
+		if (std::ranges::find(blockers, o) == blockers.end())
+			blockers.push_back(o);
 	}
-	return fallback;
+	return blockers;
 }
 
 CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject, bool pushBlockers)
@@ -1304,25 +1347,25 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 	// Final destination: never push whoever is there. Crush it if we can,
 	// wait if it's about to leave, otherwise give up and stop next to it.
 	if (nextTile == this->map->absToTileCoord(this->_cachedDest)) {
-		GameObject *blocker = this->_findTileBlocker(nextTile, ignoreObject);
+		std::vector<GameObject *> blockers = this->_findTileBlockers(nextTile, ignoreObject);
 
-		if (blocker == nullptr)
+		if (blockers.empty())
 			return COLLISION_PROCEED;
 		if (this->canStandOn(nextTile)) {
-			while (auto *b = this->_findTileBlocker(nextTile, ignoreObject)) {
-				if (!b->isCrushable())
-					break;
-				b->crushedBy(this);
-			}
+			// Everyone on the tile goes at once.
+			for (auto *b : blockers)
+				if (b->isCrushable())
+					b->crushedBy(this);
 			return COLLISION_PROCEED;
 		}
-		if (blocker->_isLeavingTile(nextTile)) {
+		// It's only worth waiting if every one of them is leaving.
+		if (std::ranges::all_of(blockers, [nextTile](const GameObject *b){ return b->_isLeavingTile(nextTile); })) {
 			this->blockTimer = 1;
 			return COLLISION_WAIT;
 		}
 		// A unit coming out of a building has nowhere else to go: the allied
 		// units standing in front of the exit have to make room.
-		if (pushBlockers && blocker->canMove() && blocker->owner->state.team == this->owner->state.team && blocker->moveAside(this)) {
+		if (pushBlockers && this->_clearBlockers(blockers, false) == BLOCKERS_ASKED) {
 			this->blockTimer = 1;
 			return COLLISION_WAIT;
 		}
@@ -1332,18 +1375,16 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 	std::vector<Vector2i> saved;
 
 	if (ignoreSolid) {
-		GameObject *blocker = this->_findTileBlocker(nextTile, ignoreObject);
-
-		if (!blocker || !blocker->canMove())
+		switch (this->_clearBlockers(this->_findTileBlockers(nextTile, ignoreObject), true)) {
+		case BLOCKERS_NONE:
+		case BLOCKERS_IMMOVABLE:
+		case BLOCKERS_CRUSHED:
 			return COLLISION_PROCEED;
-		if (blocker->owner->state.team == this->owner->state.team) {
-			if (blocker->moveAside(this)) {
-				this->blockTimer = 1;
-				return COLLISION_WAIT;
-			}
-		} else if (blocker->isCrushable() && this->_canCrush) {
-			blocker->crushedBy(this);
-			return COLLISION_PROCEED;
+		case BLOCKERS_ASKED:
+			this->blockTimer = 1;
+			return COLLISION_WAIT;
+		case BLOCKERS_STUCK:
+			break;
 		}
 
 		saved = this->_pathCache;
@@ -1368,20 +1409,16 @@ CollisionResolution GameObject::_resolveGridCollision(bool ignoreSolid, const Ga
 		}
 		this->_pathCache = saved;
 
-		GameObject *blocker = this->_findTileBlocker(nextTile, ignoreObject);
-
-		if (blocker == nullptr)
+		switch (this->_clearBlockers(this->_findTileBlockers(nextTile, ignoreObject), true)) {
+		case BLOCKERS_NONE:
+		case BLOCKERS_CRUSHED:
 			return COLLISION_PROCEED;
-		if (!blocker->canMove())
-			return COLLISION_ABORT;
-		if (blocker->owner->state.team == this->owner->state.team) {
-			if (!blocker->moveAside(this))
-				return COLLISION_ABORT;
+		case BLOCKERS_ASKED:
 			this->blockTimer = 1;
 			return COLLISION_WAIT;
-		} else if (blocker->isCrushable() && this->_canCrush) {
-			blocker->crushedBy(this);
-			return COLLISION_PROCEED;
+		case BLOCKERS_IMMOVABLE:
+		case BLOCKERS_STUCK:
+			break;
 		}
 		return COLLISION_ABORT;
 	}
@@ -1433,20 +1470,16 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid, const Ga
 	}
 	this->_pathCache = saved;
 
-	GameObject *blocker = this->_findBlockingUnit(nextPos, this->_size, ignoreObject);
-
-	if (blocker == nullptr)
+	switch (this->_clearBlockers(this->_findBlockingUnits(nextPos, this->_size, ignoreObject), true)) {
+	case BLOCKERS_NONE:
+	case BLOCKERS_CRUSHED:
 		return COLLISION_PROCEED;
-	if (!blocker->canMove())
-		return COLLISION_ABORT;
-	if (blocker->owner->state.team == this->owner->state.team) {
-		if (!blocker->moveAside(this))
-			return COLLISION_ABORT;
+	case BLOCKERS_ASKED:
 		this->blockTimer = 1;
 		return COLLISION_WAIT;
-	} else if (blocker->isCrushable() && this->_canCrush) {
-		blocker->crushedBy(this);
-		return COLLISION_PROCEED;
+	case BLOCKERS_IMMOVABLE:
+	case BLOCKERS_STUCK:
+		break;
 	}
 	return COLLISION_ABORT;
 }
@@ -3108,7 +3141,7 @@ void GameObject::moveTo(const Vector2i &pos, MoveReason reason, bool straight, G
 		});
 }
 
-bool GameObject::moveAside(const GameObject *asker)
+bool GameObject::moveAside(const GameObject *asker, std::vector<Vector2i> *claimed)
 {
 	assert_exp(this->canMove());
 	if (this->_dumpStart || this->_dumping || this->_dumpStop || this->_harvesting)
@@ -3123,8 +3156,15 @@ bool GameObject::moveAside(const GameObject *asker)
 	// Prefer moving away from whoever asked us to move (compare centers, which
 	// are valid regardless of whether either unit is grid-bound).
 	Vector2f selfCenter = this->getMiddle();
+
+	// Units sharing a tile all use the center of the tile, so that they pick
+	// the same direction instead of each of them going its own way.
+	if (this->_boundToGrid)
+		selfCenter = (this->map->topLeftCoordToAbs(this->_occupiedTile) + this->map->tileSize.to<int>() / 2).to<float>();
+
 	Vector2f away = selfCenter - asker->getMiddle();
 	Vector2i destination;
+	Vector2i destinationTile;
 	float bestScore = 0;
 	bool found = false;
 
@@ -3138,7 +3178,11 @@ bool GameObject::moveAside(const GameObject *asker)
 				continue;
 			if (tile.x >= static_cast<int>(grid.gridSize.x) || tile.y >= static_cast<int>(grid.gridSize.y))
 				continue;
-			if (!this->_tileAvailableFor(tile))
+
+			// Tiles other units (asked at the same time as us) are already going to.
+			unsigned extra = claimed ? std::ranges::count(*claimed, tile) : 0;
+
+			if (!this->_tileAvailableFor(tile, extra))
 				continue;
 
 			float score = d.x * away.x + d.y * away.y;
@@ -3146,6 +3190,7 @@ bool GameObject::moveAside(const GameObject *asker)
 			if (!found || score > bestScore) {
 				found = true;
 				destination = this->map->topLeftCoordToAbs(tile);
+				destinationTile = tile;
 				bestScore = score;
 			}
 		}
@@ -3169,6 +3214,11 @@ bool GameObject::moveAside(const GameObject *asker)
 				continue;
 			if (!this->manager->isAreaFree(candidate, this->_size, {this->index}, this->_stackable))
 				continue;
+			// Spots other units (asked at the same time as us) are already going to.
+			if (claimed && std::ranges::any_of(*claimed, [&](Vector2i c){
+				return std::abs(c.x - candidate.x) < static_cast<int>(this->_size.x) && std::abs(c.y - candidate.y) < static_cast<int>(this->_size.y);
+			}))
+				continue;
 
 			MapState::Quad footprint = {
 				candidate.to<float>(),
@@ -3191,6 +3241,8 @@ bool GameObject::moveAside(const GameObject *asker)
 	}
 	if (!found)
 		return false;
+	if (claimed)
+		claimed->push_back(this->_boundToGrid ? destinationTile : destination);
 
 	this->_orderQueue.emplace_front(MoveOrder{
 		.destination = destination,
@@ -3474,11 +3526,6 @@ unsigned GameObject::getResourceStorage() const
 bool GameObject::isFake() const
 {
 	return this->_fake;
-}
-
-bool GameObject::requiresPlacement() const
-{
-	return this->_requiresPlacement;
 }
 
 const std::optional<std::string> &GameObject::getProxy() const
