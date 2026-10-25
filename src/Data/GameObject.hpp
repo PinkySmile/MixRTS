@@ -379,6 +379,7 @@ protected:
 	mutable bool _cachedDebugTexLoaded = false;
 	bool _countsForGame;
 	bool _countsForShortGame;
+	bool _requiresPower = false;
 	bool _boundToGrid = false;
 	bool _disposable = false;
 	bool _pathCached = false;
@@ -532,7 +533,6 @@ public:
 	[[nodiscard]] const std::vector<std::string> &getAcceptResources() const;
 	[[nodiscard]] unsigned getResourceStorage() const;
 	[[nodiscard]] bool isFake() const;
-	[[nodiscard]] bool requiresPlacement() const;
 	[[nodiscard]] const std::optional<std::string> &getProxy() const;
 	[[nodiscard]] const std::optional<std::vector<std::vector<BuildingMask>>> &getTileData() const;
 	[[nodiscard]] const std::string &getId() const;

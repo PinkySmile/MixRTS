@@ -325,6 +325,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("harvest_time") || json["harvest_time"].is_number_unsigned());
 	assert_exp(!json.contains("harvest_delay") || json["harvest_delay"].is_number_unsigned());
 	assert_exp(!json.contains("build_max_distance") || json["build_max_distance"].is_number());
+	assert_exp(!json.contains("requires_power") || json["requires_power"].is_boolean());
 	assert_exp(!json.contains("selectable") || json["selectable"].is_boolean());
 	assert_exp(!json.contains("sellable") || json["sellable"].is_boolean());
 	assert_exp(!json.contains("repairable") || json["repairable"].is_boolean());
@@ -541,6 +542,8 @@ GameObject::GameObject(
 		this->_spawnOffset = {json["spawn_offset"]["x"], json["spawn_offset"]["y"]};
 	if (json.contains("point"))
 		this->_point = {json["point"]["x"], json["point"]["y"]};
+	if (json.contains("requires_power"))
+		this->_requiresPower = json["requires_power"];
 	if (json.contains("queue"))
 		this->_buildQueue = RESOURCE(base.getName(), json["queue"]);
 	if (json.contains("fake"))
@@ -1996,6 +1999,8 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 
 	Vector2f myCenter;
 
+	if (this->_requiresPower && this->owner->state.consumedPower > this->owner->state.producedPower)
+		return true;
 	if (this->_boundToGrid) {
 		MapState::Quad abs = this->map->tileCoordToAbs(this->_gridPos);
 
@@ -2015,6 +2020,8 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 
 	range *= range;
 	if (range < diffAbs.magnitude2()) {
+		if (!this->canMove())
+			return true;
 		this->_firstEvent = this->attackFirst;
 		this->attackFirst = 0;
 		if (this->_updateOrder(MoveOrder{
@@ -4441,7 +4448,6 @@ void GameObject::pushUserType(sol::state &state)
 	type["accept_resources"] = sol::property(&GameObject::getAcceptResources);
 	type["resource_storage"] = sol::property(&GameObject::getResourceStorage);
 	type["fake"] = sol::property(&GameObject::isFake);
-	type["requires_placement"] = sol::property(&GameObject::requiresPlacement);
 	type["proxy"] = sol::property(&GameObject::getProxy);
 	type["id"] = sol::property(&GameObject::getId);
 	type["max_health"] = sol::property(&GameObject::getMaxHealth);
