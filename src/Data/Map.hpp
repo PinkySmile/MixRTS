@@ -92,6 +92,7 @@ struct MYDLL_API MapMetadata {
 	std::map<Vector2u, std::vector<unsigned>> skirtsConcrete;
 	std::map<Vector2u, std::vector<unsigned>> skirts;
 	std::vector<sf::Color> mapColors;
+	std::unordered_map<std::string, std::vector<float>> speedMuls;
 
 	void load(Mod &mod, const std::filesystem::path &path);
 	void loadColors(const std::filesystem::path &path);
@@ -117,6 +118,7 @@ struct MYDLL_API LoadedMap {
 	void load(Mod &mod, const std::filesystem::path &path);
 	void buildCache();
 	void refreshTile(unsigned x, unsigned y, bool commit = true, bool reload = true);
+	float getSpeedMul(const std::vector<std::string> &tags, unsigned terrain) const;
 };
 
 

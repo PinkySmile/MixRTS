@@ -89,6 +89,7 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 	assert_exp(json.contains("generators") && json["generators"].is_array());
 	assert_exp(json.contains("resources") && json["resources"].is_array());
 	assert_exp(!json.contains("skirts_conc") || json["skirts"].is_object());
+	assert_exp(!json.contains("speeds") || json["speeds"].is_object());
 	assert_exp(json.contains("skirts") && json["skirts"].is_object());
 
 	this->loadColors(path.parent_path() / json["map_colors"].get<std::string>());
@@ -115,6 +116,12 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 
 			this->resources.emplace(res.id, res);
 		} CATCH_AND_RETHROW("In key \"resources\"[" + std::to_string(i) + "]\n")
+	}
+	for (auto &[key, value] : json["speeds"].items()) {
+		assert_msg(value.is_array(), "json[\"speeds\"][" + key + "]");
+		for (size_t i = 0; i < value.size(); i++)
+			assert_msg(value[i].is_number(), "json[\"speeds\"][" + key + "][" + std::to_string(i) + "]");
+		this->speedMuls[key] = value.get<std::vector<float>>();
 	}
 	for (auto &[key, value] : json["skirts"].items()) {
 		assert_msg(value.is_array(), "json[\"skirts\"][" + key + "]");
@@ -354,6 +361,20 @@ void LoadedMap::refreshTile(unsigned int x, unsigned int y, bool commit, bool re
 	}
 	if (commit)
 		this->renderCache.display();
+}
+
+float LoadedMap::getSpeedMul(const std::vector<std::string> &tags, unsigned terrain) const
+{
+	for (auto &tag : tags) {
+		auto it = this->metadata.speedMuls.find(tag);
+
+		if (it == this->metadata.speedMuls.end())
+			continue;
+		if (terrain >= it->second.size())
+			break;
+		return it->second[terrain];
+	}
+	return 1.f;
 }
 
 void MapResource::pushUserType(sol::state &state)

@@ -1761,12 +1761,20 @@ MoveResult GameObject::_updateMove(const MoveOrder &order)
 
 	auto pos = this->_position;
 	auto diff = dest - pos;
+	auto &lmap = this->manager->getLoadedMap();
+	auto lmapCoords = lmap.grid.absToTileCoord(pos);
 
+	assert_exp(lmapCoords.x >= 0 && static_cast<unsigned>(lmapCoords.x) < lmap.grid.gridSize.x);
+	assert_exp(lmapCoords.y >= 0 && static_cast<unsigned>(lmapCoords.y) < lmap.grid.gridSize.y);
 	if (diff.magnitude2() < this->_decel.dist2) {
 		this->currentSpeed -= this->_decel.step;
 		if (this->currentSpeed < this->_decel.min)
 			this->currentSpeed = this->_decel.min;
 	}
+
+	uint32_t tile = lmap.grid.grid[lmapCoords.x + lmapCoords.y * lmap.grid.gridSize.x];
+	unsigned terrain = GRID_TERRAIN_TYPE(tile);
+
 	//if (this->_stackable) {
 	//	//if (std::abs(diff.x))
 	//	//qddqzzqddzq
@@ -1777,7 +1785,7 @@ MoveResult GameObject::_updateMove(const MoveOrder &order)
 	//	diff.y = std::copysign(this->currentSpeed, diff.y);
 	//} else {
 		diff.normalize();
-		diff *= this->currentSpeed;
+		diff *= this->currentSpeed * lmap.getSpeedMul(this->_tags, terrain);
 	//}
 	if (this->_crouchTimer != 0)
 		diff /= 2;
