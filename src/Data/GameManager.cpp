@@ -191,10 +191,10 @@ void GameManager::_checkScroll()
 	// TODO: Hardcoded UI offset
 	size.x -= 160 * guiScale;
 	if (this->debugOptions.limitCamera) {
+		this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, static_cast<float>(this->_map.grid.gridSize.x) * this->_map.grid.tileSize.x - size.x);
+		this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, static_cast<float>(this->_map.grid.gridSize.y) * this->_map.grid.tileSize.y - size.y);
 		this->_cameraTranslate.x = std::max<float>(this->_cameraTranslate.x, 0);
 		this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -20 * guiScale);
-		this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x);
-		this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y);
 	}
 	if (cursor != UI::CURSOR_SCROLL_ALL_DIRS) {
 		if (old == this->_cameraTranslate)
@@ -1814,10 +1814,10 @@ void GameManager::centerCameraOn(Vector2f target)
 		target.x - size.x / 2,
 		target.y - size.y / 2 + 20 * guiScale
 	};
+	this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, static_cast<float>(this->_map.grid.gridSize.x) * this->_map.grid.tileSize.x - size.x);
+	this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, static_cast<float>(this->_map.grid.gridSize.y) * this->_map.grid.tileSize.y - size.y);
 	this->_cameraTranslate.x = std::max<float>(this->_cameraTranslate.x, 0);
 	this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -20 * guiScale);
-	this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, this->_map.grid.gridSize.x * this->_map.grid.tileSize.x - size.x);
-	this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, this->_map.grid.gridSize.y * this->_map.grid.tileSize.y - size.y);
 	game->soundMgr.setCamera(this->_cameraTranslate + size / 2, size);
 }
 

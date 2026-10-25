@@ -553,7 +553,7 @@ int main(int argc, char **argv)
 				timer = 0;
 			}
 			game->game->updateRender();
-			game->screen->clear(sf::Color{0x80, 0xFF, 0x40});
+			game->screen->clear(sf::Color::Black);
 			game->game->render();
 
 			{
