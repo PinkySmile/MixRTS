@@ -55,14 +55,14 @@ std::wstring wtoHex(const unsigned char *buffer, size_t size, bool endian)
 	return result;
 }
 
-HSLColor::HSLColor(short h, short s, short l, unsigned char a) :
+HSLColor::HSLColor(unsigned short h, unsigned short s, unsigned short l, unsigned char a) :
 	h(h % 360),
 	s(s),
 	l(l),
 	a(a)
 {
-	assert_exp(0 <= s && s <= 1000);
-	assert_exp(0 <= l && l <= 1000);
+	assert_exp(s <= 1000);
+	assert_exp(l <= 1000);
 }
 
 HSLColor::HSLColor(Color color)

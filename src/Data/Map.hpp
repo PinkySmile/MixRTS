@@ -17,7 +17,7 @@
 #include "FindPath.hpp"
 #include "forward.hpp"
 
-#define MAX_TEAM_COUNT 16
+#define MAX_TEAM_COUNT 32
 
 struct MYDLL_API MapState {
 	// OPTIMIZE: Align line size to PAGE_SIZE, or a power of 2

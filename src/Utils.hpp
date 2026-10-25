@@ -42,16 +42,29 @@ std::enable_if_t<std::is_integral_v<T>, std::wstring> wtoHex(const T &v)
 #define RESOURCE(declaredPkg, name) (std::string(name).find(':') == std::string::npos ? std::string(declaredPkg) + ":" + std::string(name) : std::string(name))
 
 struct MYDLL_API HSLColor {
-	short h = 0;
-	short s = 0;
-	short l = 0;
+	unsigned short h = 0;
+	unsigned short s = 0;
+	unsigned short l = 0;
 	unsigned char a = 255;
 
 	HSLColor() = default;
-	HSLColor(short h, short s, short l, unsigned char a = 255);
+	HSLColor(unsigned short h, unsigned short s, unsigned short l, unsigned char a = 255);
 	HSLColor(Color color);
 	Color toRGB() const;
 };
+
+inline std::vector<std::string> split(const std::string &str, const std::string &delims) {
+	std::vector<std::string> vec;
+	std::size_t old_pos = 0;
+	std::size_t pos = 0;
+
+	while ((pos = str.find_first_of(delims, old_pos)) != std::string::npos) {
+		vec.emplace_back(str.substr(old_pos, pos - old_pos));
+		old_pos = pos + 1;
+	}
+	vec.emplace_back(str.substr(old_pos));
+	return vec;
+}
 
 #include <sol/sol.hpp>
 // --- Lua conversion handlers for HSLColor ---

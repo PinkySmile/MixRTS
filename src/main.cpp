@@ -27,9 +27,12 @@ tgui::Font *traceFont = nullptr;
 
 struct Args {
 	bool loadingOnly = false;
-	float speed = 1;
 	bool preload = false;
 	bool noLazyLoad = false;
+	float speed = 1;
+	std::string locale = "fr";
+	std::string map = "mods/dune2000/maps/8PLAY1";
+	std::string players = "d2k:atreides(214,375,919)A<;d2k:harkonnen(0,800,750)B;d2k:ordos(145,250,900)C;scbw:terran(239,1000,500)D;scbw:zerg(299,1000,500)E;scbw:protoss(158,1000,500)F";
 };
 
 void reloadViews(sf::RenderWindow &win, tgui::Gui &gui, Vector2u size, Vector2f offset)
@@ -61,7 +64,7 @@ void dispFPS(float frameTime)
 	char details[64] = "";
 
 	if (stats.averageMs > 0)
-		snprintf(details, sizeof(details), " (avg %.1f / worst %.1f ms)", stats.averageMs, stats.worstMs);
+		snprintf(details, sizeof(details), " (a %.1f / w%.1f ms)", stats.averageMs, stats.worstMs);
 
 	auto str = sf::String(std::to_string(static_cast<unsigned>(round(1 / frameTime))) + "FPS" + details);
 	Vector2u size = game->screen->getSize();
@@ -78,21 +81,24 @@ void dispFPS(float frameTime)
 int parseArgs(int argc, char **argv, Args &args)
 {
 	std::map<std::string, char> longToShort = {
-		{"load-only", 'l'},
+		{"load-only", -1},
+		{"no-lazy-load", -2},
+		{"preload", 'P'},
+		{"players", 'p'},
 		{"speed", 's'},
-		{"no-lazy-load", 'L'},
-		{"preload", 'p'}
+		{"map", 'm'},
+		{"locale", 'l'}
 	};
 	std::map<char, std::function<bool (int &i)>> cbs = {
-		{'l', [&args](int &) {
+		{-1, [&args](int &) {
 			args.loadingOnly = true;
 			return true;
 		}},
-		{'L', [&args](int &) {
+		{-2, [&args](int &) {
 			args.noLazyLoad = true;
 			return true;
 		}},
-		{'p', [&args](int &) {
+		{'P', [&args](int &) {
 			args.preload = true;
 			return true;
 		}},
@@ -108,6 +114,33 @@ int parseArgs(int argc, char **argv, Args &args)
 				fprintf(stderr, "Invalid number sent to --speed\n");
 				return false;
 			}
+			return true;
+		}},
+		{'m', [&argc, &argv, &args](int &i) {
+			i++;
+			if (i == argc) {
+				fprintf(stderr, "Required param to --map\n");
+				return false;
+			}
+			args.map = argv[i];
+			return true;
+		}},
+		{'p', [&argc, &argv, &args](int &i) {
+			i++;
+			if (i == argc) {
+				fprintf(stderr, "Required param to --players\n");
+				return false;
+			}
+			args.players = argv[i];
+			return true;
+		}},
+		{'l', [&argc, &argv, &args](int &i) {
+			i++;
+			if (i == argc) {
+				fprintf(stderr, "Required param to --locale\n");
+				return false;
+			}
+			args.locale = argv[i];
 			return true;
 		}}
 	};
@@ -303,20 +336,19 @@ void handleCrash(Stacktrace st, const std::exception &e)
 	delete background;
 }
 
-template <size_t size>
-void genSpawns(std::array<size_t, size> &array, const std::vector<Vector2u> &areas)
+void genSpawns(size_t size, std::vector<size_t> &array, const std::vector<Vector2u> &areas)
 {
-	static_assert(size != 0);
-
 	assert_exp(areas.size() >= size);
+	array.resize(size);
 	array[0] = game->random() % areas.size();
 	if (size == 1) return;
 
 	double maxDist = -1.0;
-	std::array<size_t, size - 1> bestSub{};
+	std::vector<size_t> bestSub;
 
+	bestSub.resize(size - 1);
 	// Recursive lambda to generate all combinations of (size - 1) indices from nb (excluding array[0])
-	auto findBestCombination = [&](auto &self, size_t depth, size_t startIdx, std::array<size_t, size - 1> &currentSub) -> void {
+	auto findBestCombination = [&](auto &self, size_t depth, size_t startIdx, std::vector<size_t> &currentSub) -> void {
 		if (depth == size - 1) {
 			// Find the minimum pairwise distance among all points: array[0] and all elements in currentSub
 			double minDist = std::numeric_limits<double>::infinity();
@@ -354,12 +386,20 @@ void genSpawns(std::array<size_t, size> &array, const std::vector<Vector2u> &are
 		}
 	};
 
-	std::array<size_t, size - 1> currentSub{};
+	std::vector<size_t> currentSub{};
 
+	currentSub.resize(size - 1);
 	findBestCombination(findBestCombination, 0, 0, currentSub);
 	// Copy the best combination into the remaining slots of the array
 	for (size_t i = 0; i < size - 1; ++i)
 		array[i + 1] = bestSub[i];
+}
+
+void loadMods()
+{
+	for (const auto &entry : std::filesystem::directory_iterator("mods"))
+		if (entry.is_directory() && std::filesystem::exists(entry.path() / "mod.json"))
+			game->modManager.loadMod(entry.path());
 }
 
 int main(int argc, char **argv)
@@ -378,57 +418,86 @@ int main(int argc, char **argv)
 	#ifdef _WIN32
 		ShowWindow(game->screen->getNativeHandle(), SW_MAXIMIZE);
 	#endif
-		game->modManager.loadMod("mods/dune2000/");
-		game->modManager.loadMod("mods/starcraft_broodwar/");
+		loadMods();
 		game->screen->setMouseCursorVisible(false);
-		game->locale = "fr";
+		game->locale = args.locale;
 
 		std::filesystem::directory_iterator d2kMusics{"mods/dune2000/music_game"};
 		std::filesystem::directory_iterator scbwMusics{"mods/starcraft_broodwar/music_game"};
 		std::vector<std::filesystem::path> musics;
-
 		musics.insert(musics.end(), begin(d2kMusics), end(d2kMusics));
 		musics.insert(musics.end(), begin(scbwMusics), end(scbwMusics));
-
-		sf::Clock clock;
-		sf::Text text{game->font};
-		Mod &modD2K = game->modManager.get("d2k");
-		Mod &modSCBW = game->modManager.get("scbw");
-		std::unordered_map<std::string, Faction> factions;
 		sf::Music music{musics[game->random() % musics.size()]};
 
-		modD2K.loadFactions("factions.json", factions);
-		modSCBW.loadFactions("factions.json", factions);
+		std::vector<Faction> allFactions;
+		std::vector<std::string> loadedMods;
+		std::vector<std::string> loadedFactions;
+		std::unordered_map<std::string, Faction> factions;
+		std::vector<std::tuple<unsigned, unsigned, HSLColor>> playersParams;
+		std::vector<std::string> p = split(args.players, ";");
+		unsigned controllingIndex = 0;
+		char teamLetter[] = "0123456789ABCDEFGHIJKLMNOPQRSTUV";
 
-		std::vector allFactions{
-			factions.at("d2k:atreides"),
-			factions.at("d2k:harkonnen"),
-			factions.at("d2k:ordos"),
-			factions.at("scbw:terran"),
-			factions.at("scbw:zerg"),
-			factions.at("scbw:protoss")
-		};
-		float timer = 0;
+		for (size_t i = 0; i < p.size(); i++) {
+			auto &pl = p[i];
+			size_t posMod = pl.find(':');
+			size_t posColS = pl.find('(');
+			size_t posColE = pl.find(')');
+			assert_exp(posMod != std::string::npos);
+			assert_exp(posColS != std::string::npos);
+			assert_exp(posColE != std::string::npos);
+
+			std::string modName = pl.substr(0, posMod);
+			std::string factionName = pl.substr(0, posColS);
+			auto it = std::ranges::find(loadedFactions, modName);
+			unsigned factionIndex;
+			std::vector<std::string> colorComponents = split(pl.substr(posColS + 1, posColE - posColS), ",");
+			auto color = HSLColor(
+				std::stoul(colorComponents[0]),
+				std::stoul(colorComponents[1]),
+				std::stoul(colorComponents[2])
+			);
+
+			assert_exp(colorComponents.size() == 3);
+			assert_exp(posColE + 1 <= pl.size());
+			if (posColE + 2 != pl.size())
+				controllingIndex = i;
+			if (std::ranges::find(loadedMods, modName) == loadedMods.end()) {
+				game->modManager.get(modName).loadFactions("factions.json", factions);
+				loadedMods.push_back(modName);
+			}
+			if (it == loadedFactions.end()) {
+				factionIndex = loadedFactions.size();
+				loadedFactions.push_back(factionName);
+				assert_msg(factions.contains(factionName), factionName);
+				allFactions.push_back(factions.at(factionName));
+			} else
+				factionIndex = it - loadedFactions.begin();
+
+			char letter = pl[posColE + 1];
+			char *teamId = strchr(teamLetter, letter);
+
+			assert_exp(teamId);
+			playersParams.emplace_back(teamId - teamLetter, factionIndex, color);
+		}
+
 		game->game = std::make_unique<GameManager>(allFactions, 6, GameManager::LobbySettings{true});
+		std::vector<size_t> spawn;
 		auto &players = game->game->getPlayers();
 		auto &map = game->game->getLoadedMap();
-		std::array<size_t, 6> spawn{};
+		size_t i = 0;
+		sf::Clock clock;
+		sf::Text text{game->font};
+		float timer = 0;
 
-		game->game->loadMap(modD2K, "mods/dune2000/maps/8PLAY1");
-		genSpawns(spawn, map.grid.startAreas);
+		game->game->loadMap(game->modManager.get("d2k"), args.map);
+		genSpawns(playersParams.size(), spawn, map.grid.startAreas);
+		for (auto [team, faction, color] : playersParams) {
+			game->game->addPlayer(faction, color, spawn[i], team);
+			players[i].setEnabled(i == controllingIndex);
+			i++;
+		}
 
-		game->game->addPlayer(0, HSLColor{214, 375, 919}, spawn[0], 0); // Atreides blue
-		game->game->addPlayer(1, HSLColor{  0, 800, 750}, spawn[1], 1); // Harkonen's red
-		game->game->addPlayer(2, HSLColor{145, 250, 900}, spawn[2], 2); // Ordos's green
-		game->game->addPlayer(3, HSLColor{239,1000, 500}, spawn[3], 3); // Terran's blue
-		game->game->addPlayer(4, HSLColor{299,1000, 500}, spawn[4], 4); // Zerg's purple
-		game->game->addPlayer(5, HSLColor{158,1000, 500}, spawn[5], 5); // Protoss's green
-		players[0].setEnabled(true);
-		players[1].setEnabled(false);
-		players[2].setEnabled(false);
-		players[3].setEnabled(false);
-		players[4].setEnabled(false);
-		players[5].setEnabled(false);
 		if (args.noLazyLoad)
 			game->game->preloadAllSprites();
 		else if (args.preload)
@@ -441,23 +510,23 @@ int main(int argc, char **argv)
 			game->screen->close();
 		while (game->screen->isOpen()) {
 			Profiler::get().beginFrame();
-			{
-				PROFILE_SCOPE("events");
-				while (auto event = game->screen->pollEvent()) {
-					if (event->is<sf::Event::Closed>())
-						game->screen->close();
-					else if (auto resized = event->getIf<sf::Event::Resized>())
-						reloadViews(*game->screen, game->gui, resized->size, {0, -20 * guiScale});
-					game->game->consumeEvent(*event);
-					game->game->consumeGeneralEvent(*event);
-					{
-						PROFILE_SCOPE("gui");
-						game->gui.handleEvent(*event);
+			TRY {
+				{
+					PROFILE_SCOPE("events");
+					while (auto event = game->screen->pollEvent()) {
+						if (event->is<sf::Event::Closed>())
+							game->screen->close();
+						else if (auto resized = event->getIf<sf::Event::Resized>())
+							reloadViews(*game->screen, game->gui, resized->size, {0, -20 * guiScale});
+						game->game->consumeEvent(*event);
+						game->game->consumeGeneralEvent(*event);
+						{
+							PROFILE_SCOPE("gui");
+							game->gui.handleEvent(*event);
+						}
 					}
 				}
-			}
 
-			TRY {
 				timer += args.speed;
 				while (timer >= 1) {
 					game->game->update();

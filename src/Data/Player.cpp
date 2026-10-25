@@ -550,7 +550,7 @@ void Player::_tryEndBuildAutoTick(PlayerQueueEntry &entry)
 void Player::update()
 {
 	PROFILE_SCOPE("update");
-	if (this->_primaryFaction.hasRadar())
+	if (this->_primaryFaction.hasRadar() || DEBUG_MODE)
 		this->state.hasRadar = true;
 	else if (this->state.producedPower < this->state.consumedPower && this->_primaryFaction.isRadarPowered())
 		this->state.hasRadar = false;
@@ -581,7 +581,9 @@ void Player::update()
 
 void Player::checkWon()
 {
-	this->_won = std::ranges::all_of(this->parent.getPlayers(), [this](const Player &p) {
+	auto &players = this->parent.getPlayers();
+
+	this->_won = players.size() > 1 && std::ranges::all_of(players, [this](const Player &p) {
 		return this->state.team == p.state.team || p.lost();
 	});
 	for (auto &ui : this->_uis)

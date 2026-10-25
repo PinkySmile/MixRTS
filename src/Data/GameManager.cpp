@@ -145,7 +145,14 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned
 	for (auto &b : faction.getStartingObjects()) {
 		auto start = this->_mapStates[factionIndex].startAreas[startingArea];
 
-		start += b.offset;
+		if (static_cast<int>(start.x) < -b.offset.x)
+			start.x = 0;
+		else
+			start.x = std::min(start.x + b.offset.x, this->_mapStates[factionIndex].gridSize.x * this->_mapStates[factionIndex].tileSize.x - 1);
+		if (static_cast<int>(start.y) < -b.offset.y)
+			start.y = 0;
+		else
+			start.y = std::min(start.y + b.offset.y, this->_mapStates[factionIndex].gridSize.y * this->_mapStates[factionIndex].tileSize.y - 1);
 		this->spawnObject(index, start, b.queue, b.name);
 	}
 	// FIXME: Always teleport to player 0 starting point
