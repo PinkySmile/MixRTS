@@ -355,6 +355,7 @@ if (NOT NO_TEST)
 		tests/TestHelpers.hpp
 		tests/WeaponTests.cpp
 		tests/AutoAttackTests.cpp
+		tests/StealthTests.cpp
 		tests/main.cpp
 	)
 	target_compile_definitions(MixRTS-tests PRIVATE MOCK)

@@ -21,6 +21,7 @@
 #include "MultiSound.hpp"
 #include "FindPath.hpp"
 #include "ConditionalAnim.hpp"
+#include "Animation.hpp"
 #include "Warhead.hpp"
 #include "Extra.hpp"
 
@@ -179,6 +180,66 @@ struct MYDLL_API UnitDeployParams {
 	static void pushUserType(sol::state &state);
 };
 
+//! Parameters of the "stealth" block of an object (see documentation/OBJECTS.md).
+struct MYDLL_API StealthParams {
+	enum Type {
+		//! Revealed by nearby enemy objects having "reveal_stealth".
+		TYPE_STEALTH,
+		//! Revealed by enemy objects having a "detector" in range.
+		TYPE_CAMOUFLAGE
+	};
+	enum DisplayType {
+		//! The sprite is drawn tinted with a color (usually a translucent gray/black shadow).
+		DISPLAY_SHADOW,
+		//! The sprite is drawn with a reduced opacity.
+		DISPLAY_TRANSPARENT,
+		//! Nothing is drawn.
+		DISPLAY_INVISIBLE,
+		//! Lens like distortion around the unit. TODO: Not implemented yet, drawn like DISPLAY_INVISIBLE.
+		DISPLAY_LENS
+	};
+
+	Type type = TYPE_STEALTH;
+	bool permanent = true;
+	//! Temporary only: whether the player can end the effect before the energy runs out.
+	bool cancelable = true;
+	//! Temporary only: energy needed to start the effect.
+	unsigned activationThreshold = 0;
+	//! Temporary only: energy removed every costDelay ticks while the effect is active.
+	//! The effect ends when the energy is depleted.
+	unsigned cost = 0;
+	//! Temporary only: ticks between two energy payments (0 or 1: every tick).
+	unsigned costDelay = 0;
+	//! Ticks between being revealed and trying to cloak again. If empty, firing and getting close to
+	//! something that reveals us doesn't uncloak the object.
+	std::optional<unsigned> recloakDelay;
+	//! Health ratio (0..1) under which cloaking can fail.
+	std::optional<float> damagedThreshold;
+	//! Chance (0..1) to successfully cloak when under damagedThreshold.
+	float recloakChance = 1;
+	const MultiSound *cloakSound = nullptr;
+	const MultiSound *uncloakSound = nullptr;
+	DisplayType allyDisplay = DISPLAY_SHADOW;
+	sf::Color allyColor{0, 0, 0, 128};
+	DisplayType enemyDisplay = DISPLAY_INVISIBLE;
+	//! Frames of the dissolve mask. Frame 0 keeps the whole sprite, the last one hides it.
+	mutable std::vector<Animation> mask;
+	//! Ticks added to every frame of the mask.
+	unsigned maskDelay = 0;
+};
+
+enum StealthState {
+	//! Fully visible by everyone.
+	STEALTH_VISIBLE,
+	//! Playing the cloak animation. Already considered cloaked.
+	STEALTH_CLOAKING,
+	STEALTH_CLOAKED,
+	//! Playing the uncloak animation. Already considered visible.
+	STEALTH_UNCLOAKING,
+	//! Failing to cloak: loops the cloak/uncloak animations. Considered visible.
+	STEALTH_FLICKERING
+};
+
 struct MYDLL_API ObjectWeapon {
 	const Weapon *weapon;
 	unsigned priority;
@@ -297,6 +358,15 @@ protected:
 	std::vector<std::string> _tags;
 	std::optional<std::string> _giveQueue;
 	std::optional<UnitDeployParams> _onDeploy;
+	std::optional<StealthParams> _stealth;
+	//! Radius (in tiles) in which enemy objects with a stealth of type STEALTH are revealed.
+	float _revealStealthRange = 0;
+	//! Radius (in tiles) in which enemy objects with a stealth of type CAMOUFLAGE are revealed.
+	float _detector = 0;
+	//! Teams that currently see this object despite its stealth (temporary stealth, or without recloak delay).
+	std::set<size_t> _revealedToTeams;
+	//! Ids of the revealers that were around last tick (sorted).
+	std::vector<unsigned> _nearRevealers;
 	std::unordered_map<std::string, unsigned> _storage;
 	std::set<Vector2i> _checkTiles;
 	std::vector<const Effect *> _muzzleAnim;
@@ -371,6 +441,22 @@ protected:
 	unsigned _repairTimer = 0;
 	unsigned _sellTimer = 0;
 	unsigned _crouchTimer = 0;
+	StealthState _stealthState = STEALTH_VISIBLE;
+	//! Current energy, between 0 and _maxEnergy.
+	unsigned _energy = 0;
+	unsigned _maxEnergy = 0;
+	unsigned _spawnEnergy = 0;
+	//! Energy gained every _energyGainDelay ticks (it doesn't while a temporary stealth is active).
+	unsigned _energyGain = 0;
+	unsigned _energyGainDelay = 0;
+	unsigned _energyGainTimer = 0;
+	//! Temporary stealth: ticks left before the next energy payment.
+	unsigned _stealthCostTimer = 0;
+	//! Ticks left before trying to cloak again after being revealed.
+	unsigned _recloakTimer = 0;
+	//! Current frame of the dissolve mask.
+	unsigned _stealthFrame = 0;
+	unsigned _stealthFrameTimer = 0;
 	std::pair<unsigned, unsigned> _idleTimerRange;
 	int _altitude = 0;
 	int _power = 0;
@@ -413,6 +499,8 @@ protected:
 	bool _selectable = true;
 	//! Whether idle enemy objects in range automatically start shooting at this object.
 	bool _triggersAutoAttack = false;
+	//! Whether this object automatically shoots at enemies in range when idle.
+	bool _autoAttack = true;
 	bool _sellable = false;
 	bool _repairable = false;
 	bool _built = false;
@@ -421,6 +509,14 @@ protected:
 	bool _produced = false;
 	bool _isPrimary = false;
 	bool _lowerPowerWhenDamaged = false;
+	//! Temporary stealth: the effect is currently on (from the activation until the object is fully visible again).
+	bool _stealthActive = false;
+	//! A recloak attempt is scheduled once _recloakTimer ran out.
+	bool _recloakPending = false;
+	//! Second half (uncloak) of a flickering cycle.
+	bool _stealthFlickerUncloak = false;
+	//! The dissolve mask plays backward.
+	bool _stealthReverse = false;
 
 	GameObjectData(const Faction &base);
 	GameObjectData(const GameObjectData &);
@@ -525,6 +621,8 @@ public:
 	[[nodiscard]] bool isCrushable() const;
 	//! Whether idle enemy objects in range automatically start shooting at this object.
 	[[nodiscard]] bool triggersAutoAttack() const;
+	//! Whether this object shoots at enemies on its own when it is idle.
+	[[nodiscard]] bool autoAttacks() const;
 	[[nodiscard]] bool isSelectable() const;
 	[[nodiscard]] bool isSellable() const;
 	[[nodiscard]] bool isRepairable() const;
@@ -565,12 +663,38 @@ public:
 	[[nodiscard]] bool isStackable() const;
 	//! Tile (in this->map coordinates) currently held by this unit in the pathfinding grid.
 	[[nodiscard]] Vector2i getOccupiedTile() const;
+	//! Areas (absolute coordinates) this object currently registered in the global grid, the same ones
+	//! given to GameManager::modUnitInArea (4 corners each). Empty if it isn't in the grid.
+	[[nodiscard]] std::vector<std::array<Vector2f, 4>> getGridFootprint() const;
 	//! Whether this unit could stand on \a tile (in this->map coordinates)
 	//! right now: terrain, free space, stacking and crushing rules included.
 	[[nodiscard]] bool canStandOn(Vector2i tile) const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getCost() const;
 	[[nodiscard]] const std::set<Vector2i> &getCheckTiles() const;
 	[[nodiscard]] const std::optional<std::string> &getBuildQueue() const;
+
+	// Stealth
+	[[nodiscard]] const std::optional<StealthParams> &getStealthParams() const;
+	[[nodiscard]] StealthState getStealthState() const;
+	//! Energy level, between 0 and getMaxEnergy().
+	[[nodiscard]] unsigned getEnergy() const;
+	[[nodiscard]] unsigned getMaxEnergy() const;
+	void setEnergy(unsigned energy);
+	//! Radius in tiles in which enemy objects with a stealth of type STEALTH are revealed.
+	[[nodiscard]] float getRevealStealthRange() const;
+	//! Radius in tiles in which enemy objects with a stealth of type CAMOUFLAGE are revealed.
+	[[nodiscard]] float getDetectorRange() const;
+	//! Whether this object can currently reveal others (alive, built, powered...).
+	[[nodiscard]] bool isOperational() const;
+	//! Whether \a team can't see this object nor target it because of its stealth.
+	[[nodiscard]] bool isHiddenFrom(size_t team) const;
+	[[nodiscard]] bool isTemporaryStealth() const;
+	//! Updates who is currently revealing this stealthed object.
+	//! \param revealers Sorted ids of the enemy objects around that apply to our type of stealth.
+	//! \param teams Teams of these objects.
+	void updateStealthDetection(const std::vector<unsigned> &revealers, const std::set<size_t> &teams);
+	//! Whether deploying this object does not interrupt what it is doing (stealth activation).
+	[[nodiscard]] bool deployKeepsOrders() const;
 
 	static void pushUserType(sol::state &state);
 
@@ -650,6 +774,25 @@ protected:
 	void _goToClosestResourceDump();
 	bool _shortenOrder(Order &o);
 	void _displayAnim(Animation &anim, Vector2f offset = {}) const;
+
+	// Stealth
+	void _updateStealth();
+	//! Called whenever something makes this object visible for a while (firing, getting too close to a revealer...).
+	void _revealStealth();
+	//! Called when this object has just fired a weapon.
+	//! Starts uncloaking if needed. \return Whether the object can shoot right now.
+	bool _prepareStealthFire();
+	void _onStealthFire();
+	//! Starts to cloak (or to flicker if it fails). Starts the effect of temporary stealths.
+	void _startCloakAttempt();
+	void _beginUncloak();
+	//! Ends a temporary stealth. \a emptyEnergy also removes all the remaining energy.
+	void _endStealthActive(bool emptyEnergy = false);
+	void _updateEnergy();
+	void _playStealthSound(bool cloak) const;
+	//! Whether cloaking fails right now (damaged, and the roll failed).
+	[[nodiscard]] bool _rollCloakFailure() const;
+	void _activateStealth();
 
 	friend ObjectTurret;
 };

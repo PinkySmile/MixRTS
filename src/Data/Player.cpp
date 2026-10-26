@@ -808,6 +808,11 @@ void Player::_handleUiEvent(const UI::DeployUnitEvent &event)
 {
 	GameObject *obj = this->parent.getObjectById(event.index);
 
+	// Activating a stealth is not an order: the unit keeps doing what it was doing.
+	if (obj->deployKeepsOrders()) {
+		obj->deploy();
+		return;
+	}
 	obj->clearOrders();
 	obj->deploy();
 	obj->playDoSound();

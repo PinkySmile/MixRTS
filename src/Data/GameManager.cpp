@@ -210,6 +210,51 @@ void GameManager::_checkScroll()
 	game->soundMgr.setCamera(this->_cameraTranslate + size / 2, size);
 }
 
+void GameManager::_updateStealthDetection()
+{
+	std::vector<GameObject *> stealthed;
+	std::vector<GameObject *> revealers;
+
+	for (auto &o : this->_liveObjects) {
+		if (o->isDisposable())
+			continue;
+		if (o->getStealthParams())
+			stealthed.push_back(&*o);
+		if ((o->getRevealStealthRange() > 0 || o->getDetectorRange() > 0) && o->isOperational())
+			revealers.push_back(&*o);
+	}
+	for (GameObject *obj : stealthed) {
+		const auto type = obj->getStealthParams()->type;
+		const size_t team = obj->owner->state.team;
+		const Vector2f pos = obj->getMiddle();
+		std::vector<unsigned> ids;
+		std::set<size_t> teams;
+
+		for (const GameObject *r : revealers) {
+			const size_t rteam = r->owner->state.team;
+
+			if (rteam == team)
+				continue;
+
+			// Radius is in tiles. The half tile of tolerance makes a radius of 1 cover all the 8 neighbouring tiles.
+			const float range = (type == StealthParams::TYPE_STEALTH ? r->getRevealStealthRange() : r->getDetectorRange());
+
+			if (range <= 0)
+				continue;
+
+			const Vector2f diff = r->getMiddle() - pos;
+			const float limit = (range + 0.5f) * static_cast<float>(obj->map->tileSize.x);
+
+			if (diff.magnitude2() > limit * limit)
+				continue;
+			ids.push_back(r->index);
+			teams.insert(rteam);
+		}
+		std::ranges::sort(ids);
+		obj->updateStealthDetection(ids, teams);
+	}
+}
+
 void GameManager::update()
 {
 	if (this->_paused && !this->_forceStep)
@@ -226,6 +271,10 @@ void GameManager::update()
 		}
 		if (this->_shake.freezeTime)
 			return;
+	}
+	{
+		PROFILE_SCOPE("stealth");
+		this->_updateStealthDetection();
 	}
 	{
 		PROFILE_SCOPE("objects");
@@ -753,16 +802,58 @@ void GameManager::renderMinimap(Vector2f pos, Vector2u size)
 	rpos.x = pos.x + (size.x - rsize.x) / 2;
 	rpos.y = pos.y + (size.y - rsize.y) / 2;
 
+	// Objects the viewer can't see (cloaked) don't show up. They are removed from the occupied spaces.
+	std::map<size_t, std::vector<uint8_t>> hidden;
+	size_t viewer = this->getControlledPlayer();
+
+	if (viewer < this->_players.size()) {
+		size_t viewerTeam = this->_players[viewer].state.team;
+		auto tileSize = this->_map.grid.tileSize;
+		auto gridSize = this->_map.grid.gridSize;
+
+		for (auto &list : this->_renderObjects | std::ranges::views::values)
+			for (const GameObject *obj : list) {
+				if (!obj->isHiddenFrom(viewerTeam))
+					continue;
+
+				auto &counts = hidden[obj->owner->state.index];
+
+				counts.resize(static_cast<size_t>(gridSize.x) * gridSize.y, 0);
+				for (auto &quad : obj->getGridFootprint()) {
+					Vector2i minv = {
+						static_cast<int>(floor(std::min(std::min(quad[0].x, quad[1].x), std::min(quad[2].x, quad[3].x)) / tileSize.x)),
+						static_cast<int>(floor(std::min(std::min(quad[0].y, quad[1].y), std::min(quad[2].y, quad[3].y)) / tileSize.y))
+					};
+					Vector2i maxv = {
+						static_cast<int>(ceil(std::max(std::max(quad[0].x, quad[1].x), std::max(quad[2].x, quad[3].x)) / tileSize.x)),
+						static_cast<int>(ceil(std::max(std::max(quad[0].y, quad[1].y), std::max(quad[2].y, quad[3].y)) / tileSize.y))
+					};
+
+					for (int y = std::max(minv.y, 0); y < std::min<int>(maxv.y, gridSize.y); y++)
+						for (int x = std::max(minv.x, 0); x < std::min<int>(maxv.x, gridSize.x); x++)
+							if (counts[x + y * gridSize.x] != UINT8_MAX)
+								counts[x + y * gridSize.x]++;
+				}
+			}
+	}
+
 	for (unsigned y = 0; y < this->_map.grid.gridSize.y; y++)
 		for (unsigned x = 0; x < this->_map.grid.gridSize.x; x++)
-			for (size_t player = 0; player < this->_players.size(); player++)
-				if (this->_map.usedSpaces[player][this->_map.grid.gridSize.x * y + x]) {
+			for (size_t player = 0; player < this->_players.size(); player++) {
+				size_t index = this->_map.grid.gridSize.x * y + x;
+				auto it = hidden.find(player);
+				unsigned used = this->_map.usedSpaces[player][index];
+
+				if (it != hidden.end())
+					used = used > it->second[index] ? used - it->second[index] : 0;
+				if (used) {
 					auto c = this->_players[player].getColor();
 
 					c.l /= 2;
 					result.setPixel({x, y}, c.toRGB());
 					break;
 				}
+			}
 
 	sf::Texture texture{result};
 	sf::Sprite sprite{texture};

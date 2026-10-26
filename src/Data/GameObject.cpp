@@ -103,6 +103,125 @@ static Order parseBehavior(const nlohmann::json &json)
 	assert_not_reached_msg("Invalid \"type\": \"" + json["type"].get<std::string>() + "\"");
 }
 
+static const MultiSound *parseStealthSound(const Mod &base, const std::unordered_map<std::string, MultiSound> &sounds, const nlohmann::json &json, const char *key)
+{
+	if (!json.contains(key) || json[key].is_null())
+		return nullptr;
+	assert_msg(json[key].is_string(), std::string("json[\"") + key + "\"]");
+
+	std::string name = RESOURCE(base.getName(), json[key].get<std::string>());
+
+	assert_msg(sounds.contains(name), name);
+	return &sounds.at(name);
+}
+
+static StealthParams parseStealth(
+	const Mod &base,
+	const std::unordered_map<std::string, std::vector<Animation>> &animList,
+	const std::unordered_map<std::string, MultiSound> &sounds,
+	const nlohmann::json &json
+)
+{
+	StealthParams result;
+
+	assert_exp(json.is_object());
+	assert_exp(!json.contains("type") || json["type"].is_string());
+	assert_exp(!json.contains("permanent") || json["permanent"].is_boolean());
+	assert_exp(!json.contains("cancelable") || json["cancelable"].is_boolean());
+	assert_exp(!json.contains("energy_cost") || json["energy_cost"].is_object());
+	assert_exp(!json.contains("activation_threshold") || json["activation_threshold"].is_number_unsigned());
+	assert_exp(!json.contains("recloak_delay") || json["recloak_delay"].is_null() || json["recloak_delay"].is_number_unsigned());
+	assert_exp(!json.contains("damaged_threshold") || json["damaged_threshold"].is_null() || json["damaged_threshold"].is_number());
+	assert_exp(!json.contains("recloak_chance") || json["recloak_chance"].is_number());
+	assert_exp(!json.contains("anim") || json["anim"].is_null() || json["anim"].is_object());
+	assert_exp(!json.contains("ally_display") || json["ally_display"].is_object());
+	assert_exp(!json.contains("enemy_display") || json["enemy_display"].is_string());
+
+	if (json.contains("type")) {
+		if (json["type"] == "stealth")
+			result.type = StealthParams::TYPE_STEALTH;
+		else if (json["type"] == "camouflage")
+			result.type = StealthParams::TYPE_CAMOUFLAGE;
+		else
+			assert_not_reached_msg("Invalid json[\"type\"]: \"" + json["type"].get<std::string>() + "\"");
+	}
+	if (json.contains("permanent"))
+		result.permanent = json["permanent"];
+	if (json.contains("cancelable"))
+		result.cancelable = json["cancelable"];
+	if (json.contains("activation_threshold"))
+		result.activationThreshold = json["activation_threshold"];
+	if (json.contains("energy_cost")) {
+		auto &j = json["energy_cost"];
+
+		assert_msg(j.contains("cost") && j["cost"].is_number_unsigned(), "json[\"energy_cost\"][\"cost\"]");
+		assert_msg(!j.contains("delay") || j["delay"].is_number_unsigned(), "json[\"energy_cost\"][\"delay\"]");
+		result.cost = j["cost"];
+		if (j.contains("delay"))
+			result.costDelay = j["delay"];
+	}
+	if (!result.permanent)
+		assert_msg(result.cancelable || result.cost != 0, "A temporary stealth that can't be canceled needs an \"energy_cost\" to ever end");
+	if (json.contains("recloak_delay") && !json["recloak_delay"].is_null())
+		result.recloakDelay = json["recloak_delay"].get<unsigned>();
+	if (json.contains("damaged_threshold") && !json["damaged_threshold"].is_null())
+		result.damagedThreshold = json["damaged_threshold"].get<float>();
+	if (json.contains("recloak_chance")) {
+		result.recloakChance = json["recloak_chance"];
+		assert_msg(result.recloakChance >= 0 && result.recloakChance <= 1, "json[\"recloak_chance\"] must be between 0 and 1");
+	}
+	result.cloakSound = parseStealthSound(base, sounds, json, "cloak_sound");
+	result.uncloakSound = parseStealthSound(base, sounds, json, "uncloak_sound");
+	if (json.contains("anim") && !json["anim"].is_null()) {
+		assert_exp(json["anim"].contains("anim") && json["anim"]["anim"].is_string());
+		assert_exp(!json["anim"].contains("delay") || json["anim"]["delay"].is_number_unsigned());
+
+		std::string name = RESOURCE(base.getName(), json["anim"]["anim"].get<std::string>());
+
+		assert_msg(animList.contains(name), name);
+		result.mask = animList.at(name);
+		if (json["anim"].contains("delay"))
+			result.maskDelay = json["anim"]["delay"];
+	}
+	if (json.contains("ally_display")) {
+		auto &j = json["ally_display"];
+
+		assert_exp(j.contains("type") && j["type"].is_string());
+		if (j["type"] == "shadow") {
+			result.allyDisplay = StealthParams::DISPLAY_SHADOW;
+			if (j.contains("color")) {
+				assert_exp(j["color"].is_object());
+				for (auto key : {"r", "g", "b", "a"})
+					assert_msg(!j["color"].contains(key) || j["color"][key].is_number_unsigned(), std::string("json[\"ally_display\"][\"color\"][\"") + key + "\"]");
+				result.allyColor = sf::Color{
+					static_cast<uint8_t>(j["color"].value("r", 0)),
+					static_cast<uint8_t>(j["color"].value("g", 0)),
+					static_cast<uint8_t>(j["color"].value("b", 0)),
+					static_cast<uint8_t>(j["color"].value("a", 128))
+				};
+			}
+		} else if (j["type"] == "transparent") {
+			assert_exp(!j.contains("opacity") || j["opacity"].is_number());
+
+			float opacity = j.value("opacity", 0.5f);
+
+			assert_msg(opacity >= 0 && opacity <= 1, "json[\"ally_display\"][\"opacity\"] must be between 0 and 1");
+			result.allyDisplay = StealthParams::DISPLAY_TRANSPARENT;
+			result.allyColor = sf::Color{255, 255, 255, static_cast<uint8_t>(std::round(opacity * 255))};
+		} else
+			assert_not_reached_msg("Invalid json[\"ally_display\"][\"type\"]: \"" + j["type"].get<std::string>() + "\"");
+	}
+	if (json.contains("enemy_display")) {
+		if (json["enemy_display"] == "invisible")
+			result.enemyDisplay = StealthParams::DISPLAY_INVISIBLE;
+		else if (json["enemy_display"] == "lens")
+			result.enemyDisplay = StealthParams::DISPLAY_LENS;
+		else
+			assert_not_reached_msg("Invalid json[\"enemy_display\"]: \"" + json["enemy_display"].get<std::string>() + "\"");
+	}
+	return result;
+}
+
 bool GameObject::_shortenOrder(Order &o)
 {
 	if (std::holds_alternative<FinishMovementOrder>(o))
@@ -125,43 +244,13 @@ bool GameObject::_shortenOrder(Order &o)
 	return true;
 }
 
-void GameObject::_displayAnim(Animation &anim, Vector2f offset) const
+//! Draws \a sprite on the screen with the blending of an animation.
+static void drawSpriteBlended(const sf::Drawable &sprite, Animation::Blending blending)
 {
-	Sprite &sprite = anim.getSprite();
-	auto pos = sprite.getPosition();
-
-	sprite.setPosition({
-		pos.x + this->_position.x + offset.x,
-		pos.y + this->_position.y + offset.y
-	});
-	if (this->_altitude != 0) {
-		sprite.setColor(sf::Color{0, 0, 0, 0x80});
-		using Factor = sf::BlendMode::Factor;
-		using Equation = sf::BlendMode::Equation;
-		switch (anim.getBlending()) {
-		case Animation::BLEND_ADD:
-			game->screen->draw(sprite, sf::BlendAdd);
-			break;
-		case Animation::BLEND_SUB:
-			game->screen->draw(sprite, sf::BlendMode{
-				Factor::SrcAlpha, Factor::One, Equation::ReverseSubtract,
-				Factor::One, Factor::One, Equation::ReverseSubtract
-			});
-			break;
-		case Animation::BLEND_ALPHA:
-			game->screen->draw(sprite, sf::BlendAlpha);
-			break;
-		}
-		sprite.setPosition({
-			pos.x + this->_position.x + offset.x,
-			pos.y + this->_position.y + offset.y - this->_altitude
-		});
-	}
-
-	sprite.setColor(sf::Color::White);
 	using Factor = sf::BlendMode::Factor;
 	using Equation = sf::BlendMode::Equation;
-	switch (anim.getBlending()) {
+
+	switch (blending) {
 	case Animation::BLEND_ADD:
 		game->screen->draw(sprite, sf::BlendAdd);
 		break;
@@ -175,6 +264,141 @@ void GameObject::_displayAnim(Animation &anim, Vector2f offset) const
 		game->screen->draw(sprite, sf::BlendAlpha);
 		break;
 	}
+}
+
+//! Draws \a sprite keeping only the parts that are not hidden by \a mask.
+//! The mask is stretched over the sprite. Where the mask is transparent, the sprite disappears.
+static void drawSpriteMasked(Sprite &sprite, Animation::Blending blending, Sprite &mask)
+{
+	// Shared by all the objects. Only grows. Never freed on purpose: it must not outlive the graphical context.
+	static sf::RenderTexture *scratch = nullptr;
+	sf::IntRect rect = sprite.getTextureRect();
+	Vector2u size{static_cast<unsigned>(std::abs(rect.size.x)), static_cast<unsigned>(std::abs(rect.size.y))};
+	Vector2u maskSize = mask.getTextureSize();
+
+	if (size.x == 0 || size.y == 0 || maskSize.x == 0 || maskSize.y == 0)
+		return drawSpriteBlended(sprite, blending);
+	if (!scratch || scratch->getSize().x < size.x || scratch->getSize().y < size.y) {
+		sf::Vector2u newSize{size.x, size.y};
+
+		if (scratch)
+			newSize = {std::max(size.x, scratch->getSize().x), std::max(size.y, scratch->getSize().y)};
+		delete scratch;
+		scratch = new sf::RenderTexture(newSize);
+	}
+
+	const sf::Vector2f oldPos = sprite.getPosition();
+	const sf::Color oldColor = sprite.getColor();
+	const sf::Vector2f oldMaskPos = mask.getPosition();
+	const sf::Vector2f oldMaskScale = mask.getScale();
+
+	scratch->clear(sf::Color::Transparent);
+	// Copies the sprite as is (no blending with the transparent background)
+	sprite.setPosition({0, 0});
+	sprite.setColor(sf::Color::White);
+	scratch->draw(sprite, sf::BlendNone);
+	// Multiplies the alpha of what was drawn by the alpha of the mask.
+	mask.setPosition({0, 0});
+	mask.setScale({
+		static_cast<float>(size.x) / static_cast<float>(maskSize.x),
+		static_cast<float>(size.y) / static_cast<float>(maskSize.y)
+	});
+	scratch->draw(mask, sf::BlendMode{
+		sf::BlendMode::Factor::Zero, sf::BlendMode::Factor::One, sf::BlendMode::Equation::Add,
+		sf::BlendMode::Factor::Zero, sf::BlendMode::Factor::SrcAlpha, sf::BlendMode::Equation::Add
+	});
+	scratch->display();
+	mask.setPosition(oldMaskPos);
+	mask.setScale(oldMaskScale);
+	sprite.setPosition(oldPos);
+	sprite.setColor(oldColor);
+
+	sf::Sprite result{scratch->getTexture(), sf::IntRect{{0, 0}, {static_cast<int>(size.x), static_cast<int>(size.y)}}};
+
+	result.setPosition(oldPos);
+	result.setColor(oldColor);
+	drawSpriteBlended(result, blending);
+}
+
+void GameObject::_displayAnim(Animation &anim, Vector2f offset) const
+{
+	enum Appearance {
+		APPEARANCE_NORMAL,
+		//! Cloaked, as seen by the owner and its allies.
+		APPEARANCE_ALLY_CLOAKED,
+		//! Not drawn at all
+		APPEARANCE_HIDDEN,
+		//! Playing the (un)cloak animation
+		APPEARANCE_MASKED,
+		APPEARANCE_MASKED_ALLY
+	} appearance = APPEARANCE_NORMAL;
+
+	if (this->_stealth && !this->_deathAnim && this->_stealthState != STEALTH_VISIBLE) {
+		size_t controlled = this->manager->getControlledPlayer();
+		auto &players = this->manager->getPlayers();
+		// Nobody is playing (spectating, tests...): see everything
+		bool ally = controlled >= players.size() || players[controlled].state.team == this->owner->state.team;
+		bool masked = this->_stealthState != STEALTH_CLOAKED && !this->_stealth->mask.empty();
+
+		switch (this->_stealthState) {
+		case STEALTH_CLOAKED:
+		case STEALTH_CLOAKING:
+			if (!ally && !this->isHiddenFrom(players[controlled].state.team))
+				appearance = APPEARANCE_NORMAL;
+			else if (this->_stealthState == STEALTH_CLOAKED)
+				appearance = ally ? APPEARANCE_ALLY_CLOAKED : APPEARANCE_HIDDEN;
+			else
+				appearance = ally ? APPEARANCE_MASKED_ALLY : APPEARANCE_MASKED;
+			break;
+		case STEALTH_UNCLOAKING:
+		case STEALTH_FLICKERING:
+			appearance = ally ? APPEARANCE_MASKED_ALLY : APPEARANCE_MASKED;
+			break;
+		default:
+			break;
+		}
+		if (!masked && (appearance == APPEARANCE_MASKED || appearance == APPEARANCE_MASKED_ALLY))
+			// No animation to play. Only the end result is visible.
+			appearance = this->_stealthState == STEALTH_CLOAKING ?
+				(ally ? APPEARANCE_ALLY_CLOAKED : APPEARANCE_HIDDEN) :
+				APPEARANCE_NORMAL;
+		if (appearance == APPEARANCE_ALLY_CLOAKED && this->_stealth->allyDisplay == StealthParams::DISPLAY_INVISIBLE)
+			appearance = APPEARANCE_HIDDEN;
+	}
+	if (appearance == APPEARANCE_HIDDEN)
+		return;
+
+	Sprite &sprite = anim.getSprite();
+	auto pos = sprite.getPosition();
+
+	sprite.setPosition({
+		pos.x + this->_position.x + offset.x,
+		pos.y + this->_position.y + offset.y
+	});
+	if (this->_altitude != 0) {
+		sprite.setColor(sf::Color{0, 0, 0, 0x80});
+		drawSpriteBlended(sprite, anim.getBlending());
+		sprite.setPosition({
+			pos.x + this->_position.x + offset.x,
+			pos.y + this->_position.y + offset.y - this->_altitude
+		});
+	}
+
+	if (appearance == APPEARANCE_ALLY_CLOAKED || appearance == APPEARANCE_MASKED_ALLY) {
+		// What allies see of a cloaked object (the sprite tinted, or translucent)
+		sprite.setColor(this->_stealth->allyColor);
+		drawSpriteBlended(sprite, anim.getBlending());
+	}
+	sprite.setColor(sf::Color::White);
+	if (appearance == APPEARANCE_MASKED || appearance == APPEARANCE_MASKED_ALLY) {
+		auto &mask = this->_stealth->mask;
+		unsigned frame = std::min<unsigned>(this->_stealthFrame, mask.size() - 1);
+
+		if (this->_stealthReverse)
+			frame = mask.size() - 1 - frame;
+		drawSpriteMasked(sprite, anim.getBlending(), mask[frame].getSprite());
+	} else if (appearance == APPEARANCE_NORMAL)
+		drawSpriteBlended(sprite, anim.getBlending());
 }
 
 GameObject::GameObject(const GameObject &g) :
@@ -328,6 +552,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("requires_power") || json["requires_power"].is_boolean());
 	assert_exp(!json.contains("selectable") || json["selectable"].is_boolean());
 	assert_exp(!json.contains("triggers_auto_attack") || json["triggers_auto_attack"].is_boolean());
+	assert_exp(!json.contains("auto_attack") || json["auto_attack"].is_boolean());
 	assert_exp(!json.contains("sellable") || json["sellable"].is_boolean());
 	assert_exp(!json.contains("repairable") || json["repairable"].is_boolean());
 	assert_exp(!json.contains("gives_queue") || json["gives_queue"].is_string());
@@ -492,6 +717,8 @@ GameObject::GameObject(
 		this->_selectable = json["selectable"];
 	if (json.contains("triggers_auto_attack"))
 		this->_triggersAutoAttack = json["triggers_auto_attack"];
+	if (json.contains("auto_attack"))
+		this->_autoAttack = json["auto_attack"];
 	if (json.contains("ignore_terrain"))
 		this->_ignoreTerrain = json["ignore_terrain"];
 	if (json.contains("sellable"))
@@ -681,6 +908,36 @@ GameObject::GameObject(
 
 		assert_msg(sounds.contains(doSound), doSound);
 		this->_doSound = &sounds.at(doSound);
+	}
+	assert_exp(!json.contains("max_energy") || json["max_energy"].is_number_unsigned());
+	assert_exp(!json.contains("spawn_energy") || json["spawn_energy"].is_number_unsigned());
+	assert_exp(!json.contains("energy_gain") || json["energy_gain"].is_number_unsigned());
+	assert_exp(!json.contains("energy_gain_delay") || json["energy_gain_delay"].is_number_unsigned());
+	assert_exp(!json.contains("stealth") || json["stealth"].is_object());
+	if (json.contains("max_energy"))
+		this->_maxEnergy = json["max_energy"];
+	if (json.contains("spawn_energy"))
+		this->_spawnEnergy = json["spawn_energy"];
+	if (json.contains("energy_gain"))
+		this->_energyGain = json["energy_gain"];
+	if (json.contains("energy_gain_delay"))
+		this->_energyGainDelay = json["energy_gain_delay"];
+	this->_energy = std::min(this->_spawnEnergy, this->_maxEnergy);
+	assert_exp(!json.contains("reveal_stealth") || json["reveal_stealth"].is_number());
+	assert_exp(!json.contains("detector") || json["detector"].is_number());
+	if (json.contains("reveal_stealth"))
+		this->_revealStealthRange = json["reveal_stealth"];
+	if (json.contains("detector"))
+		this->_detector = json["detector"];
+	if (json.contains("stealth")) {
+		TRY {
+			this->_stealth.emplace(parseStealth(base, animList, sounds, json["stealth"]));
+		} CATCH_AND_RETHROW("In key \"stealth\"\n")
+		// Permanent stealths are active from the start
+		if (this->_stealth->permanent)
+			this->_stealthState = STEALTH_CLOAKED;
+		else
+			assert_msg(this->_maxEnergy >= this->_stealth->activationThreshold, "A temporary stealth can only be activated if \"max_energy\" reaches its \"activation_threshold\"");
 	}
 	if (json.contains("anim_idles"))
 		for (auto &j : json["anim_idles"])
@@ -1168,6 +1425,46 @@ bool GameObject::_tileAvailableFor(Vector2i tile, unsigned extraClaims) const
 Vector2i GameObject::getOccupiedTile() const
 {
 	return this->_occupiedTile;
+}
+
+std::vector<std::array<Vector2f, 4>> GameObject::getGridFootprint() const
+{
+	std::vector<std::array<Vector2f, 4>> result;
+
+	if (!this->_initGrid || this->_altitude)
+		return result;
+	if (this->_tiles) {
+		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
+			auto &line = (*this->_tiles)[gy];
+
+			for (size_t gx = 0; gx < line.size(); gx++)
+				if (line[gx].placementRequired || line[gx].placementConcrete)
+				{
+					auto quad = this->map->tileCoordToAbs({
+						static_cast<int>(this->_gridPos.x + gx),
+						static_cast<int>(this->_gridPos.y + gy)
+					});
+
+					result.push_back({quad.pt1, quad.pt2, quad.pt3, quad.pt4});
+				}
+		}
+	} else if (this->_boundToGrid) {
+		Vector2f topLeft = this->map->topLeftCoordToAbs(this->_occupiedTile);
+
+		result.push_back({
+			topLeft,
+			{topLeft.x + this->map->tileSize.x, topLeft.y},
+			{topLeft.x + this->map->tileSize.x, topLeft.y + this->map->tileSize.y},
+			{topLeft.x, topLeft.y + this->map->tileSize.y},
+		});
+	} else
+		result.push_back({
+			this->_position,
+			{this->_position.x + this->_size.x, this->_position.y},
+			{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
+			{this->_position.x, this->_position.y + this->_size.y},
+		});
+	return result;
 }
 
 bool GameObject::canStandOn(Vector2i tile) const
@@ -2003,7 +2300,8 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 {
 	GameObject *obj = order.target;
 
-	if (obj == nullptr || obj->isDead() || obj->owner->state.team == this->owner->state.team)
+	// Targets that cloaked (and aren't revealed) can't be attacked anymore
+	if (obj == nullptr || obj->isDead() || obj->owner->state.team == this->owner->state.team || obj->isHiddenFrom(this->owner->state.team))
 		return this->_updateOrder(FinishMovementOrder{});
 	if (this->_firstEvent)
 		this->attackFirst = 1;
@@ -2052,6 +2350,9 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 
 	if (barrel.shootTimer != 0)
 		return false;
+	// Stealthed units have to uncloak completely before shooting
+	if (!this->_prepareStealthFire())
+		return false;
 
 	double angle = diff.angle();
 	unsigned direction = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
@@ -2099,6 +2400,7 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 	if (effect)
 		this->manager->spawnEffect(*effect, spawnPos, this->owner);
 	this->_shooting = true;
+	this->_onStealthFire();
 	if (turret)
 		turret->attack();
 	if (!this->_muzzleAnim.empty())
@@ -2418,6 +2720,8 @@ void GameObject::update()
 			this->_disposable = true;
 		return;
 	}
+	this->_updateEnergy();
+	this->_updateStealth();
 	if (this->_repairing) {
 		if (this->_repairAnim && (*this->_repairAnim)())
 			this->_repairAnim->update();
@@ -3065,7 +3369,320 @@ bool GameObject::isDeployable() const
 {
 	if (this->_onDeploy)
 		return true;
+	return this->isTemporaryStealth();
+}
+
+bool GameObject::deployKeepsOrders() const
+{
+	return !this->_onDeploy && this->isTemporaryStealth();
+}
+
+bool GameObject::isTemporaryStealth() const
+{
+	return this->_stealth && !this->_stealth->permanent;
+}
+
+const std::optional<StealthParams> &GameObject::getStealthParams() const
+{
+	return this->_stealth;
+}
+
+StealthState GameObject::getStealthState() const
+{
+	return this->_stealthState;
+}
+
+unsigned GameObject::getEnergy() const
+{
+	return this->_energy;
+}
+
+unsigned GameObject::getMaxEnergy() const
+{
+	return this->_maxEnergy;
+}
+
+void GameObject::setEnergy(unsigned energy)
+{
+	this->_energy = std::min(energy, this->_maxEnergy);
+}
+
+float GameObject::getRevealStealthRange() const
+{
+	return this->_revealStealthRange;
+}
+
+float GameObject::getDetectorRange() const
+{
+	return this->_detector;
+}
+
+bool GameObject::isOperational() const
+{
+	if (this->isDead() || this->_built || this->_sold || this->_fake)
+		return false;
+	if (this->_requiresPower && this->owner->state.consumedPower > this->owner->state.producedPower)
+		return false;
+	return true;
+}
+
+bool GameObject::isHiddenFrom(size_t team) const
+{
+	if (!this->_stealth || this->isDead())
+		return false;
+	if (team == this->owner->state.team)
+		return false;
+	if (this->_stealthState != STEALTH_CLOAKED && this->_stealthState != STEALTH_CLOAKING)
+		return false;
+	// Permanent stealths are revealed for a while when something reveals them (see _revealStealth).
+	// Without that, they stay revealed for as long as the revealer is around.
+	if ((!this->_stealth->permanent || !this->_stealth->recloakDelay) && this->_revealedToTeams.contains(team))
+		return false;
+	return true;
+}
+
+void GameObject::updateStealthDetection(const std::vector<unsigned> &revealers, const std::set<size_t> &teams)
+{
+	if (!this->_stealth)
+		return;
+	this->_revealedToTeams = teams;
+	if (this->_stealth->permanent && this->_stealth->recloakDelay)
+		// Only revealers that just got close reveal us. The ones that were already around
+		// don't keep us from cloaking again.
+		for (unsigned id : revealers)
+			if (!std::ranges::binary_search(this->_nearRevealers, id)) {
+				this->_revealStealth();
+				break;
+			}
+	this->_nearRevealers = revealers;
+}
+
+void GameObject::_playStealthSound(bool cloak) const
+{
+	auto sound = cloak ? this->_stealth->cloakSound : this->_stealth->uncloakSound;
+
+	if (sound)
+		sound->play(this->_position + this->_size / 2);
+}
+
+bool GameObject::_rollCloakFailure() const
+{
+	auto &s = *this->_stealth;
+
+	if (!s.damagedThreshold || this->_maxHp == 0)
+		return false;
+	if (static_cast<float>(this->_hp) / static_cast<float>(this->_maxHp) >= *s.damagedThreshold)
+		return false;
+	if (s.recloakChance >= 1)
+		return false;
+	if (s.recloakChance <= 0)
+		return true;
+	return random_distrib(game->gameRandom, 0, 9999) >= static_cast<int64_t>(s.recloakChance * 10000);
+}
+
+void GameObject::_startCloakAttempt()
+{
+	this->_stealthFrame = 0;
+	this->_stealthFrameTimer = 0;
+	this->_stealthReverse = false;
+	this->_stealthFlickerUncloak = false;
+	this->_stealthState = this->_rollCloakFailure() ? STEALTH_FLICKERING : STEALTH_CLOAKING;
+	this->_playStealthSound(true);
+}
+
+void GameObject::_beginUncloak()
+{
+	auto frames = static_cast<unsigned>(this->_stealth->mask.size());
+
+	if (this->_stealthState == STEALTH_CLOAKED)
+		this->_stealthFrame = 0;
+	else if (this->_stealthState == STEALTH_CLOAKING)
+		// Plays the animation backward from where it was so that it doesn't jump.
+		this->_stealthFrame = frames == 0 ? 0 : frames - 1 - std::min(this->_stealthFrame, frames - 1);
+	else
+		return;
+	this->_stealthFrameTimer = 0;
+	this->_stealthReverse = true;
+	this->_stealthState = STEALTH_UNCLOAKING;
+	this->_playStealthSound(false);
+}
+
+void GameObject::_revealStealth()
+{
+	if (!this->_stealth || !this->_stealth->permanent || !this->_stealth->recloakDelay)
+		return;
+	if (this->_stealthState == STEALTH_FLICKERING)
+		return;
+	this->_beginUncloak();
+	// Being revealed again doesn't postpone the moment we try to cloak again.
+	if (!this->_recloakPending) {
+		this->_recloakPending = true;
+		this->_recloakTimer = *this->_stealth->recloakDelay;
+	}
+}
+
+void GameObject::_endStealthActive(bool emptyEnergy)
+{
+	if (!this->_stealthActive)
+		return;
+	this->_stealthActive = false;
+	this->_stealthCostTimer = 0;
+	if (emptyEnergy)
+		this->_energy = 0;
+	if (this->_stealthState == STEALTH_FLICKERING) {
+		this->_stealthState = STEALTH_VISIBLE;
+		this->_stealthReverse = false;
+		this->_stealthFlickerUncloak = false;
+	} else
+		this->_beginUncloak();
+}
+
+bool GameObject::_prepareStealthFire()
+{
+	if (!this->_stealth || !this->_stealth->recloakDelay)
+		return true;
+	switch (this->_stealthState) {
+	case STEALTH_VISIBLE:
+		return true;
+	case STEALTH_FLICKERING:
+		// Not cloaked: nothing to wait for. A temporary stealth is lost though.
+		if (!this->_stealth->permanent)
+			this->_endStealthActive(true);
+		return true;
+	case STEALTH_UNCLOAKING:
+		return false;
+	default:
+		break;
+	}
+	// Has to be fully visible before shooting
+	if (this->_stealth->permanent) {
+		this->_beginUncloak();
+		if (!this->_recloakPending) {
+			this->_recloakPending = true;
+			this->_recloakTimer = *this->_stealth->recloakDelay;
+		}
+	} else
+		this->_endStealthActive(true);
 	return false;
+}
+
+void GameObject::_onStealthFire()
+{
+	if (!this->_stealth || !this->_stealth->recloakDelay)
+		return;
+	if (!this->_stealth->permanent) {
+		this->_endStealthActive(true);
+		return;
+	}
+	if (this->_stealthState == STEALTH_FLICKERING)
+		return;
+	// Stays visible for as long as it keeps shooting
+	this->_recloakPending = true;
+	this->_recloakTimer = *this->_stealth->recloakDelay;
+}
+
+void GameObject::_activateStealth()
+{
+	if (!this->isTemporaryStealth() || this->isDead())
+		return;
+	if (this->_stealthActive || this->_stealthState != STEALTH_VISIBLE || this->_energy < this->_stealth->activationThreshold)
+		return;
+	this->_stealthActive = true;
+	this->_stealthCostTimer = 0;
+	this->_startCloakAttempt();
+}
+
+void GameObject::_updateEnergy()
+{
+	if (this->_energyGain == 0 || this->_energy >= this->_maxEnergy)
+		return;
+	// What a temporary stealth costs is not given back while it is active
+	if (this->_stealthActive)
+		return;
+	if (++this->_energyGainTimer < std::max(this->_energyGainDelay, 1u))
+		return;
+	this->_energyGainTimer = 0;
+	this->_energy = std::min(this->_energy + this->_energyGain, this->_maxEnergy);
+}
+
+void GameObject::_updateStealth()
+{
+	if (!this->_stealth)
+		return;
+
+	auto &s = *this->_stealth;
+	auto frames = static_cast<unsigned>(s.mask.size());
+
+	if (s.permanent) {
+		// The delay only starts once the unit is fully visible
+		if (this->_recloakPending && this->_recloakTimer != 0 && this->_stealthState == STEALTH_VISIBLE)
+			this->_recloakTimer--;
+	} else if (this->_stealthActive && s.cost != 0) {
+		// Pays for the effect. It ends once there is nothing left to pay with.
+		if (++this->_stealthCostTimer >= std::max(s.costDelay, 1u)) {
+			this->_stealthCostTimer = 0;
+			this->_energy -= std::min(this->_energy, s.cost);
+			if (this->_energy == 0)
+				this->_endStealthActive();
+		}
+	}
+
+	switch (this->_stealthState) {
+	case STEALTH_VISIBLE:
+		if (this->_recloakPending && this->_recloakTimer == 0) {
+			this->_recloakPending = false;
+			this->_startCloakAttempt();
+		}
+		return;
+	case STEALTH_CLOAKED:
+		return;
+	default:
+		break;
+	}
+
+	// Playing the mask
+	if (frames != 0) {
+		if (this->_stealthFrameTimer < s.maskDelay) {
+			this->_stealthFrameTimer++;
+			return;
+		}
+		this->_stealthFrameTimer = 0;
+		if (++this->_stealthFrame < frames)
+			return;
+		this->_stealthFrame = frames - 1;
+	}
+
+	switch (this->_stealthState) {
+	case STEALTH_CLOAKING:
+		this->_stealthState = STEALTH_CLOAKED;
+		break;
+	case STEALTH_UNCLOAKING:
+		this->_stealthState = STEALTH_VISIBLE;
+		this->_stealthReverse = false;
+		this->_stealthFrame = 0;
+		if (this->isTemporaryStealth())
+			this->_stealthActive = false;
+		break;
+	case STEALTH_FLICKERING:
+		this->_stealthFrame = 0;
+		if (this->_stealthFlickerUncloak) {
+			// Back to visible, start again
+			this->_stealthFlickerUncloak = false;
+			this->_stealthReverse = false;
+			this->_playStealthSound(true);
+		} else if (!this->_rollCloakFailure()) {
+			// Made it (either lucky or repaired)
+			this->_stealthState = STEALTH_CLOAKED;
+			this->_stealthFrame = frames == 0 ? 0 : frames - 1;
+		} else {
+			this->_stealthFlickerUncloak = true;
+			this->_stealthReverse = true;
+			this->_playStealthSound(false);
+		}
+		break;
+	default:
+		break;
+	}
 }
 
 void GameObject::select() const
@@ -3077,6 +3694,13 @@ void GameObject::select() const
 
 void GameObject::deploy()
 {
+	if (this->deployKeepsOrders()) {
+		if (!this->_stealthActive)
+			this->_activateStealth();
+		else if (this->canDeploy())
+			this->_endStealthActive();
+		return;
+	}
 	if (this->_onDeploy) {
 		if (this->_onDeploy->direction)
 			this->_orderQueue.emplace_back(TurnOrder{*this->_onDeploy->direction});
@@ -3088,6 +3712,13 @@ void GameObject::deploy()
 
 bool GameObject::canDeploy() const
 {
+	if (this->deployKeepsOrders())
+		return
+			!this->isDead() &&
+			(this->_stealthActive ?
+				// Ends it by hand, unless it has to run out
+				this->_stealth->cancelable && this->_stealthState != STEALTH_UNCLOAKING :
+				this->_stealthState == STEALTH_VISIBLE && this->_energy >= this->_stealth->activationThreshold);
 	if (this->_onDeploy) {
 		if (this->_onDeploy->spawnBuilding) {
 			auto &s = *this->_onDeploy->spawnBuilding;
@@ -3133,7 +3764,7 @@ void GameObject::_autoAcquireTarget()
 		this->_autoAcquireTimer--;
 		return;
 	}
-	if (this->_barrels.empty() || this->_fake || this->_built || this->_sold || this->_pickup)
+	if (!this->_autoAttack || this->_barrels.empty() || this->_fake || this->_built || this->_sold || this->_pickup)
 		return;
 	if (this->_requiresPower && this->owner->state.consumedPower > this->owner->state.producedPower)
 		return;
@@ -3160,6 +3791,7 @@ void GameObject::_autoAcquireTarget()
 			o->triggersAutoAttack() &&
 			!o->isDead() &&
 			o->owner->state.team != this->owner->state.team &&
+			!o->isHiddenFrom(this->owner->state.team) &&
 			this->canAttack(o);
 	});
 	for (GameObject *o : candidates) {
@@ -3767,6 +4399,11 @@ bool GameObject::isCrushable() const
 bool GameObject::triggersAutoAttack() const
 {
 	return this->_triggersAutoAttack;
+}
+
+bool GameObject::autoAttacks() const
+{
+	return this->_autoAttack;
 }
 
 bool GameObject::isSelectable() const
@@ -4456,11 +5093,25 @@ void GameObject::pushUserType(sol::state &state)
 		{"DELIVERY",             MOVEREASON_DELIVERY},
 	});
 
+	state.new_enum<StealthState>("GameObject_StealthState", {
+		{"VISIBLE",   STEALTH_VISIBLE},
+		{"CLOAKING",  STEALTH_CLOAKING},
+		{"CLOAKED",   STEALTH_CLOAKED},
+		{"UNCLOAKING", STEALTH_UNCLOAKING},
+		{"FLICKERING", STEALTH_FLICKERING},
+	});
+
 	AnimationState::pushUserType(state);
 	UnitDeployParams::pushUserType(state);
 
 	sol::usertype<GameObject> type = state.new_usertype<GameObject>("GameObject");
 
+	type["stealth_state"] = sol::property(&GameObject::getStealthState);
+	type["energy"] = sol::property(&GameObject::getEnergy, &GameObject::setEnergy);
+	type["max_energy"] = sol::property(&GameObject::getMaxEnergy);
+	type["reveal_stealth_range"] = sol::property(&GameObject::getRevealStealthRange);
+	type["detector_range"] = sol::property(&GameObject::getDetectorRange);
+	type["is_hidden_from"] = &GameObject::isHiddenFrom;
 	type["update"] = &GameObject::update;
 	type["render"] = &GameObject::render;
 	type["deploy"] = &GameObject::deploy;
@@ -4527,6 +5178,7 @@ void GameObject::pushUserType(sol::state &state)
 	type["crushable"] = sol::property(&GameObject::isCrushable);
 	type["selectable"] = sol::property(&GameObject::isSelectable);
 	type["triggers_auto_attack"] = sol::property(&GameObject::triggersAutoAttack);
+	type["auto_attacks"] = sol::property(&GameObject::autoAttacks);
 	type["sellable"] = sol::property(&GameObject::isSellable);
 	type["repairable"] = sol::property(&GameObject::isRepairable);
 	type["primary"] = sol::property(&GameObject::isPrimary);

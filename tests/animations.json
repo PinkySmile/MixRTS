@@ -5,5 +5,27 @@
 			"offset": { "x": 0, "y": 0 },
 			"bounds": { "x": 0, "y": 0, "w": 224, "h": 224 }
 		}
+	],
+	"mask": [
+		{
+			"sprite": "dummy.png",
+			"offset": { "x": 0, "y": 0 },
+			"bounds": { "x": 0, "y": 0, "w": 16, "h": 16 }
+		},
+		{
+			"sprite": "dummy.png",
+			"offset": { "x": 0, "y": 0 },
+			"bounds": { "x": 0, "y": 0, "w": 16, "h": 16 }
+		},
+		{
+			"sprite": "dummy.png",
+			"offset": { "x": 0, "y": 0 },
+			"bounds": { "x": 0, "y": 0, "w": 16, "h": 16 }
+		},
+		{
+			"sprite": "dummy.png",
+			"offset": { "x": 0, "y": 0 },
+			"bounds": { "x": 0, "y": 0, "w": 16, "h": 16 }
+		}
 	]
 }

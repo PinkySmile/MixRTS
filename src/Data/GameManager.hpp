@@ -193,6 +193,8 @@ private:
 	GameObject *_spawnExtra(GameObject &parent, const ExtraSpawn &extra);
 
 	void _checkScroll();
+	//! Computes which stealthed objects are currently revealed by the enemy objects around them.
+	void _updateStealthDetection();
 	void _renderPathFindingGrid(PathFindingGrid &grid, Vector2u scale = {1, 1}, bool drawGrid = false);
 	void _initObject(MapState &map, Player &owner, GameObject &obj);
 	void _onObjectSpawned(Vector2i pos, GameObject &obj);

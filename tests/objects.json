@@ -87,6 +87,22 @@
 		]
 	},
 
+	"atk_hitscan_manual": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 500,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"auto_attack": false,
+		"barrels": [
+			{ "weapons": [ { "name": "weapon.hitscan", "cooldown": 200 } ] }
+		]
+	},
+
 	"atk_projectile": {
 		"anims": [],
 		"armor": "d2k:none",
@@ -242,5 +258,296 @@
 		"barrels": [
 			{ "weapons": [ { "name": "weapon.multi_ground", "cooldown": 200 } ] }
 		]
+	},
+
+	"stealth_perm": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"triggers_auto_attack": true,
+		"stealth": {
+			"type": "stealth",
+			"permanent": true,
+			"recloak_delay": 60,
+			"anim": { "anim": "mask", "delay": 0 },
+			"ally_display": { "type": "shadow", "color": { "r": 0, "g": 0, "b": 0, "a": 128 } },
+			"enemy_display": "invisible"
+		}
+	},
+
+	"stealth_atk": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"barrels": [
+			{ "weapons": [ { "name": "weapon.hitscan", "cooldown": 20 } ] }
+		],
+		"stealth": {
+			"type": "stealth",
+			"permanent": true,
+			"recloak_delay": 50,
+			"anim": { "anim": "mask", "delay": 0 },
+			"ally_display": { "type": "shadow", "color": { "r": 0, "g": 0, "b": 0, "a": 128 } },
+			"enemy_display": "invisible"
+		}
+	},
+
+	"stealth_transparent": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"triggers_auto_attack": true,
+		"stealth": {
+			"type": "stealth",
+			"permanent": true,
+			"recloak_delay": 60,
+			"anim": { "anim": "mask", "delay": 0 },
+			"ally_display": { "type": "transparent", "opacity": 0.5 },
+			"enemy_display": "invisible"
+		}
+	},
+
+	"stealth_flicker": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"triggers_auto_attack": true,
+		"stealth": {
+			"type": "stealth",
+			"permanent": true,
+			"recloak_delay": 20,
+			"anim": { "anim": "mask", "delay": 0 },
+			"ally_display": { "type": "shadow", "color": { "r": 0, "g": 0, "b": 0, "a": 128 } },
+			"enemy_display": "invisible",
+			"damaged_threshold": 0.5,
+			"recloak_chance": 0
+		}
+	},
+
+	"stealth_lucky": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"triggers_auto_attack": true,
+		"stealth": {
+			"type": "stealth",
+			"permanent": true,
+			"recloak_delay": 20,
+			"anim": { "anim": "mask", "delay": 0 },
+			"ally_display": { "type": "shadow", "color": { "r": 0, "g": 0, "b": 0, "a": 128 } },
+			"enemy_display": "invisible",
+			"damaged_threshold": 0.5,
+			"recloak_chance": 1
+		}
+	},
+
+	"stealth_temp": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"triggers_auto_attack": true,
+		"barrels": [
+			{ "weapons": [ { "name": "weapon.hitscan", "cooldown": 20 } ] }
+		],
+		"max_energy": 20,
+		"energy_gain": 1,
+		"energy_gain_delay": 1,
+		"stealth": {
+			"type": "stealth",
+			"permanent": false,
+			"recloak_delay": 10,
+			"anim": { "anim": "mask", "delay": 0 },
+			"ally_display": { "type": "shadow", "color": { "r": 0, "g": 0, "b": 0, "a": 128 } },
+			"enemy_display": "invisible",
+			"activation_threshold": 10,
+			"energy_cost": { "cost": 10, "delay": 100 }
+		}
+	},
+
+	"stealth_temp_locked": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"triggers_auto_attack": true,
+		"max_energy": 20,
+		"energy_gain": 1,
+		"energy_gain_delay": 1,
+		"stealth": {
+			"type": "stealth",
+			"permanent": false,
+			"recloak_delay": 10,
+			"anim": { "anim": "mask", "delay": 0 },
+			"ally_display": { "type": "shadow", "color": { "r": 0, "g": 0, "b": 0, "a": 128 } },
+			"enemy_display": "invisible",
+			"cancelable": false,
+			"activation_threshold": 10,
+			"energy_cost": { "cost": 10, "delay": 100 }
+		}
+	},
+
+	"stealth_temp_damaged": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"triggers_auto_attack": true,
+		"max_energy": 10,
+		"spawn_energy": 10,
+		"stealth": {
+			"type": "stealth",
+			"permanent": false,
+			"recloak_delay": 10,
+			"anim": { "anim": "mask", "delay": 0 },
+			"ally_display": { "type": "shadow", "color": { "r": 0, "g": 0, "b": 0, "a": 128 } },
+			"enemy_display": "invisible",
+			"activation_threshold": 10,
+			"energy_cost": { "cost": 10, "delay": 100 },
+			"damaged_threshold": 0.5,
+			"recloak_chance": 0
+		}
+	},
+
+	"camo_perm": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"triggers_auto_attack": true,
+		"stealth": {
+			"type": "camouflage",
+			"permanent": true,
+			"recloak_delay": 60,
+			"anim": { "anim": "mask", "delay": 0 },
+			"ally_display": { "type": "shadow", "color": { "r": 0, "g": 0, "b": 0, "a": 128 } },
+			"enemy_display": "invisible"
+		}
+	},
+
+	"camo_temp": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"triggers_auto_attack": true,
+		"max_energy": 10,
+		"energy_gain": 1,
+		"energy_gain_delay": 1,
+		"stealth": {
+			"type": "camouflage",
+			"permanent": false,
+			"recloak_delay": 10,
+			"anim": { "anim": "mask", "delay": 0 },
+			"ally_display": { "type": "shadow", "color": { "r": 0, "g": 0, "b": 0, "a": 128 } },
+			"enemy_display": "invisible",
+			"activation_threshold": 10,
+			"energy_cost": { "cost": 10, "delay": 100 }
+		}
+	},
+
+	"revealer": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"reveal_stealth": 1
+	},
+
+	"detector": {
+		"anims": [
+			{ "anim": "dummy", "layer": 0 }
+		],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"detector": 3
 	}
 }

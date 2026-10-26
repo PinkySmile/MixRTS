@@ -780,7 +780,10 @@ void UI::_updateCursor()
 		return;
 	}
 	this->_objectBuffer.clear();
-	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
+	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer, true, [this](const GameObject *obj) {
+		// Stealthed enemies can't be hovered, selected nor targeted.
+		return !obj->isHiddenFrom(this->ownerState->team);
+	});
 
 	if (this->_selling)
 		this->_updateCursorSell();
@@ -1117,7 +1120,10 @@ void UI::mouseReleased(Vector2i)
 		if (this->_placementBuilding != nullptr)
 			return this->_handleTryPlace();
 		this->_objectBuffer.clear();
-		this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer);
+		this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer, true, [this](const GameObject *obj) {
+			// Stealthed enemies can't be hovered, selected nor targeted.
+			return !obj->isHiddenFrom(this->ownerState->team);
+		});
 
 		if (this->_selling)
 			this->_tileClickedSell();

@@ -44,6 +44,11 @@ Every object definition contains the following core properties:
 	"altitude": int?,                                 // Vertical elevation offset for rendering and collision.
 	"limit": uint?,                                   // Maximum instance count allowed per faction/player.
 	"selectable": boolean?,                           // Whether the object can be selected by player input.
+	"max_energy": uint?,                              // Maximum energy of the object (default: 0). Used by temporary stealths.
+	"spawn_energy": uint?,                            // Energy the object has when it spawns (default: 0). Can't exceed max_energy.
+	"energy_gain": uint?,                             // Energy gained every energy_gain_delay ticks, up to max_energy (default: 0). Nothing is gained while a temporary stealth is active.
+	"energy_gain_delay": uint?,                       // Ticks between two energy gains (default: 0, every tick).
+	"auto_attack": boolean?,                          // Whether this object automatically shoots at enemies in range when idle (default: true). Orders given by the player still work.
 	"triggers_auto_attack": boolean?,                 // Whether idle enemy objects with a weapon in range automatically start shooting at this object (default: false). Meant for units and turrets.
 	"sellable": boolean?,                             // Whether the object can be sold by the player.
 	"repairable": boolean?,                           // Whether the object can be repaired when damaged.
@@ -80,6 +85,9 @@ Every object definition contains the following core properties:
 	"decel": DecelObject?,                            // Deceleration physics configuration.
 	"behavior": BehaviorObject?,                      // Default autonomous behavior order assigned to this object.
 	"deploy": DeployObject?,                          // Structure or unit conversion rules upon deployment.
+	"stealth": StealthObject?,                        // Makes the object hidden from its enemies (stealth or camouflage, permanent or temporary).
+	"reveal_stealth": float?,                         // Radius (in tiles) in which this object reveals enemy objects with a stealth of type "stealth" (infantry and turrets in Dune 2000).
+	"detector": float?,                               // Radius (in tiles) in which this object reveals enemy objects with a stealth of type "camouflage".
 	"sell": SellObject?,                              // Financial return and unit spawning parameters upon selling.
 	"dump": DumpObject?,                              // Resource unloading animation and timing attributes.
 	"death": DeathObject?,                            // Animation, sound, and particle behaviors triggered on destruction.
@@ -179,6 +187,78 @@ Defines the structure spawned upon unit deployment.
 	"name": string,    // Target building identifier to construct. (Must be a valid Object)
 	"queue": string,   // Production queue type associated with the created structure.
 	"offset": Vector2f // Positional offset relative to the deploying unit.
+}
+```
+
+## StealthObject
+
+Makes the object invisible to its enemies, and impossible to target (including by the automatic attacks), until it is revealed.
+
+There are 4 kinds of stealth, depending on `type` and `permanent`:
+
+* **Permanent stealth** (`"stealth"`, permanent): always cloaked. Revealed by nearby enemy objects having `reveal_stealth`.
+* **Temporary stealth** (`"stealth"`, not permanent): uses the object's energy (`max_energy`...). It can be activated using the deploy cursor when the object has at least `activation_threshold` energy. While active, `energy_cost.cost` energy is spent every `energy_cost.delay` ticks (and the object doesn't gain any), and the effect ends when there is no energy left. If `cancelable`, using the deploy cursor again ends it before that. Revealed by the same objects.
+* **Permanent camouflage** (`"camouflage"`, permanent): always cloaked. Revealed by enemy objects having a `detector` in range.
+* **Temporary camouflage** (`"camouflage"`, not permanent): same as temporary stealth but revealed by detectors.
+
+Distances are measured in tiles between the centers of the objects. A half tile of tolerance is added: a radius of 1 covers the 8 tiles around the revealer.
+Only operational revealers count (alive, built and powered when they require power).
+
+Revealing works differently depending on the kind:
+
+* Permanent stealths (with a `recloak_delay`): an enemy revealer **coming** in range uncloaks the object for everyone. After `recloak_delay` ticks spent completely visible, it tries to cloak again, even if the revealer is still close. Being revealed again meanwhile does not postpone that moment.
+* Firing: a cloaked object first uncloaks completely, and only then shoots. Each shot restarts the `recloak_delay`, so it stays visible for as long as it keeps shooting, and tries to cloak again `recloak_delay` ticks after the last shot.
+* Temporary stealths: nearby revealers make the object visible to their team for as long as they are around. When it wants to fire, the effect ends (and the energy is emptied), the object uncloaks completely and then shoots.
+* Objects that are hidden from the controlled player don't appear on the minimap.
+* If `recloak_delay` is `null`, firing doesn't uncloak anything and permanent stealths stay visible for as long as a revealer is around.
+
+An object that is damaged (health ratio under `damaged_threshold`) may fail to cloak: each attempt succeeds with a probability of `recloak_chance`. When it fails, the object *flickers*: it plays the cloak and uncloak animations over and over, and rolls again after each loop. While flickering, it is not considered cloaked (it can be targeted). It succeeds if repaired over the threshold. This applies to both temporary and permanent stealths. With a chance of 0, a damaged object can never cloak again.
+
+The cloak animation plays the mask forward, the uncloak plays it backward. Both change the sprite while it is in progress.
+
+```jsonc
+{
+	"type": string?,              // "stealth" (default) or "camouflage".
+	"permanent": boolean?,        // Whether the object is always cloaked (default: true).
+	"cancelable": boolean?,       // Temporary only: whether the player can end the effect by hand. If not, it lasts until the energy is depleted (default: true).
+	"activation_threshold": uint?, // Temporary only: energy the object needs to be able to activate the effect (default: 0).
+	"energy_cost": EnergyCostObject?, // Temporary only: energy spent while the effect is active (default: free, which requires "cancelable").
+	"recloak_delay": uint|null?,  // Ticks between being revealed and trying to cloak again. null: Firing doesn't uncloak the object (default: null).
+	"damaged_threshold": float|null?, // Health ratio (0 to 1) under which cloaking can fail (default: null, never fails).
+	"recloak_chance": float?,     // Chance (0 to 1) to succeed to cloak while under the threshold (default: 1).
+	"cloak_sound": string?,       // Audio effect played every time the object starts to cloak. (Must be an existing Sound)
+	"uncloak_sound": string?,     // Audio effect played every time the object starts to uncloak. (Must be an existing Sound)
+	"anim": StealthAnimObject?,   // Dissolve mask: frame 0 keeps the whole sprite, the last one hides it. Without it, there is no transition.
+	"ally_display": StealthAllyDisplayObject?, // How the owner and its allies see the object while cloaked (default: shadow, black with 50% opacity).
+	"enemy_display": string?      // How the enemies see the object while cloaked: "invisible" (default) or "lens" (not implemented yet, behaves like "invisible").
+}
+```
+
+## EnergyCostObject
+
+```jsonc
+{
+	"cost": uint,   // Energy removed every time.
+	"delay": uint?  // Ticks between two payments, the first one being this long after the activation (default: 0, every tick).
+}
+```
+
+## StealthAnimObject
+
+```jsonc
+{
+	"anim": string,  // Animation containing the frames of the mask. (Must be an existing Animation)
+	"delay": uint?   // Ticks added to every frame (default: 0).
+}
+```
+
+## StealthAllyDisplayObject
+
+```jsonc
+{
+	"type": string,         // "shadow": the sprite is tinted with "color". "transparent": the sprite is drawn with "opacity".
+	"color": ColorObject?,  // Shadow only: Object with the fields "r", "g", "b" and "a" (0 to 255). Default: {"r": 0, "g": 0, "b": 0, "a": 128}
+	"opacity": float?       // Transparent only: 0 (invisible) to 1 (opaque). Default: 0.5
 }
 ```
 
