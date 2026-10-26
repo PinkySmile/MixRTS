@@ -352,6 +352,8 @@ protected:
 	unsigned _decayTarget;
 	unsigned _decayTimer = 0;
 	unsigned _sight = 0;
+	//! Ticks left before this object looks around for something to shoot again (while idle).
+	unsigned _autoAcquireTimer = 0;
 	unsigned _limit = UINT32_MAX;
 	std::array<unsigned, 16> _gpTimerU = {};
 	std::array<int, 8> _gpTimerI = {};
@@ -409,6 +411,8 @@ protected:
 	bool _dumping = false;
 	bool _moving = false;
 	bool _selectable = true;
+	//! Whether idle enemy objects in range automatically start shooting at this object.
+	bool _triggersAutoAttack = false;
 	bool _sellable = false;
 	bool _repairable = false;
 	bool _built = false;
@@ -519,6 +523,8 @@ public:
 	[[nodiscard]] unsigned char getBuildMaxDistance() const;
 	[[nodiscard]] bool isRadar() const;
 	[[nodiscard]] bool isCrushable() const;
+	//! Whether idle enemy objects in range automatically start shooting at this object.
+	[[nodiscard]] bool triggersAutoAttack() const;
 	[[nodiscard]] bool isSelectable() const;
 	[[nodiscard]] bool isSellable() const;
 	[[nodiscard]] bool isRepairable() const;
@@ -591,6 +597,12 @@ protected:
 	std::unordered_map<std::string, std::vector<ObjectWeapon *>> _weaponByTag;
 
 	[[nodiscard]] Vector2f _getTileOffsetFromCenter() const;
+	//! Point weapon ranges are measured from.
+	[[nodiscard]] Vector2f _getAttackOrigin() const;
+	//! Whether \a target is within reach of the best weapon this object has against it.
+	[[nodiscard]] bool _isInWeaponRange(const GameObject *target) const;
+	//! Called while idle: starts shooting at the closest enemy that is in range and triggers automatic attacks.
+	void _autoAcquireTarget();
 	void _recomputeConnectedMask();
 	unsigned char _getConnectionSide(const GameObject *);
 	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);

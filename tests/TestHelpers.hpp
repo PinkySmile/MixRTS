@@ -110,5 +110,28 @@ inline MockedUI *installMockedUI(Player &player)
 	return mockedUi;
 }
 
+//! Places `obj` so that its *center* - not its top-left corner, which is
+//! what GameObject::setPosition() actually takes - ends up exactly at
+//! `center`. Every weapon-range/hitbox computation in the engine
+//! (GameObject::getHitboxCenter(), the myCenter/opCenter pair in
+//! GameObject::_updateAttack(), ...) is center-based, so this keeps test
+//! geometry exact instead of being off by half the object's size.
+inline void placeAt(GameObject &obj, Vector2f center)
+{
+	obj.setPosition(center - Vector2f(obj.getSize().to<float>()) / 2.f);
+}
+
+//! Spawns `id` for `owner` and immediately centers it on `center` (see
+//! placeAt()), overriding whatever tile-snapped position spawnObject()
+//! itself picked.
+inline GameObject *spawnAt(GameManager &manager, size_t owner, const std::string &id, Vector2f center)
+{
+	GameObject *obj = manager.spawnObject(owner, Vector2i(center.to<int>()), "", id);
+
+	if (obj)
+		placeAt(*obj, center);
+	return obj;
+}
+
 
 #endif //MIXRTS_TESTS_TESTHELPERS_HPP

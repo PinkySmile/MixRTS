@@ -170,5 +170,77 @@
 				]
 			}
 		]
+	},
+
+	"target_trigger": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"triggers_auto_attack": true
+	},
+
+	"target_trigger_air": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": ["mtag_air"],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"altitude": 64,
+		"triggers_auto_attack": true
+	},
+
+	"target_building": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": ["building"],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"tiles": [[6]]
+	},
+
+	"target_turret": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": ["building"],
+		"cost": {},
+		"hp": 1000,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"tiles": [[6]],
+		"triggers_auto_attack": true,
+		"barrels": [
+			{ "weapons": [ { "name": "weapon.hitscan", "cooldown": 200 } ] }
+		]
+	},
+
+	"atk_ground_only": {
+		"anims": [],
+		"armor": "d2k:none",
+		"tags": [],
+		"cost": {},
+		"hp": 500,
+		"counts_for_game": false,
+		"counts_for_short_game": false,
+		"requirements": [],
+		"size": { "x": 32, "y": 32 },
+		"barrels": [
+			{ "weapons": [ { "name": "weapon.multi_ground", "cooldown": 200 } ] }
+		]
 	}
 }

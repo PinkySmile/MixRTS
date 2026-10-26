@@ -14,37 +14,11 @@
 
 #include <gtest/gtest.h>
 #include "GameFixture.hpp"
+#include "TestHelpers.hpp"
 #include "Data/GameManager.hpp"
 #include "Data/GameObject.hpp"
 #include "Data/Map.hpp"
 #include "Data/Player.hpp"
-
-namespace {
-
-//! Places `obj` so that its *center* - not its top-left corner, which is
-//! what GameObject::setPosition() actually takes - ends up exactly at
-//! `center`. Every weapon-range/hitbox computation in the engine
-//! (GameObject::getHitboxCenter(), the myCenter/opCenter pair in
-//! GameObject::_updateAttack(), ...) is center-based, so this keeps test
-//! geometry exact instead of being off by half the object's size.
-void placeAt(GameObject &obj, Vector2f center)
-{
-	obj.setPosition(center - Vector2f(obj.getSize().to<float>()) / 2.f);
-}
-
-//! Spawns `id` for `owner` and immediately centers it on `center` (see
-//! placeAt()), overriding whatever tile-snapped position spawnObject()
-//! itself picked.
-GameObject *spawnAt(GameManager &manager, size_t owner, const std::string &id, Vector2f center)
-{
-	GameObject *obj = manager.spawnObject(owner, Vector2i(center.to<int>()), "", id);
-
-	if (obj)
-		placeAt(*obj, center);
-	return obj;
-}
-
-} // namespace
 
 //! Base fixture for every weapon test: on top of GameFixture's own player
 //! (team 0, "d2k:atreides", used below to own every attacker), spawns a

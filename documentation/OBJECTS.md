@@ -44,6 +44,7 @@ Every object definition contains the following core properties:
 	"altitude": int?,                                 // Vertical elevation offset for rendering and collision.
 	"limit": uint?,                                   // Maximum instance count allowed per faction/player.
 	"selectable": boolean?,                           // Whether the object can be selected by player input.
+	"triggers_auto_attack": boolean?,                 // Whether idle enemy objects with a weapon in range automatically start shooting at this object (default: false). Meant for units and turrets.
 	"sellable": boolean?,                             // Whether the object can be sold by the player.
 	"repairable": boolean?,                           // Whether the object can be repaired when damaged.
 	"can_crush": boolean?,                            // Whether this object can crush smaller crushable targets.

@@ -327,6 +327,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("build_max_distance") || json["build_max_distance"].is_number());
 	assert_exp(!json.contains("requires_power") || json["requires_power"].is_boolean());
 	assert_exp(!json.contains("selectable") || json["selectable"].is_boolean());
+	assert_exp(!json.contains("triggers_auto_attack") || json["triggers_auto_attack"].is_boolean());
 	assert_exp(!json.contains("sellable") || json["sellable"].is_boolean());
 	assert_exp(!json.contains("repairable") || json["repairable"].is_boolean());
 	assert_exp(!json.contains("gives_queue") || json["gives_queue"].is_string());
@@ -489,6 +490,8 @@ GameObject::GameObject(
 		this->_buildMaxDistance = json["build_max_distance"];
 	if (json.contains("selectable"))
 		this->_selectable = json["selectable"];
+	if (json.contains("triggers_auto_attack"))
+		this->_triggersAutoAttack = json["triggers_auto_attack"];
 	if (json.contains("ignore_terrain"))
 		this->_ignoreTerrain = json["ignore_terrain"];
 	if (json.contains("sellable"))
@@ -2005,17 +2008,10 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 	if (this->_firstEvent)
 		this->attackFirst = 1;
 
-	Vector2f myCenter;
-
 	if (this->_requiresPower && this->owner->state.consumedPower > this->owner->state.producedPower)
 		return true;
-	if (this->_boundToGrid) {
-		MapState::Quad abs = this->map->tileCoordToAbs(this->_gridPos);
 
-		myCenter = (abs.pt1 + abs.pt2 + abs.pt3 + abs.pt4) / 4;
-	} else
-		myCenter = this->_position + this->_size / 2;
-
+	Vector2f myCenter = this->_getAttackOrigin();
 	Vector2f opCenter = obj->getHitboxCenter(myCenter);
 	Vector2f diff = opCenter - myCenter;
 	Vector2f diffAbs = diff.abs();
@@ -2028,7 +2024,8 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 
 	range *= range;
 	if (range < diffAbs.magnitude2()) {
-		if (!this->canMove())
+		// Automatic attacks never chase: the target got away, so go back to idling.
+		if (order.automatic || !this->canMove())
 			return true;
 		this->_firstEvent = this->attackFirst;
 		this->attackFirst = 0;
@@ -2478,6 +2475,8 @@ void GameObject::update()
 		else
 			this->_firstIEvent = false;
 	}
+	if (this->_orderQueue.empty())
+		this->_autoAcquireTarget();
 	if (!this->_moving && !this->_dumpStop && !this->_dumping && !this->_dumpStart && !this->_idleAnims.empty()) {
 		if (this->_currentIdle) {
 			if (this->_idleAnims[this->_currentIdle - 1].update())
@@ -3099,6 +3098,85 @@ bool GameObject::canDeploy() const
 	return false;
 }
 
+Vector2f GameObject::_getAttackOrigin() const
+{
+	if (!this->_boundToGrid)
+		return this->_position + this->_size / 2;
+
+	MapState::Quad abs = this->map->tileCoordToAbs(this->_gridPos);
+
+	return (abs.pt1 + abs.pt2 + abs.pt3 + abs.pt4) / 4;
+}
+
+bool GameObject::_isInWeaponRange(const GameObject *target) const
+{
+	// Same weapon selection as the attack order itself.
+	const ObjectWeapon *weapon = this->getBestWeaponFor(target, UINT32_MAX, true);
+
+	if (weapon == nullptr)
+		weapon = this->getBestWeaponFor(target, UINT32_MAX, false);
+	if (weapon == nullptr)
+		return false;
+
+	Vector2f myCenter = this->_getAttackOrigin();
+	double range = weapon->weapon->getRange();
+
+	return range * range >= (target->getHitboxCenter(myCenter) - myCenter).magnitude2();
+}
+
+void GameObject::_autoAcquireTarget()
+{
+	// Constant time spent between two looks around
+	constexpr unsigned AUTO_ACQUIRE_INTERVAL = 8;
+
+	if (this->_autoAcquireTimer != 0) {
+		this->_autoAcquireTimer--;
+		return;
+	}
+	if (this->_barrels.empty() || this->_fake || this->_built || this->_sold || this->_pickup)
+		return;
+	if (this->_requiresPower && this->owner->state.consumedPower > this->owner->state.producedPower)
+		return;
+	this->_autoAcquireTimer = AUTO_ACQUIRE_INTERVAL;
+
+	unsigned maxRange = 0;
+
+	for (auto &barrel : this->_barrels)
+		for (auto &weapon : barrel.weapons)
+			maxRange = std::max(maxRange, weapon.weapon->getRange());
+	if (maxRange == 0)
+		return;
+
+	Vector2f center = this->_getAttackOrigin();
+	Vector2i corner = (center - Vector2f{static_cast<float>(maxRange), static_cast<float>(maxRange)}).to<int>();
+	Vector2u size{maxRange * 2 + 1, maxRange * 2 + 1};
+	std::vector<GameObject *> candidates;
+	GameObject *best = nullptr;
+	float bestDist = 0;
+
+	this->manager->getObjectsInArea(corner, size, candidates, true, [this](const GameObject *o) {
+		return
+			o != this &&
+			o->triggersAutoAttack() &&
+			!o->isDead() &&
+			o->owner->state.team != this->owner->state.team &&
+			this->canAttack(o);
+	});
+	for (GameObject *o : candidates) {
+		if (!this->_isInWeaponRange(o))
+			continue;
+
+		float dist = (o->getHitboxCenter(center) - center).magnitude2();
+
+		if (best == nullptr || dist < bestDist) {
+			best = o;
+			bestDist = dist;
+		}
+	}
+	if (best)
+		this->attack(best, true, false);
+}
+
 bool GameObject::canMove() const
 {
 	return this->_speed != 0;
@@ -3684,6 +3762,11 @@ bool GameObject::isRadar() const
 bool GameObject::isCrushable() const
 {
 	return this->_crushSound != nullptr;
+}
+
+bool GameObject::triggersAutoAttack() const
+{
+	return this->_triggersAutoAttack;
 }
 
 bool GameObject::isSelectable() const
@@ -4443,6 +4526,7 @@ void GameObject::pushUserType(sol::state &state)
 	type["radar"] = sol::property(&GameObject::isRadar);
 	type["crushable"] = sol::property(&GameObject::isCrushable);
 	type["selectable"] = sol::property(&GameObject::isSelectable);
+	type["triggers_auto_attack"] = sol::property(&GameObject::triggersAutoAttack);
 	type["sellable"] = sol::property(&GameObject::isSellable);
 	type["repairable"] = sol::property(&GameObject::isRepairable);
 	type["primary"] = sol::property(&GameObject::isPrimary);
