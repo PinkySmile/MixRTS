@@ -52,7 +52,7 @@ FactionQueue::FactionQueue(const Mod &base, const nlohmann::json &data)
 		assert_not_reached_msg("Invalid queue unit_spawn");
 
 	if (data.contains("cursor"))
-		this->cursor = data["cursor"];
+		this->cursor = UI::stringToCursor(data["cursor"]);
 	if (data.contains("loader")) {
 		assert_exp(data.contains("loader") && data["loader"].is_string());
 		this->loader.emplace(base.getBase() / data["loader"].get<std::string>());

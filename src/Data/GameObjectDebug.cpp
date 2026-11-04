@@ -93,7 +93,7 @@ namespace
 
 		std::string operator()(const TurnOrder &o) const
 		{
-			return "Turn(dir=" + std::to_string(o.resultDir) + ")";
+			return "Turn(angle=" + fmt(o.angle) + ")";
 		}
 
 		std::string operator()(const MoveOrder &o) const
@@ -246,7 +246,7 @@ void GameObject::getDebugInfo(DebugInfoList &out, const AliveSet &alive) const
 	add("hitbox middle", vec(this->getMiddle()));
 
 	// Movement
-	add("direction", std::to_string(this->_currentDir) + " / " + std::to_string(this->getDirections()));
+	add("direction", fmt(this->getFacingAngle() * 180 / M_PI, 1) + " deg (sprite " + std::to_string(this->getDirection()) + " / " + std::to_string(this->getDirections()) + ")");
 	add("speed", fmt(this->_speed));
 	add("alpha", fmt(this->_alpha));
 	add("pass flags", std::to_string(this->_passFlags));
@@ -296,7 +296,7 @@ void GameObject::getDebugInfo(DebugInfoList &out, const AliveSet &alive) const
 	add("crouch timer", std::to_string(this->_crouchTimer));
 	add("harvest timer", std::to_string(this->_harvestTime) + " / " + std::to_string(this->_harvestDelay));
 	add("decay timer", std::to_string(this->_decayTimer) + " (target " + std::to_string(this->_decayTarget) + ")");
-	add("turn delay", std::to_string(this->_turnDelay));
+	add("turn speed", fmt(this->_turnSpeed) + " deg/frame");
 	add("aside cooldown", std::to_string(this->_asideCooldown));
 	if (this->_takeControlTime)
 		add("take control", std::to_string(this->_takeControlTime));
@@ -326,9 +326,9 @@ void GameObject::getDebugInfo(DebugInfoList &out, const AliveSet &alive) const
 
 		add(
 			"turret " + std::to_string(i),
-			"dir " + std::to_string(turret.direction) + " -> " + std::to_string(turret.directionTarget) +
-			", shot " + std::to_string(turret.shotTimer) +
-			", turn " + std::to_string(turret.turnTimer) +
+			"angle " + fmt(turret.angle * 180 / M_PI, 1) + " -> " + fmt(turret.targetAngle * 180 / M_PI, 1) +
+			" deg, shot " + std::to_string(turret.shotTimer) +
+			", speed " + fmt(turret.turnSpeed) +
 			", recoil " + std::to_string(turret.recoilTimer) + "/" + std::to_string(turret.recoilMax)
 		);
 	}

@@ -11,6 +11,7 @@
 #include <nlohmann/json_fwd.hpp>
 #include <sol/forward.hpp>
 #include "forward.hpp"
+#include "UI/UI.hpp"
 
 enum WeaponNeeds {
 	WEAPONNEED_NONE = 0,
@@ -71,7 +72,7 @@ private:
 	double _inaccuracyDist = 0;
 	double _inaccuracyBase = 0;
 	const Warhead *_warhead = nullptr;
-	std::optional<std::string> _cursor;
+	std::optional<UI::Cursor> _cursor;
 	std::vector<std::string> _canHitTags;
 	std::optional<WeaponProjectile> _projectile;
 	std::optional<WeaponTakeControl> _takeControl;
@@ -88,7 +89,7 @@ public:
 		const std::unordered_map<std::string, Warhead> &warheads,
 		const nlohmann::json &data
 	);
-	[[nodiscard]] const std::optional<std::string> &getCursor() const;
+	[[nodiscard]] const std::optional<UI::Cursor> &getCursor() const;
 	[[nodiscard]] WeaponType getType() const;
 	[[nodiscard]] const Effect *getEffect() const;
 	[[nodiscard]] const MultiSound *getSound() const;

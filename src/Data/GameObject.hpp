@@ -61,7 +61,7 @@ struct MYDLL_API SpinOrder {
 	float angle;
 };
 struct MYDLL_API TurnOrder {
-	unsigned resultDir;
+	float angle;
 };
 struct MYDLL_API MoveOrder {
 	Vector2i destination;
@@ -148,7 +148,8 @@ enum MoveResult {
 };
 
 struct MYDLL_API DumpInfo {
-	unsigned dir;
+	//! Facing required to dump, in degrees clockwise from up (0 = north).
+	float dir;
 	unsigned delay;
 	unsigned delayAfter;
 	std::unique_ptr<ConditionalAnim> during;
@@ -179,7 +180,8 @@ struct MYDLL_API UnitDeployParams {
 		static void pushUserType(sol::state &state);
 	};
 
-	std::optional<unsigned> direction;
+	//! Facing required to deploy, in degrees clockwise from up (0 = north).
+	std::optional<float> direction;
 	std::optional<SpawnBuilding> spawnBuilding;
 
 	static void pushUserType(sol::state &state);
@@ -272,11 +274,11 @@ struct MYDLL_API ObjectTurret {
 	bool fast = true;
 	Vector2f offset;
 	unsigned shotTimer = 0;
-	unsigned turnTimer = 0;
-	unsigned turnDelay = 1;
+	//! Degrees this turret can turn per frame. Divided by 8 while it is not tracking something.
+	float turnSpeed = 360;
 	unsigned barrel;
-	unsigned direction = 0;
-	unsigned directionTarget = 0;
+	float angle = -static_cast<float>(M_PI_2);
+	float targetAngle = -static_cast<float>(M_PI_2);
 	unsigned recoilTimer = 0;
 	unsigned recoilMax = 0;
 
@@ -424,8 +426,10 @@ protected:
 	unsigned _takeControlTime = 0;
 	unsigned _timeDecOnAtk;
 	unsigned _resourceStorage = 0;
-	unsigned _currentDir = 0;
-	unsigned _turnDelay = 0;
+	//! Facing, in radians. 0 points right and the angle grows counterclockwise, so -PI/2 points up.
+	float _facingAngle = -static_cast<float>(M_PI_2);
+	//! Degrees this object can turn per frame. 360 means it turns instantly.
+	float _turnSpeed = 360;
 	unsigned _buildSpeed = -1;
 	unsigned _maxHp;
 	unsigned _hp;
@@ -629,7 +633,7 @@ public:
 	[[nodiscard]] int getAltitude() const;
 	[[nodiscard]] bool ignoresTerrain() const;
 	[[nodiscard]] size_t getDirections() const;
-	[[nodiscard]] double getFacingAngle() const;
+	[[nodiscard]] float getFacingAngle() const;
 	[[nodiscard]] unsigned getDirection() const;
 	[[nodiscard]] bool isInObject(Vector2f pos, Vector2f size, bool fullTile) const;
 	[[nodiscard]] Vector2f getHitboxCenter(Vector2f pos) const;

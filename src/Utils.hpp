@@ -160,5 +160,14 @@ typename WindowType::Ptr openWindowWithFocus(T &gui, tgui::Layout width, tgui::L
 //! @return std::string The last Exception name
 MYDLL_API std::string getLastExceptionName();
 
+//! Sprite direction index of a facing angle. Index 0 points up, then clockwise.
+//! A \a count of 0 or 1 always yields 0.
+MYDLL_API unsigned angleToDirection(double angle, size_t count);
+//! Brings an angle into [-PI, PI).
+MYDLL_API double normalizeAngle(double angle);
+//! Rotates \a angle toward \a target by at most \a maxStep radians, along the shortest arc.
+//! Snaps to the target and returns true once it is within one step.
+MYDLL_API bool rotateTowards(float &angle, float target, float maxStep);
+
 
 #endif //MIXRTS_UTILS_HPP

@@ -18,7 +18,6 @@
 #include "Debug/Profiler.hpp"
 
 #define currentSpeed _gpTimerF[0]
-#define currentAngle _gpTimerF[0]
 
 #define pickupOldAltitude _gpTimerI[7]
 
@@ -27,7 +26,6 @@
 #define cancel _gpTimerU[1]
 #define harvestDelaying _gpTimerU[2]
 #define blockTimer _gpTimerU[3]
-#define turnTimer _gpTimerU[4]
 #define harvestArrived _gpTimerU[5]
 #define dropTimer _gpTimerU[12]
 #define dropLast _gpTimerU[13]
@@ -538,7 +536,7 @@ GameObject::GameObject(
 	assert_exp(json.contains("anims") && json["anims"].is_array());
 	assert_exp(!json.contains("barrels") || json["barrels"].is_array());
 	assert_exp(!json.contains("sight") || json["sight"].is_number());
-	assert_exp(!json.contains("turn_delay") || json["turn_delay"].is_number());
+	assert_exp(!json.contains("turn_speed") || json["turn_speed"].is_number());
 	assert_exp(!json.contains("do_sound") || json["do_sound"].is_string());
 	assert_exp(!json.contains("select_sound") || json["select_sound"].is_string());
 	assert_exp(!json.contains("pass_flags") || json["pass_flags"].is_string() || json["pass_flags"].is_number_unsigned());
@@ -632,7 +630,7 @@ GameObject::GameObject(
 	}
 	if (json.contains("dump")) {
 		assert_exp(json["dump"].is_object());
-		assert_exp(json["dump"].contains("dir") && json["dump"]["dir"].is_number_unsigned());
+		assert_exp(json["dump"].contains("dir") && json["dump"]["dir"].is_number());
 		assert_exp(json["dump"].contains("dir") && json["dump"]["delay"].is_number_unsigned());
 		assert_exp(json["dump"].contains("dir") && json["dump"]["delay_after"].is_number_unsigned());
 		assert_exp(json["dump"].contains("during") && json["dump"]["during"].is_object());
@@ -666,7 +664,7 @@ GameObject::GameObject(
 
 		this->_onDeploy.emplace();
 		if (json["deploy"].contains("direction"))
-			this->_onDeploy->direction = json["deploy"]["direction"];
+			this->_onDeploy->direction = json["deploy"]["direction"].get<float>();
 		if (json["deploy"].contains("spawn_building")) {
 			this->_onDeploy->spawnBuilding.emplace();
 			assert_exp(json["deploy"]["spawn_building"].contains("name"));
@@ -813,8 +811,8 @@ GameObject::GameObject(
 		this->_producedAnim.emplace(base, this, animList, json["produced_anim"]);
 	if (json.contains("idle_time"))
 		this->_idleTimerRange = {json["idle_time"][0], json["idle_time"][1]};
-	if (json.contains("turn_delay"))
-		this->_turnDelay = json["turn_delay"];
+	if (json.contains("turn_speed"))
+		this->_turnSpeed = json["turn_speed"];
 	if (json.contains("tiles")) {
 		std::vector<std::vector<uint8_t>> b = json["tiles"];
 		std::vector<std::vector<BuildingMask>> r;
@@ -1050,7 +1048,7 @@ GameObject::GameObject(
 	}
 	if (json.contains("dump"))
 		this->_dump.emplace(
-			json["dump"]["dir"].get<unsigned>(),
+			json["dump"]["dir"].get<float>(),
 			json["dump"]["delay"].get<unsigned>(),
 			json["dump"]["delay_after"].get<unsigned>(),
 			std::make_unique<ConditionalAnim>(base, this, animList, json["dump"]["during"]),
@@ -1811,26 +1809,27 @@ CollisionResolution GameObject::_resolveFreeCollision(bool ignoreSolid, const Ga
 Vector2i GameObject::_getFacingTile() const
 {
 	auto pos = this->_gridPos;
+	unsigned dir = angleToDirection(this->_facingAngle, 8);
 
-	if (this->_currentDir == 1 * this->_anims.size() / 8) {
+	if (dir == 1) {
 		pos.x++;
 		pos.y--;
-	} else if (this->_currentDir == 3 * this->_anims.size() / 8) {
+	} else if (dir == 3) {
 		pos.x++;
 		pos.y++;
-	} else if (this->_currentDir == 5 * this->_anims.size() / 8) {
+	} else if (dir == 5) {
 		pos.x--;
 		pos.y++;
-	} else if (this->_currentDir == 7 * this->_anims.size() / 8) {
+	} else if (dir == 7) {
 		pos.x--;
 		pos.y--;
-	} else if (this->_currentDir == 0 * this->_anims.size() / 8)
+	} else if (dir == 0)
 		pos.y--;
-	else if (this->_currentDir == 2 * this->_anims.size() / 8)
+	else if (dir == 2)
 		pos.x++;
-	else if (this->_currentDir == 4 * this->_anims.size() / 8)
+	else if (dir == 4)
 		pos.y++;
-	else if (this->_currentDir == 6 * this->_anims.size() / 8)
+	else if (dir == 6)
 		pos.x--;
 	return pos;
 }
@@ -1966,19 +1965,7 @@ void GameObject::_spawnUnits(const std::unordered_map<std::string, unsigned> &un
 
 bool GameObject::_updateOrder(const TurnOrder &order)
 {
-	if (this->_currentDir == order.resultDir)
-		return true;
-	this->turnTimer++;
-	if (this->turnTimer > this->_turnDelay) {
-		size_t diff = (this->_currentDir - order.resultDir + this->_anims.size()) % this->_anims.size();
-
-		this->turnTimer = 0;
-		if (diff >= this->_anims.size() / 2)
-			this->_currentDir = (this->_currentDir + 1) % this->_anims.size();
-		else
-			this->_currentDir = (this->_currentDir - 1 + this->_anims.size()) % this->_anims.size();
-	}
-	return false;
+	return rotateTowards(this->_facingAngle, order.angle, this->_turnSpeed * static_cast<float>(M_PI) / 180.f);
 }
 
 bool GameObject::_updateOrder(const MoveOrder &order)
@@ -2038,20 +2025,20 @@ MoveResult GameObject::_updateMove(const MoveOrder &order)
 	} else
 		a = this->_position.angle(dest);
 
-	// TODO: All units should still have a direction even when non directional sprites are used
-	//       so the turn speed can be changed.
 	if (a) {
-		unsigned angle = round((*a + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
+		bool aligned = this->_updateOrder(TurnOrder{*a});
 
-		angle %= this->_anims.size();
-		if (angle != this->_currentDir) {
-			if (!this->_updateOrder(TurnOrder{angle}) && !this->_moveWhileTurn)
+		if (!aligned) {
+			if (!this->_moveWhileTurn)
 				return MOVE_IN_PROGRESS;
-			*a = this->getFacingAngle();
+
+			float facing = this->_facingAngle;
+
 			dest = {
-				std::cos(*a) * this->currentSpeed * 2,
-				std::sin(*a) * this->currentSpeed * 2
+				std::cos(facing) * this->currentSpeed * 2,
+				std::sin(facing) * this->currentSpeed * 2
 			};
+			dest += this->_position;
 		}
 	}
 
@@ -2296,7 +2283,7 @@ bool GameObject::_updateOrder(const DumpOrder &order)
 			this->dumpTimer++;
 	} else if (this->_position != (order.target->getPosition() + order.target->getPoint()).to<float>()) {
 		return false;
-	} else if (!this->_updateOrder(TurnOrder{this->_dump->dir})) {
+	} else if (!this->_updateOrder(TurnOrder{this->_dump->dir * static_cast<float>(M_PI) / 180.f - static_cast<float>(M_PI_2)})) {
 		return false;
 	} else
 		this->_dumpStart = true;
@@ -2381,20 +2368,20 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 		return false;
 
 	double angle = diff.angle();
-	unsigned direction = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
 	ObjectTurret *turret = barrel.turret;
 
-	direction %= this->_anims.size();
 	if (turret && !turret->fixed) {
-		size_t d = direction * turret->anims.size() / this->_anims.size();
+		float step = turret->turnSpeed * static_cast<float>(M_PI) / 180.f;
 
-		turret->directionTarget = d;
+		turret->targetAngle = static_cast<float>(angle);
 		turret->fast = true;
-		if (turret->direction != d) {
+		// A moving target is never exactly where the turret is aiming: close enough to
+		// reach within one frame counts as aimed.
+		if (std::abs(normalizeAngle(turret->angle - angle)) > step) {
 			turret->shotTimer = 1;
 			return false;
 		}
-	} else if (direction != this->_currentDir && !this->_updateOrder(TurnOrder{direction}))
+	} else if (!this->_updateOrder(TurnOrder{static_cast<float>(angle)}))
 		return false;
 
 	double inaccuracy = weapon->weapon->getInaccuracy(diff.magnitude());
@@ -2409,7 +2396,7 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 	barrel.shootTimer = weapon->cooldown;
 	if (weapon->weapon->sendsForward()) {
 		double dist = (targetPos - spawnPos).magnitude();
-		double myAngle = this->getFacingAngle();
+		double myAngle = this->_facingAngle;
 
 		targetPos = spawnPos;
 		targetPos.x += std::cos(myAngle) * dist;
@@ -2430,7 +2417,7 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 	if (turret)
 		turret->attack();
 	if (!this->_muzzleAnim.empty())
-		this->manager->spawnEffect(*this->_muzzleAnim[this->_currentDir], this->_position - Vector2i{0, this->_altitude} + this->_size / 2, this->owner);
+		this->manager->spawnEffect(*this->_muzzleAnim[angleToDirection(this->_facingAngle, this->_muzzleAnim.size())], this->_position - Vector2i{0, this->_altitude} + this->_size / 2, this->owner);
 	switch (weapon->weapon->getType()) {
 	case WEAPONTYPE_HITSCAN:
 		if (hitEffect)
@@ -2497,16 +2484,11 @@ bool GameObject::_updateOrder(const AttackPosOrder &order)
 
 bool GameObject::_updateOrder(const SpinOrder &order)
 {
-	if (this->_firstEvent)
-		this->currentAngle = this->getFacingAngle() * 180 / M_PI;
-	this->currentAngle = fmod(this->currentAngle + 360 + order.angle, 360);
+	this->_facingAngle = static_cast<float>(normalizeAngle(this->_facingAngle + order.angle * M_PI / 180.0));
 
-	double angle = this->currentAngle * M_PI / 180;
 	Vector2f speed = {this->_speed, 0};
 
-	this->_currentDir = round((angle + M_PI_2) * this->_anims.size() / (M_PI * 2));
-	this->_currentDir %= this->_anims.size();
-	this->setPosition(speed.rotation(angle, {0, 0}) + this->_position);
+	this->setPosition(speed.rotation(this->_facingAngle, {0, 0}) + this->_position);
 	return false;
 }
 
@@ -2528,13 +2510,11 @@ bool GameObject::_updateOrder(const PickupOrder &order)
 		return false;
 	}
 	case 1: {
-		unsigned converted = round((target->getFacingAngle() + M_PI_2) * this->_anims.size() / (M_PI * 2));
-
-		if (this->_currentDir != converted) {
+		if (this->_facingAngle != target->getFacingAngle()) {
 			this->pickupState = 2;
 			this->pickupOldAltitude = this->_altitude;
 		} else
-			this->_updateOrder(TurnOrder{converted});
+			this->_updateOrder(TurnOrder{static_cast<float>(target->getFacingAngle())});
 		return false;
 	}
 	case 2:
@@ -2564,7 +2544,7 @@ bool GameObject::_updateOrder(const PickupOrder &order)
 			.force = false
 		});
 
-		target->_currentDir = round((this->getFacingAngle() + M_PI_2) * target->_anims.size() / (M_PI * 2));
+		target->setDirection(static_cast<float>(this->getFacingAngle()));
 		target->setPosition(this->getMiddle() + target->_getTileOffsetFromCenter());
 		if (!arrived)
 			return false;
@@ -2868,10 +2848,10 @@ void GameObject::update()
 		this->_currentIdle = 0;
 	if (this->_shooting) {
 		if (this->_crouchTimer == 0) {
-			if (!this->_fireAnim.empty() && this->_fireAnim[this->_currentDir].update())
+			if (!this->_fireAnim.empty() && this->_fireAnim[this->getDirection()].update())
 				this->_shooting = false;
 		} else {
-			if (!this->_crawlFireAnim.empty() && this->_crawlFireAnim[this->_currentDir].update())
+			if (!this->_crawlFireAnim.empty() && this->_crawlFireAnim[this->getDirection()].update())
 				this->_shooting = false;
 		}
 	}
@@ -2916,18 +2896,18 @@ void GameObject::update()
 					if (anim())
 						anim.update();
 			} else if (this->_moving && !this->_moveAnim.empty()) {
-				if (this->_moveAnim[this->_currentDir]())
-					this->_moveAnim[this->_currentDir].update();
-			} else for (auto &anim : this->_anims[this->_currentDir])
+				if (this->_moveAnim[this->getDirection()]())
+					this->_moveAnim[this->getDirection()].update();
+			} else for (auto &anim : this->_anims[this->getDirection()])
 				if (anim())
 					anim.update();
 		} else {
 			if (this->_moving && !this->_crawlAnim.empty()) {
-				if (this->_crawlAnim[this->_currentDir]())
-					this->_crawlAnim[this->_currentDir].update();
+				if (this->_crawlAnim[this->getDirection()]())
+					this->_crawlAnim[this->getDirection()].update();
 			} else {
-				if (this->_crouchAnim[this->_currentDir]())
-					this->_crouchAnim[this->_currentDir].update();
+				if (this->_crouchAnim[this->getDirection()]())
+					this->_crouchAnim[this->getDirection()].update();
 			}
 		}
 	}
@@ -2942,7 +2922,7 @@ void GameObject::update()
 	if (this->_dumping && (*this->_dump->during)())
 		this->_dump->during->update();
 	if (!this->_harvestAnims.empty() && this->_harvesting) {
-		auto dir = this->_currentDir * this->_harvestAnims.size() / this->_anims.size();
+		auto dir = angleToDirection(this->_facingAngle, this->_harvestAnims.size());
 		auto &anim = this->_harvestAnims[dir];
 
 		if (!anim() || anim.update())
@@ -3027,19 +3007,19 @@ void GameObject::render(int layer)
 	if (display) {
 		if (!this->_dumpStop && !this->_dumpStart && !this->_dumping) {
 			if (this->_crouchTimer == 0) {
-				unsigned a = this->_currentDir;
+				unsigned a = this->getDirection();
 
 				if (!this->_connectTo.empty()) {
 					for (auto &anim : this->_anims[this->_connectedMask])
 						if (anim() && anim.getLayer() == layer)
 							this->_displayAnim(anim.getAnim());
 				} else if (this->_shooting && !this->_fireAnim.empty()) {
-					auto &anim = this->_fireAnim[this->_currentDir];
+					auto &anim = this->_fireAnim[this->getDirection()];
 
 					if (anim() && anim.getLayer() == layer)
 						this->_displayAnim(anim.getAnim());
 				} else if (this->_moving && !this->_moveAnim.empty()) {
-					auto &anim = this->_moveAnim[this->_currentDir];
+					auto &anim = this->_moveAnim[this->getDirection()];
 
 					if (anim() && anim.getLayer() == layer)
 						this->_displayAnim(anim.getAnim());
@@ -3053,17 +3033,17 @@ void GameObject::render(int layer)
 						this->_displayAnim(anim.getAnim());
 			} else {
 				if (this->_shooting && !this->_crawlFireAnim.empty()) {
-					auto &anim = this->_crawlFireAnim[this->_currentDir];
+					auto &anim = this->_crawlFireAnim[this->getDirection()];
 
 					if (anim() && anim.getLayer() == layer)
 						this->_displayAnim(anim.getAnim());
 				} else if (this->_moving && !this->_crawlAnim.empty()) {
-					auto &anim = this->_crawlAnim[this->_currentDir];
+					auto &anim = this->_crawlAnim[this->getDirection()];
 
 					if (anim() && anim.getLayer() == layer)
 						this->_displayAnim(anim.getAnim());
 				} else {
-					auto &anim = this->_crouchAnim[this->_currentDir];
+					auto &anim = this->_crouchAnim[this->getDirection()];
 
 					if (anim() && anim.getLayer() == layer)
 						this->_displayAnim(anim.getAnim());
@@ -3077,7 +3057,7 @@ void GameObject::render(int layer)
 		if (this->_dumpStart && (*this->_dump->start)() && this->_dump->start->getLayer() == layer)
 			this->_displayAnim(this->_dump->start->getAnim());
 		if (!this->_harvestAnims.empty() && this->_harvesting) {
-			auto dir = this->_currentDir * this->_harvestAnims.size() / this->_anims.size();
+			auto dir = angleToDirection(this->_facingAngle, this->_harvestAnims.size());
 			auto &anim = this->_harvestAnims[dir];
 
 			if (anim() && anim.getLayer() == layer)
@@ -3434,7 +3414,7 @@ const std::optional<Vector2i> &GameObject::getExitOffset() const
 
 const std::vector<ConditionalAnim> &GameObject::getBaseAnims() const
 {
-	return this->_anims[this->_currentDir];
+	return this->_anims[this->getDirection()];
 }
 
 const ReqAndCombinator &GameObject::getRequirements() const
@@ -3834,7 +3814,7 @@ void GameObject::deploy()
 	}
 	if (this->_onDeploy) {
 		if (this->_onDeploy->direction)
-			this->_orderQueue.emplace_back(TurnOrder{*this->_onDeploy->direction});
+			this->_orderQueue.emplace_back(TurnOrder{*this->_onDeploy->direction * static_cast<float>(M_PI) / 180.f - static_cast<float>(M_PI_2)});
 		this->_orderQueue.emplace_back(DeployOrder{});
 	}
 	if (this->_doSound)
@@ -4418,8 +4398,7 @@ const std::optional<std::string> &GameObject::getBuildQueue() const
 
 void GameObject::setDirection(float angle)
 {
-	this->_currentDir = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
-	this->_currentDir %= this->_anims.size();
+	this->_facingAngle = angle;
 }
 
 void GameObject::renderPathFindingPath() const
@@ -4585,7 +4564,11 @@ void GameObject::sell()
 
 void GameObject::nextDirection()
 {
-	this->_currentDir = (this->_currentDir + 1) % this->_anims.size();
+	size_t count = this->getDirections();
+
+	if (count <= 1)
+		return;
+	this->_facingAngle = static_cast<float>(normalizeAngle(this->_facingAngle + M_PI * 2 / static_cast<double>(count)));
 }
 
 void GameObject::setOwner(Player *player, unsigned time, unsigned timeDecOnAtk)
@@ -4773,14 +4756,14 @@ size_t GameObject::getDirections() const
 	return 1;
 }
 
-double GameObject::getFacingAngle() const
+float GameObject::getFacingAngle() const
 {
-	return M_PI * 2 * this->_currentDir / this->_anims.size() - M_PI_2;
+	return this->_facingAngle;
 }
 
 unsigned GameObject::getDirection() const
 {
-	return this->_currentDir;
+	return angleToDirection(this->_facingAngle, this->_anims.size());
 }
 
 bool GameObject::isInObject(Vector2f pos, Vector2f size, bool fullTile) const
@@ -4915,7 +4898,6 @@ unsigned GameObject::getSpeed() const
 	return this->_speed;
 }
 
-#undef turnTimer
 ObjectBarrel::ObjectBarrel(unsigned index, const Mod &base, const std::unordered_map<std::string, Weapon> &wList, const nlohmann::json &j)
 {
 	assert_exp(j.contains("weapons") && j["weapons"].is_array());
@@ -4945,7 +4927,7 @@ ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unord
 	assert_exp(!json.contains("fixed") || json["fixed"].is_boolean());
 	assert_exp(!json.contains("offset") || json["offset"].is_object());
 	assert_exp(!json.contains("recoil") || json["recoil"].is_number());
-	assert_exp(!json.contains("turn_delay") || json["turn_delay"].is_number());
+	assert_exp(!json.contains("turn_speed") || json["turn_speed"].is_number());
 	assert_exp(!json.contains("directions") || json["directions"].is_number());
 
 	size_t directions = parent->getDirections();
@@ -4962,8 +4944,8 @@ ObjectTurret::ObjectTurret(GameObject *parent, const Mod &base, const std::unord
 	assert_exp(parent->_barrels.size() > this->barrel);
 	assert_exp(parent->_barrels[this->barrel].turret == nullptr);
 	parent->_barrels[this->barrel].turret = this;
-	if (json.contains("turn_delay"))
-		this->turnDelay = json["turn_delay"].get<unsigned>() + 1;
+	if (json.contains("turn_speed"))
+		this->turnSpeed = json["turn_speed"];
 	if (json.contains("recoil"))
 		this->recoilMax = json["recoil"];
 	if (json.contains("fixed"))
@@ -4984,7 +4966,9 @@ ObjectTurret::ObjectTurret(GameObject *parent, const ObjectTurret &other) :
 	this->offset = other.offset;
 	this->barrel = other.barrel;
 	parent->_barrels[this->barrel].turret = this;
-	this->direction = other.direction;
+	this->angle = other.angle;
+	this->targetAngle = other.targetAngle;
+	this->turnSpeed = other.turnSpeed;
 	this->recoilTimer = other.recoilTimer;
 	this->recoilMax = other.recoilMax;
 }
@@ -4999,41 +4983,31 @@ void ObjectTurret::attack()
 void ObjectTurret::update()
 {
 	if (this->fixed)
-		this->direction = this->parent->getDirection() * this->anims.size() / this->parent->getDirections();
+		this->angle = static_cast<float>(this->parent->getFacingAngle());
 	if (this->recoilTimer)
 		this->recoilTimer--;
 	if (this->independent) {
 		if (this->shotTimer == 0 && this->parent->getDirections() != 1)
-			this->directionTarget = this->parent->getDirection() * this->anims.size() / this->parent->getDirections();
+			this->targetAngle = static_cast<float>(this->parent->getFacingAngle());
 		else
 			this->shotTimer--;
 	}
 	if (!this->fixed) {
-		if (this->direction != this->directionTarget) {
-			unsigned delay = this->fast ? this->turnDelay : this->turnDelay * 8;
+		float step = (this->fast ? this->turnSpeed : this->turnSpeed / 8.f) * static_cast<float>(M_PI) / 180.f;
 
-			this->turnTimer++;
-			if (this->turnTimer >= delay) {
-				size_t diff = (this->direction - this->directionTarget + this->anims.size()) % this->anims.size();
-
-				this->turnTimer = 0;
-				if (diff >= this->anims.size() / 2)
-					this->direction = (this->direction + 1) % this->anims.size();
-				else
-					this->direction = (this->direction - 1 + this->anims.size()) % this->anims.size();
-			}
-		} else
+		if (rotateTowards(this->angle, this->targetAngle, step))
 			this->fast = false;
 	}
 }
 
 void ObjectTurret::render(int layer)
 {
-	double angle = M_PI * 2 * this->direction / this->anims.size() - M_PI_2 - M_PI;
+	unsigned direction = angleToDirection(this->angle, this->anims.size());
+	double recoilAngle = this->angle - M_PI;
 	Vector2d recoilOffset = {(std::log(this->recoilMax + 1) - std::log(this->recoilMax + 1 - this->recoilTimer)) * 2, 0};
 
-	if (this->anims[this->direction].getLayer() == layer)
-		this->parent->_displayAnim(this->anims[this->direction].getAnim(), this->offset + recoilOffset.rotation(angle, {0, 0}));
+	if (this->anims[direction].getLayer() == layer)
+		this->parent->_displayAnim(this->anims[direction].getAnim(), this->offset + recoilOffset.rotation(recoilAngle, {0, 0}));
 }
 
 ObjectDeathParams::ObjectDeathParams(
@@ -5311,7 +5285,7 @@ void GameObject::pushUserType(sol::state &state)
 	type["altitude"] = sol::property(&GameObject::getAltitude, &GameObject::setAltitude);
 	type["ignores_terrain"] = sol::property(&GameObject::ignoresTerrain);
 	type["directions"] = sol::property(&GameObject::getDirections);
-	type["facing_angle"] = sol::property(&GameObject::getFacingAngle);
+	type["facing_angle"] = sol::property(&GameObject::getFacingAngle, &GameObject::setDirection);
 	type["direction"] = sol::property(&GameObject::getDirection, &GameObject::setDirection);
 	type["in_object"] = sol::property(&GameObject::isInObject);
 	type["hitbox_center"] = sol::property(&GameObject::getHitboxCenter);

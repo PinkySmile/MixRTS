@@ -119,11 +119,13 @@ public:
 		CURSOR_SELL,
 		CURSOR_NUKE,
 		CURSOR_AIR_DROP,
+		CURSOR_EXPLODE,
 		CURSOR_COUNT,
 
 		CURSOR_SCROLL_DIFF = CURSOR_NO_SCROLL_RIGHT - CURSOR_SCROLL_RIGHT,
 	};
 	static std::string cursorToString(Cursor snd);
+	static Cursor stringToCursor(const std::string &str);
 
 	struct StartBuildEvent {
 		std::string id;
@@ -290,7 +292,6 @@ protected:
 	tgui::Panel::Ptr _panel = tgui::Panel::create();
 	std::array<std::string, CURSOR_COUNT> _cursorMapping;
 	std::unordered_map<std::string, CursorAnimation> _cursors;
-	std::optional<std::string> _cursorName;
 	Cursor _cursor = CURSOR_NORMAL;
 	Vector2f _minimapPos;
 	Vector2f _minimapSize;

@@ -64,7 +64,7 @@ Weapon::Weapon(
 	this->_warhead = &warheads.at(warhead);
 
 	if (data.contains("cursor"))
-		this->_cursor = data["cursor"];
+		this->_cursor = UI::stringToCursor(data["cursor"]);
 	if (data.contains("air"))
 		this->_air = data["air"];
 	if (data.contains("ground"))
@@ -101,7 +101,7 @@ Weapon::Weapon(
 	}
 }
 
-const std::optional<std::string> &Weapon::getCursor() const
+const std::optional<UI::Cursor> &Weapon::getCursor() const
 {
 	return this->_cursor;
 }

@@ -194,11 +194,94 @@ std::string UI::cursorToString(Cursor cur)
 		return "CURSOR_NUKE";
 	case CURSOR_AIR_DROP:
 		return "CURSOR_AIR_DROP";
+	case CURSOR_EXPLODE:
+		return "CURSOR_EXPLODE";
 	case CURSOR_COUNT:
 		return "CURSOR_COUNT";
 	default:
 		return "Invalid cursor " + std::to_string(cur);
 	}
+}
+
+UI::Cursor UI::stringToCursor(const std::string &str)
+{
+	if (str == "normal")
+		return CURSOR_NORMAL;
+	if (str == "start_select")
+		return CURSOR_START_SELECT;
+	if (str == "move")
+		return CURSOR_MOVE;
+	if (str == "move_restrict")
+		return CURSOR_MOVE_RESTRICT;
+	if (str == "no_move")
+		return CURSOR_NO_MOVE;
+	if (str == "select")
+		return CURSOR_SELECT;
+	if (str == "harvest")
+		return CURSOR_HARVEST;
+	if (str == "attack")
+		return CURSOR_ATTACK;
+	if (str == "attack_move")
+		return CURSOR_ATTACK_MOVE;
+	if (str == "enter")
+		return CURSOR_ENTER;
+	if (str == "dump")
+		return CURSOR_DUMP;
+	if (str == "scroll_all_dirs")
+		return CURSOR_SCROLL_ALL_DIRS;
+	if (str == "scroll_right")
+		return CURSOR_SCROLL_RIGHT;
+	if (str == "scroll_left")
+		return CURSOR_SCROLL_LEFT;
+	if (str == "scroll_top")
+		return CURSOR_SCROLL_TOP;
+	if (str == "scroll_top_right")
+		return CURSOR_SCROLL_TOP_RIGHT;
+	if (str == "scroll_top_left")
+		return CURSOR_SCROLL_TOP_LEFT;
+	if (str == "scroll_bottom")
+		return CURSOR_SCROLL_BOTTOM;
+	if (str == "scroll_bottom_right")
+		return CURSOR_SCROLL_BOTTOM_RIGHT;
+	if (str == "scroll_bottom_left")
+		return CURSOR_SCROLL_BOTTOM_LEFT;
+	if (str == "no_scroll_right")
+		return CURSOR_NO_SCROLL_RIGHT;
+	if (str == "no_scroll_left")
+		return CURSOR_NO_SCROLL_LEFT;
+	if (str == "no_scroll_top")
+		return CURSOR_NO_SCROLL_TOP;
+	if (str == "no_scroll_top_right")
+		return CURSOR_NO_SCROLL_TOP_RIGHT;
+	if (str == "no_scroll_top_left")
+		return CURSOR_NO_SCROLL_TOP_LEFT;
+	if (str == "no_scroll_bottom")
+		return CURSOR_NO_SCROLL_BOTTOM;
+	if (str == "no_scroll_bottom_right")
+		return CURSOR_NO_SCROLL_BOTTOM_RIGHT;
+	if (str == "no_scroll_bottom_left")
+		return CURSOR_NO_SCROLL_BOTTOM_LEFT;
+	if (str == "deploy")
+		return CURSOR_DEPLOY;
+	if (str == "no_deploy")
+		return CURSOR_NO_DEPLOY;
+	if (str == "primary")
+		return CURSOR_PRIMARY;
+	if (str == "no_repair")
+		return CURSOR_NO_REPAIR;
+	if (str == "repair")
+		return CURSOR_REPAIR;
+	if (str == "no_sell")
+		return CURSOR_NO_SELL;
+	if (str == "sell")
+		return CURSOR_SELL;
+	if (str == "nuke")
+		return CURSOR_NUKE;
+	if (str == "air_drop")
+		return CURSOR_AIR_DROP;
+	if (str == "explode")
+		return CURSOR_EXPLODE;
+	assert_not_reached_msg("Invalid cursor \"" + str + "\"");
 }
 
 void UI::pushUserType(sol::state &state)
@@ -564,19 +647,11 @@ void UI::_setCursorMapping(Cursor cursor, const std::string &name)
 
 CursorAnimation &UI::_getCurrentCursor()
 {
-	std::unordered_map<std::string, CursorAnimation>::iterator it;
-
-	if (!this->forcedCursor && this->_cursorName) {
-		it = this->_cursors.find(*this->_cursorName);
-		if (it != this->_cursors.end())
-			return it->second;
-	}
-
 	Cursor cursor = !game->paused && this->forcedCursor ? *this->forcedCursor : this->_cursor;
 	assert_exp(cursor < CURSOR_COUNT);
-	auto &cursorName = this->_cursorMapping[cursor];
+	const std::string &cursorName = this->_cursorMapping[cursor];
+	auto it = this->_cursors.find(cursorName);
 
-	it = this->_cursors.find(cursorName);
 	assert_msg(it != this->_cursors.end(), cursorName);
 	return it->second;
 }
@@ -641,7 +716,6 @@ void UI::_updateCursorNormal()
 
 	Vector2i pos = this->map->absToTileCoord(this->_placementPos);
 
-	this->_cursorName.reset();
 	if (!this->_objectBuffer.empty()) {
 		// TODO: Handle non snap-to-grid units/buildings
 		if (this->state->selectedObjects.size() == 1) {
@@ -676,8 +750,9 @@ void UI::_updateCursorNormal()
 				const ObjectWeapon *w = obj->getBestWeaponFor(other, UINT32_MAX, false);
 
 				if (w) {
-					this->_cursor = CURSOR_ATTACK;
-					this->_cursorName = w->weapon->getCursor();
+					auto cursor = w->weapon->getCursor();
+
+					this->_cursor = cursor ? *cursor : CURSOR_ATTACK;
 					return;
 				}
 			}
@@ -779,7 +854,6 @@ void UI::_updateCursorSell()
 void UI::_updateCursor()
 {
 	if (this->_placementBuilding != nullptr) {
-		this->_cursorName.reset();
 		if (!this->_placementBuilding->getTileData()) {
 			const auto &queueId = this->_placementBuilding->getBuildQueue();
 
@@ -793,7 +867,7 @@ void UI::_updateCursor()
 					it->second.unitSpawn == FactionQueue::SPAWN_PLACEMENT &&
 					it->second.cursor
 				)
-					this->_cursorName = *it->second.cursor;
+					this->_cursor = *it->second.cursor;
 			}
 		} else
 			this->_cursor = CURSOR_NORMAL;
@@ -805,7 +879,6 @@ void UI::_updateCursor()
 		static_cast<unsigned>(this->_placementPos.x) >= this->map->gridSize.x * this->map->tileSize.x ||
 		static_cast<unsigned>(this->_placementPos.y) >= this->map->gridSize.y * this->map->tileSize.y
 	) {
-		this->_cursorName.reset();
 		this->_cursor = CURSOR_NORMAL;
 		return;
 	}
@@ -1223,7 +1296,6 @@ void UI::onCancel(Vector2i absPos)
 void UI::mouseOnUi()
 {
 	this->_cursor = CURSOR_NORMAL;
-	this->_cursorName.reset();
 }
 
 void UI::_displaySelectBox(Vector2i top, Vector2u size)

@@ -39,7 +39,7 @@ Every object definition contains the following core properties:
 	"anims": string[],                                // Default animation identifiers associated with this object.
 	"speed": float?,                                  // Base movement speed of the object.
 	"directions": uint?,                              // Number of rotational directions for rendering (must be divisible by 8).
-	"turn_delay": uint?,                              // Interval delay between directional turns.
+	"turn_speed": float?,                             // Degrees the object can turn per frame (default: 360, which turns instantly).
 	"sight": uint?,                                   // Vision range radius on the map.
 	"altitude": int?,                                 // Vertical elevation offset for rendering and collision.
 	"limit": uint?,                                   // Maximum instance count allowed per faction/player.
@@ -176,7 +176,7 @@ Defines conversion rules when deploying a unit into a structure.
 
 ```jsonc
 {
-	"direction": float?,                   // Required unit facing direction for deployment.
+	"direction": float?,                   // Facing required to deploy, in degrees clockwise from up (0 = north).
 	"spawn_building": SpawnBuildingObject? // Properties of the building created upon deployment.
 }
 ```
@@ -283,7 +283,7 @@ Configures resource unloading timings and animation sequences.
 
 ```jsonc
 {
-	"dir": uint,                         // Direction facing required for dumping resources.
+	"dir": float,                        // Facing required to dump, in degrees clockwise from up (0 = north).
 	"delay": uint,                       // Processing delay per resource dumping tick.
 	"delay_after": uint,                 // Post-dumping delay before returning to operation.
 	"during": ConditionalAnimObject,     // Animation displayed continuously during dumping.
@@ -366,6 +366,7 @@ Configures rotating turret assemblies mounted on the object.
 ```jsonc
 {
 	"fixed": boolean?,             // Prevents independent rotation if set to true.
+	"turn_speed": float?,          // Degrees the turret can turn per frame (default: 360, which turns instantly). Divided by 8 while it is not tracking a target.
 	"anims": ConditionalAnimObject // Directional animation sets used to render the turret.
 }
 ```

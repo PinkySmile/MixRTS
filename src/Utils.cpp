@@ -5,6 +5,7 @@
 #ifdef __GNUG__
 #include <cxxabi.h>
 #endif
+#include <cmath>
 #include "Utils.hpp"
 #include "Resources/Assert.hpp"
 
@@ -110,6 +111,41 @@ Color HSLColor::toRGB() const
 	};
 
 	return Color(f(0) * 255, f(8) * 255, f(4) * 255, 255);
+}
+
+unsigned angleToDirection(double angle, size_t count)
+{
+	if (count <= 1)
+		return 0;
+
+	double scaled = (angle + M_PI_2) * static_cast<double>(count) / (M_PI * 2);
+	auto index = static_cast<long long>(std::llround(scaled));
+	auto directions = static_cast<long long>(count);
+
+	index %= directions;
+	if (index < 0)
+		index += directions;
+	return static_cast<unsigned>(index);
+}
+
+double normalizeAngle(double angle)
+{
+	angle = std::fmod(angle + M_PI, M_PI * 2);
+	if (angle < 0)
+		angle += M_PI * 2;
+	return angle - M_PI;
+}
+
+bool rotateTowards(float &angle, float target, float maxStep)
+{
+	double delta = normalizeAngle(static_cast<double>(target) - angle);
+
+	if (std::abs(delta) <= static_cast<double>(maxStep)) {
+		angle = target;
+		return true;
+	}
+	angle = static_cast<float>(normalizeAngle(angle + std::copysign(static_cast<double>(maxStep), delta)));
+	return false;
 }
 
 std::string getLastExceptionName()

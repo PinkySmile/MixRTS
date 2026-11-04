@@ -13,6 +13,7 @@
 #include "Sprite.hpp"
 #include "MultiSound.hpp"
 #include "SharedLibrary.hpp"
+#include "UI/UI.hpp"
 
 
 struct MYDLL_API StartObject {
@@ -55,7 +56,7 @@ struct MYDLL_API FactionQueue {
 	bool requiresProducer;
 	Type behavior;
 	Spawn unitSpawn;
-	std::optional<std::string> cursor;
+	std::optional<UI::Cursor> cursor;
 	std::map<float, float, std::greater<>> powerMul;
 	std::map<unsigned, float, std::greater<>> producerMul;
 	std::optional<StarportParams> starportParams;

@@ -142,9 +142,7 @@ void Projectile::update()
 		this->_hit();
 
 	float angle = this->_position.angle(this->_targetPos);
-	unsigned direction = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
-	direction %= this->_anims.size();
-	auto &anim = this->_anims[direction];
+	auto &anim = this->_anims[angleToDirection(angle, this->_anims.size())];
 
 	if (anim())
 		anim.update();
@@ -202,9 +200,7 @@ void Projectile::_displayAnim(Animation &anim, Vector2f offset) const
 void Projectile::render(int layer)
 {
 	float angle = this->_position.angle(this->_targetPos);
-	unsigned direction = round((angle + M_PI_2 + M_PI * 2) * this->_anims.size() / (M_PI * 2));
-	direction %= this->_anims.size();
-	auto &anim = this->_anims[direction];
+	auto &anim = this->_anims[angleToDirection(angle, this->_anims.size())];
 
 	if (anim.getLayer() == layer && anim())
 		this->_displayAnim(anim.getAnim());
