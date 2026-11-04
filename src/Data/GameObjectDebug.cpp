@@ -131,6 +131,11 @@ namespace
 			return "Attack(target=" + this->obj(o.target) + (o.automatic ? ", auto" : "") + (o.force ? ", force" : "") + ")";
 		}
 
+		std::string operator()(const AttackPosOrder &o) const
+		{
+			return "AttackPos(target=" + vec(o.target) + ")";
+		}
+
 		std::string operator()(const FinishMovementOrder &) const
 		{
 			return "FinishMovement";

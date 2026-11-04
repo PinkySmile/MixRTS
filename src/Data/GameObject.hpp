@@ -93,6 +93,10 @@ struct MYDLL_API AttackUnitOrder {
 	bool automatic;
 	bool force;
 };
+//! Missile flight: climb until above the map, reappear above \a target, then fall onto it.
+struct MYDLL_API AttackPosOrder {
+	Vector2f target;
+};
 typedef std::variant<
 	SpinOrder,
 	TurnOrder,
@@ -103,6 +107,7 @@ typedef std::variant<
 	DumpOrder,
 	MoveCheckOrder,
 	AttackUnitOrder,
+	AttackPosOrder,
 	FinishMovementOrder,
 	PickupOrder,
 	WaitPickupOrder,
@@ -334,6 +339,11 @@ public:
 		static void pushUserType(sol::state &state);
 	};
 
+	enum Behavior {
+		BEHAVIOR_NORMAL,
+		BEHAVIOR_MISSILE,
+	};
+
 	unsigned index;
 	AnimationState animationState;
 	PathFindingGrid *pfGrid = nullptr;
@@ -461,6 +471,17 @@ protected:
 	int _altitude = 0;
 	int _power = 0;
 	float _speed = 0;
+	//! Missile only: each shot is aimed at the target offset by up to this much on both axes.
+	float _inaccuracy = 0;
+	unsigned _spawnDelay = 0;
+	//! Missile only: how many volleys to fire once the missile reaches its target.
+	unsigned _shootRounds = 1;
+	//! Volleys left to fire while the missile is dying.
+	unsigned _missileRoundsLeft = 0;
+	Vector2f _missileTarget;
+	Behavior _behavior = BEHAVIOR_NORMAL;
+	//! True once the missile has reappeared above its target and is falling toward it.
+	bool _missileDescending = false;
 	float _alpha = 1;
 	PFFreeMask _currentTilePosition;
 	unsigned char _buildMaxDistance = 0;
@@ -474,7 +495,6 @@ protected:
 	bool _firstEvent = true;
 	bool _firstREvent = true;
 	bool _firstIEvent = true;
-	bool _initGrid = false;
 	bool _registered = false;
 	bool _stackable = false;
 	bool _solid = true;
@@ -562,6 +582,7 @@ public:
 	void harvest(const Vector2i &pos, bool automatic, bool straight = false);
 	void harvest();
 	void attack(GameObject *obj, bool automatic, bool force);
+	void attackPos(Vector2f target);
 	void moveOut(const Vector2i &pos);
 	//! \param ignore Object that is never considered an obstacle on the way (e.g. the building a unit just came out of).
 	void moveTo(const Vector2i &pos, MoveReason reason, bool straight = false, GameObject *ignore = nullptr);
@@ -595,6 +616,7 @@ public:
 	void disconnectFrom(const GameObject *object);
 	void disposeOf();
 
+	[[nodiscard]] bool boundToGrid() const;
 	[[nodiscard]] bool countsForGame() const;
 	[[nodiscard]] bool countsForShortGame() const;
 	[[nodiscard]] const ObjectWeapon *getBestWeaponFor(const GameObject *, unsigned barrel, bool isFree) const;
@@ -719,6 +741,7 @@ protected:
 	std::vector<ObjectTurret> _turrets;
 	std::unordered_map<std::string, std::vector<ObjectBarrel *>> _barrelByTag;
 	std::unordered_map<std::string, std::vector<ObjectWeapon *>> _weaponByTag;
+	bool _initGrid = false;
 
 	[[nodiscard]] Vector2f _getTileOffsetFromCenter() const;
 	//! Point weapon ranges are measured from.
@@ -758,6 +781,7 @@ protected:
 	bool _updateOrder(const DumpOrder &order);
 	bool _updateOrder(const DeployOrder &order);
 	bool _updateOrder(const AttackUnitOrder &order);
+	bool _updateOrder(const AttackPosOrder &order);
 	bool _updateOrder(const SpinOrder &order);
 	bool _updateOrder(const PickupOrder &order);
 	bool _updateOrder(const WaitPickupOrder &order);
@@ -768,6 +792,10 @@ protected:
 	bool _updateOrder(Order &order);
 
 	void _reduceTimeControlTimer(unsigned dec);
+	//! Starts the death animation, effects and spawned units. Missile objects are not removed immediately.
+	void _die(DamageType type);
+	//! Fires one volley from every barrel that is ready. One volley is every ready barrel in this frame.
+	void _updateMissileShots();
 	void _spawnUnits(const std::unordered_map<std::string, unsigned> &units);
 	void _harvestClosestResource();
 	void _dumpInClosestResourceDump();

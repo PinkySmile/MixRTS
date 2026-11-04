@@ -575,6 +575,8 @@ int main(int argc, char **argv)
 		}
 		return 0;
 	} CPPTRACE_CATCH(const std::exception &e) {
+		if (args.loadingOnly)
+			game->screen->close();
 	#ifdef NO_TRACE
 		handleCrash({}, e);
 	#else

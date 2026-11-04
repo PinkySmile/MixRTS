@@ -21,6 +21,7 @@ FactionQueue::FactionQueue(const Mod &base, const nlohmann::json &data)
 	assert_exp(data.contains("requires_producer") && data["requires_producer"].is_boolean());
 	assert_exp(data.contains("behavior") && data["behavior"].is_string());
 	assert_exp(data.contains("unit_spawn") && data["unit_spawn"].is_string());
+	assert_exp(!data.contains("cursor") || data["cursor"].is_string());
 	assert_exp(!data.contains("power_mul") || data["power_mul"].is_array());
 	assert_exp(!data.contains("producer_mul") || data["producer_mul"].is_array());
 
@@ -50,6 +51,8 @@ FactionQueue::FactionQueue(const Mod &base, const nlohmann::json &data)
 	else
 		assert_not_reached_msg("Invalid queue unit_spawn");
 
+	if (data.contains("cursor"))
+		this->cursor = data["cursor"];
 	if (data.contains("loader")) {
 		assert_exp(data.contains("loader") && data["loader"].is_string());
 		this->loader.emplace(base.getBase() / data["loader"].get<std::string>());
@@ -465,6 +468,7 @@ void FactionQueue::pushUserType(sol::state &state)
 	type["behavior"] = &FactionQueue::behavior;
 	type["requires_producer"] = &FactionQueue::requiresProducer;
 	type["unit_spawn"] = &FactionQueue::unitSpawn;
+	type["cursor"] = &FactionQueue::cursor;
 	type["starport_params"] = &FactionQueue::starportParams;
 	type["delivery"] = &FactionQueue::delivery;
 }

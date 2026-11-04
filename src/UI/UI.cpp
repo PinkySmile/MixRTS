@@ -108,6 +108,12 @@ std::string UI::EVAToString(EVASound snd)
 		return "EVA_HAZARD_SPAWNED";
 	case EVA_HAZARD_ATTACKED:
 		return "EVA_HAZARD_ATTACKED";
+	case EVA_NUKE_PREP:
+		return "EVA_NUKE_PREP";
+	case EVA_NUKE_LAUNCH:
+		return "EVA_NUKE_LAUNCH";
+	case EVA_NUKE_READY:
+		return "EVA_NUKE_READY";
 	default:
 		return "Invalid EVA " + std::to_string(snd);
 	}
@@ -184,6 +190,10 @@ std::string UI::cursorToString(Cursor cur)
 		return "CURSOR_NO_SELL";
 	case CURSOR_SELL:
 		return "CURSOR_SELL";
+	case CURSOR_NUKE:
+		return "CURSOR_NUKE";
+	case CURSOR_AIR_DROP:
+		return "CURSOR_AIR_DROP";
 	case CURSOR_COUNT:
 		return "CURSOR_COUNT";
 	default:
@@ -768,17 +778,38 @@ void UI::_updateCursorSell()
 
 void UI::_updateCursor()
 {
+	if (this->_placementBuilding != nullptr) {
+		this->_cursorName.reset();
+		if (!this->_placementBuilding->getTileData()) {
+			const auto &queueId = this->_placementBuilding->getBuildQueue();
+
+			this->_cursor = CURSOR_ATTACK;
+			if (queueId) {
+				auto &queues = this->_faction.getQueues();
+				auto it = queues.find(*queueId);
+
+				if (
+					it != queues.end() &&
+					it->second.unitSpawn == FactionQueue::SPAWN_PLACEMENT &&
+					it->second.cursor
+				)
+					this->_cursorName = *it->second.cursor;
+			}
+		} else
+			this->_cursor = CURSOR_NORMAL;
+		return;
+	}
+#ifdef _DEBUG
 	if (
-		this->_placementBuilding != nullptr
-	#ifdef _DEBUG
-		|| this->_placementPos.x < 0 || this->_placementPos.y < 0 ||
+		this->_placementPos.x < 0 || this->_placementPos.y < 0 ||
 		static_cast<unsigned>(this->_placementPos.x) >= this->map->gridSize.x * this->map->tileSize.x ||
 		static_cast<unsigned>(this->_placementPos.y) >= this->map->gridSize.y * this->map->tileSize.y
-	#endif
 	) {
+		this->_cursorName.reset();
 		this->_cursor = CURSOR_NORMAL;
 		return;
 	}
+#endif
 	this->_objectBuffer.clear();
 	this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer, true, [this](const GameObject *obj) {
 		// Stealthed enemies can't be hovered, selected nor targeted.
@@ -830,7 +861,8 @@ void UI::_displayPlacementPreview()
 	bool tooFar = this->_isSelectionTooFar();
 	auto gridPos = this->map->absToTileCoord(this->_placementPos);
 
-	assert_exp(tileData);
+	if (!tileData)
+		return;
 	for (size_t y = 0; y < tileData->size(); y++) {
 		auto &line = (*tileData)[y];
 
@@ -882,6 +914,26 @@ void UI::_handleTryPlace()
 	auto &placement = this->_faction.getPlacementCursors();
 	bool foundGood = false;
 
+	if (!tileData) {
+		auto gridPos = this->map->absToTileCoord(this->_placementPos);
+
+		if (
+			gridPos.x < 0 || gridPos.y < 0 ||
+			static_cast<size_t>(gridPos.x) >= this->map->gridSize.x ||
+			static_cast<size_t>(gridPos.y) >= this->map->gridSize.y
+		) {
+			this->playEVA(EVA_CANNOT_BUILD, 600, 2, 60, "");
+			return;
+		}
+		assert_exp(this->_placementBuilding->getBuildQueue());
+		this->_eventQueue.emplace_back(PlaceBuildEvent{
+			this->_placementBuilding->getId(),
+			*this->_placementBuilding->getBuildQueue(),
+			sf::Vector2u(this->_placementPos.x, this->_placementPos.y)
+		});
+		this->_placementBuilding = nullptr;
+		return;
+	}
 	if (placement[0].empty())
 		return;
 	if (this->_isSelectionTooFar()) {
@@ -1171,6 +1223,7 @@ void UI::onCancel(Vector2i absPos)
 void UI::mouseOnUi()
 {
 	this->_cursor = CURSOR_NORMAL;
+	this->_cursorName.reset();
 }
 
 void UI::_displaySelectBox(Vector2i top, Vector2u size)

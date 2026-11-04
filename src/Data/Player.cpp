@@ -106,7 +106,7 @@ bool CustomQueueDll::update(PlayerQueue &entry)
 
 bool CustomQueueDll::update(PlayerQueueEntry *entry)
 {
-	if (this->_update)
+	if (this->_updateEntry)
 		return this->_updateEntry(*this, entry);
 	return true;
 }
@@ -127,14 +127,14 @@ bool CustomQueueDll::handleStartBuildEvent(PlayerQueueEntry *entry, const UI::St
 
 bool CustomQueueDll::handlePlaceBuildEvent(PlayerQueueEntry *entry, const UI::PlaceBuildEvent &event)
 {
-	if (this->_handleStartBuildEvent)
+	if (this->_handlePlaceBuildEvent)
 		return this->_handlePlaceBuildEvent(*this, entry, event);
 	return true;
 }
 
 bool CustomQueueDll::handleCancelBuildEvent(PlayerQueueEntry *entry, const UI::CancelBuildEvent &event)
 {
-	if (this->_handleStartBuildEvent)
+	if (this->_handleCancelBuildEvent)
 		return this->_handleCancelBuildEvent(*this, entry, event);
 	return true;
 }

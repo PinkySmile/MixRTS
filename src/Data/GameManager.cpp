@@ -1076,9 +1076,7 @@ GameObject *GameManager::_spawnExtra(GameObject &parent, const ExtraSpawn &extra
 
 void GameManager::_onObjectSpawned(Vector2i pos, GameObject &obj)
 {
-	auto p = obj.map->topLeftCoordToAbs(pos);
-
-	obj.spawn(p);
+	obj.spawn(pos);
 	for (auto &order : obj.getSpawnOrders())
 		this->_pushOrder(obj, order);
 
@@ -1183,12 +1181,13 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 
 			Vector2i fullPos = {static_cast<int>(pos.x + x), static_cast<int>(pos.y + y)};
 			auto fullPosAbs = map.tileCoordToAbs(fullPos);
+			auto fullPosTl = map.topLeftCoordToAbs(fullPos);
 
 			if (
 				line[x].placementConcrete &&
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				map.hasAllGridBits(fullPos, GRIDMASK_CAN_BUILD) &&
-				this->isAreaFree(map.topLeftCoordToAbs(fullPos), map.tileSize, {}, false, true)
+				this->isAreaFree(fullPosTl, map.tileSize, {}, false, true)
 			) {
 				// OPTIMIZE: Can use a reference instead of calling helpers
 				this->_map.grid.setGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
@@ -1196,7 +1195,7 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 					m.setGridBits(fullPosAbs, GRIDMASK_HAS_CONCRETE);
 				this->_liveObjects.push_back(std::make_unique<GameObject>(concBase));
 				this->_initObject(map, player, *this->_liveObjects.back());
-				this->_onObjectSpawned(fullPos, *this->_liveObjects.back());
+				this->_onObjectSpawned(fullPosTl, *this->_liveObjects.back());
 			}
 		}
 	}
@@ -1221,7 +1220,7 @@ noGrid:
 			auto spawn = parent->getSpawnOffset();
 
 			if (spawn) {
-				pos = map.absToTileCoord(*spawn + parent->getPosition());
+				absPos = *spawn + parent->getPosition();
 				if (exit) {
 					auto next = *exit + parent->getPosition();
 
@@ -1231,7 +1230,7 @@ noGrid:
 				}
 			}
 		}
-		this->_onObjectSpawned(pos, *obj);
+		this->_onObjectSpawned(absPos, *obj);
 
 		auto &gqueue = obj->getGivenQueue();
 		auto &bqueue = obj->getBuildQueue();

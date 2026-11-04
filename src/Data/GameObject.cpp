@@ -460,7 +460,6 @@ GameObject::GameObject(const GameObject &g) :
 		for (auto &anim : animVec)
 			this->_anims.back().emplace_back(this, anim);
 	}
-
 	if (!this->_idleAnims.empty())
 		this->_idleTimer = random_distrib(game->gameRandom, this->_idleTimerRange.first, this->_idleTimerRange.second);
 
@@ -507,6 +506,9 @@ GameObject::GameObject(
 	assert_exp(!json.contains("build") || json["build"].is_string());
 	assert_exp(!json.contains("speed") || json["speed"].is_number());
 	assert_exp(!json.contains("behavior") || json["behavior"].is_object());
+	assert_exp(!json.contains("missile") || json["missile"].is_boolean());
+	assert_exp(!json.contains("shoot_rounds") || json["shoot_rounds"].is_number_unsigned());
+	assert_exp(!json.contains("inaccuracy") || json["inaccuracy"].is_number());
 	assert_exp(!json.contains("limit") || json["limit"].is_number_unsigned());
 	assert_exp(json.contains("hp") && json["hp"].is_number());
 	assert_exp(json.contains("cost") && json["cost"].is_object());
@@ -570,6 +572,7 @@ GameObject::GameObject(
 	assert_exp(!json.contains("repair_delay") || json["repair_delay"].is_number());
 	assert_exp(!json.contains("repair_heal") || json["repair_heal"].is_number());
 	assert_exp(!json.contains("repair_cost") || json["repair_cost"].is_object());
+	assert_exp(!json.contains("spawn_delay") || json["spawn_delay"].is_number_unsigned());
 	if (json.contains("connected")) {
 		assert_exp(json["connected"].is_object());
 		assert_exp(json["connected"].contains("type") && json["connected"]["type"].is_string());
@@ -707,6 +710,8 @@ GameObject::GameObject(
 	}
 	if (json.contains("spawn_params"))
 		this->_spawnParams = { json["spawn_params"] };
+	if (json.contains("spawn_delay"))
+		this->_spawnDelay = json["spawn_delay"];
 	if (json.contains("altitude"))
 		this->_altitude = json["altitude"];
 	if (json.contains("lower_power_when_damaged"))
@@ -786,6 +791,12 @@ GameObject::GameObject(
 		this->_canCrush = json["can_crush"];
 	if (json.contains("speed"))
 		this->_speed = json["speed"];
+	if (json.contains("shoot_rounds"))
+		this->_shootRounds = json["shoot_rounds"];
+	if (json.contains("inaccuracy")) {
+		this->_inaccuracy = json["inaccuracy"];
+		assert_msg(this->_inaccuracy >= 0, "\"inaccuracy\" must be >= 0");
+	}
 	if (json.contains("gives_queue"))
 		this->_giveQueue = RESOURCE(base.getName(), json["gives_queue"]);
 	if (json.contains("storage"))
@@ -1136,6 +1147,16 @@ GameObject::GameObject(
 			return a->priority < b->priority;
 		});
 	assert_msg(!this->_moveWhileTurn || (!this->_boundToGrid && this->_ignoreTerrain), "move_while_turn only works if the unit isn't bound to grid, and ignores terrain");
+	if (json.contains("missile") && json["missile"].get<bool>()) {
+		this->_behavior = BEHAVIOR_MISSILE;
+		this->_solid = false;
+		this->_selectable = false;
+		this->_autoAttack = false;
+		this->_triggersAutoAttack = false;
+		this->_ignoreTerrain = true;
+		assert_msg(json.contains("death"), "A missile object needs a \"death\" block");
+		assert_msg(!this->_barrels.empty(), "A missile object needs at least one barrel");
+	}
 }
 
 GameObject::~GameObject() = default;
@@ -2113,7 +2134,7 @@ bool GameObject::_updateOrder(const MoveCheckOrder &order)
 		auto front = this->_orderQueue.front();
 
 		this->_orderQueue.pop_front();
-		(this->*order.fail)();
+		(this->*std::get<MoveCheckOrder>(front).fail)();
 		this->_orderQueue.push_front(front);
 	}
 	return true;
@@ -2435,6 +2456,45 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 	return false;
 }
 
+bool GameObject::_updateOrder(const AttackPosOrder &order)
+{
+	if (this->_behavior != BEHAVIOR_MISSILE)
+		return true;
+	if (this->_firstEvent) {
+		this->_missileTarget = order.target;
+		this->_missileDescending = false;
+	}
+
+	auto pos = this->_position;
+
+	if (!this->_missileDescending) {
+		pos.y -= this->_speed;
+		// Offscreen once the bottom of the sprite is above the top of the map.
+		if (this->_position.y - static_cast<float>(this->_size.y) < 0) {
+			pos.x = (this->_missileTarget - this->_size / 2).x;
+			this->_missileDescending = true;
+		}
+		this->setPosition(pos);
+		return false;
+	}
+
+	// anim_move plays while _moving is set (the falling sprite).
+	this->_moving = true;
+	pos.y += this->_speed;
+	if (pos.y <= this->_missileTarget.y) {
+		this->setPosition(pos);
+		return false;
+	}
+	// setHealth(0) would announce the unit as lost.
+	this->_hp = 0;
+	this->animationState.health = 0;
+	if (this->_deathSound)
+		this->_deathSound->play(this->_position + this->_size / 2);
+	this->_missileRoundsLeft = this->_shootRounds;
+	this->_die(DMGTYPE_GENERIC);
+	return true;
+}
+
 bool GameObject::_updateOrder(const SpinOrder &order)
 {
 	if (this->_firstEvent)
@@ -2711,17 +2771,23 @@ void GameObject::playBuiltSound(Vector2f pos) const
 
 void GameObject::update()
 {
+	if (this->_spawnDelay) {
+		this->_spawnDelay--;
+		return;
+	}
 	if (this->_pickup && this->_pickup->isDisposable())
 		this->_pickup = nullptr;
 	if (this->_deathAnim) {
 		if (this->_animFinished || !this->_deathAnim->anim || this->_deathAnim->anim->update())
 			this->_animFinished = true;
+		if (this->_missileRoundsLeft)
+			this->_updateMissileShots();
 		if (this->_deathAnim->stayTime && this->_gpTimerU[3] < *this->_deathAnim->stayTime)
 			this->_gpTimerU[3]++;
 		else if (this->_deathAnim->fadeTime && this->_gpTimerU[2] < *this->_deathAnim->fadeTime) {
 			this->_gpTimerU[2]++;
 			this->_alpha = static_cast<float>(*this->_deathAnim->fadeTime - this->_gpTimerU[2]) / *this->_deathAnim->fadeTime;
-		} else if (this->_animFinished)
+		} else if (this->_animFinished && this->_missileRoundsLeft == 0)
 			this->_disposable = true;
 		return;
 	}
@@ -2934,6 +3000,8 @@ void GameObject::drawSkirt() const
 
 void GameObject::render(int layer)
 {
+	if (this->_spawnDelay)
+		return;
 	if (this->_repairing && this->_repairAnim && (*this->_repairAnim)())
 		this->_displayAnim(this->_repairAnim->getAnim(), this->_size / 2);
 	if (this->_deathAnim) {
@@ -3175,8 +3243,15 @@ void GameObject::damage(unsigned amount, DamageType type)
 	this->_reduceTimeControlTimer(this->_timeDecOnAtk);
 	if (!this->isDead())
 		return;
+	this->_die(type);
+}
+
+void GameObject::_die(DamageType type)
+{
 	if (this->_deathAnims.empty() || type == DMGTYPE_VOID) {
-		this->_disposable = true;
+		// A missile that still has volleys to fire stays until those are done.
+		if (this->_behavior != BEHAVIOR_MISSILE || this->_missileRoundsLeft == 0)
+			this->_disposable = true;
 		return;
 	}
 	this->deinitGlobalGrid();
@@ -3250,6 +3325,57 @@ void GameObject::damage(unsigned amount, DamageType type)
 		}
 	}
 	this->_spawnUnits(this->_deathAnim->units);
+}
+
+void GameObject::_updateMissileShots()
+{
+	bool fired = false;
+	Vector2f spawnPos = this->_position - Vector2i{0, this->_altitude} + this->_size / 2;
+	int inaccuracy = static_cast<int>(this->_inaccuracy);
+
+	for (auto &barrel : this->_barrels) {
+		if (barrel.shootTimer != 0) {
+			barrel.shootTimer--;
+			continue;
+		}
+		if (barrel.weapons.empty())
+			continue;
+
+		ObjectWeapon &objectWeapon = barrel.weapons.front();
+		const Weapon *weapon = objectWeapon.weapon;
+		const MultiSound *sound = weapon->getSound();
+		const Effect *effect = weapon->getEffect();
+		Vector2f targetPos = this->_missileTarget;
+
+		targetPos.x += random_distrib(game->gameRandom, -inaccuracy, inaccuracy);
+		targetPos.y += random_distrib(game->gameRandom, -inaccuracy, inaccuracy);
+		barrel.shootTimer = objectWeapon.cooldown;
+		fired = true;
+		if (sound)
+			sound->play(spawnPos);
+		if (effect)
+			this->manager->spawnEffect(*effect, spawnPos, this->owner);
+		switch (weapon->getType()) {
+		case WEAPONTYPE_HITSCAN: {
+			const Effect *hitEffect = weapon->getHitEffect();
+
+			if (hitEffect)
+				this->manager->spawnEffect(*hitEffect, targetPos, this->owner);
+			this->manager->weaponUsedAt(weapon->getDamage(), weapon, targetPos, this->owner->state.index);
+			break;
+		}
+		case WEAPONTYPE_PROJECTILE:
+			this->manager->spawnProjectile(this, weapon, spawnPos, nullptr, targetPos);
+			break;
+		case WEAPONTYPE_ENTER:
+			assert_not_reached_msg("Missile barrels cannot use weapons of type \"enter\"");
+			break;
+		default:
+			assert_not_reached();
+		}
+	}
+	if (fired)
+		this->_missileRoundsLeft--;
 }
 
 void GameObject::setHealth(unsigned health)
@@ -3841,6 +3967,11 @@ void GameObject::attack(GameObject *obj, bool automatic, bool force)
 	this->_orderQueue.emplace_back(AttackUnitOrder{.target = obj, .automatic = automatic, .force = force});
 }
 
+void GameObject::attackPos(Vector2f target)
+{
+	this->_orderQueue.emplace_back(AttackPosOrder{target});
+}
+
 void GameObject::moveOut(const Vector2i &pos)
 {
 	this->_orderQueue.emplace_back(MoveOrder{
@@ -4057,6 +4188,8 @@ void GameObject::clearPrimaryDump()
 
 void GameObject::initGlobalGrid()
 {
+	if (this->_behavior == BEHAVIOR_MISSILE)
+		return;
 	if (this->_initGrid)
 		return;
 	if (this->_altitude)
@@ -4491,7 +4624,10 @@ void GameObject::spawn(const Vector2f &spawnPoint)
 	Vector2i gridPos = this->map->absToTileCoord(pos);
 	Vector2f off = this->_tiles ? Vector2f{0, 0} : this->_getTileOffsetFromCenter() + this->map->tileSize / 2;
 
-	this->setPosition(this->map->topLeftCoordToAbs(gridPos) + off);
+	if (this->_boundToGrid || this->_tiles)
+		this->setPosition(this->map->topLeftCoordToAbs(gridPos) + off);
+	else
+		this->setPosition(pos + off);
 	if (pos != spawnPoint)
 		this->moveTo(spawnPoint, MOVEREASON_MOVE_SPAWN);
 }
@@ -4570,6 +4706,11 @@ void GameObject::disconnectFrom(const GameObject *object)
 void GameObject::disposeOf()
 {
 	this->deinitGlobalGrid();
+}
+
+bool GameObject::boundToGrid() const
+{
+	return this->_boundToGrid || this->_tiles; // TODO
 }
 
 bool GameObject::countsForGame() const
@@ -5132,6 +5273,7 @@ void GameObject::pushUserType(sol::state &state)
 		sol::resolve<void()>(&GameObject::harvest)
 	);
 	type["attack"] = &GameObject::attack;
+	type["attack_pos"] = &GameObject::attackPos;
 	type["move_out"] = &GameObject::moveOut;
 	type["move_to"] = &GameObject::moveTo;
 	type["move_aside"] = &GameObject::moveAside;
