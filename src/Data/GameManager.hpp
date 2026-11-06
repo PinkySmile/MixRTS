@@ -111,6 +111,18 @@ public:
 	MapResource &getResource(Vector2i pos);
 	void consumeResource(Vector2i pos);
 	void centerCameraOn(Vector2f pos);
+	//! Sets the camera zoom: 1 is the native resolution, 2 shows everything twice as big, 0.5 twice as small.
+	void setCameraZoom(float zoom);
+	[[nodiscard]] float getCameraZoom() const;
+	//! Position, in the world, of what is displayed in the top left corner of the screen.
+	[[nodiscard]] Vector2f getCameraTranslate() const;
+	//! Size, in world units, of the part of the screen that isn't covered by the UI at the current zoom.
+	[[nodiscard]] Vector2f getVisibleSize() const;
+	//! Centers the camera in the middle of the (not covered by the UI) viewport on the rectangle
+	//! starting at \a topLeft and of size \a size, and picks the biggest zoom (between \a minZoom
+	//! and \a maxZoom) that fits all of it, plus \a margin world units on each side, in the viewport.
+	//! Contrary to centerCameraOn(), the camera is not kept inside the map.
+	void fitCameraTo(Vector2f topLeft, Vector2f size, float margin = 0, float minZoom = 0.05f, float maxZoom = 4.f);
 	float initUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map);
 	void deinitUnitTiles(const std::vector<std::vector<BuildingMask>> &tiles, Vector2i pos, MapState &map);
 	std::pair<std::string, unsigned> convertResource(const std::string &source, const std::vector<std::string> &expected, unsigned value);

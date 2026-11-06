@@ -141,6 +141,7 @@ TEST_F(DebugToolsTests, WarheadHitIsRecordedWithItsTargets)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
+	this->focusCamera({attacker, target});
 	this->manager->debugOptions.warheads = true;
 	attacker->attack(target, false, true);
 	this->tick(5);
@@ -166,6 +167,7 @@ TEST_F(DebugToolsTests, WarheadsAreNotRecordedWhenDisabled)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
+	this->focusCamera({attacker, target});
 	attacker->attack(target, false, true);
 	this->tick(5);
 	EXPECT_EQ(target->getHealth(), target->getMaxHealth() - 100);
@@ -180,6 +182,7 @@ TEST_F(DebugToolsTests, PauseOnWarheadContactFreezesTheTickOfContact)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
+	this->focusCamera({attacker, target});
 	this->manager->debugOptions.pauseOnWarhead = true;
 	attacker->attack(target, false, true);
 	this->tick(120);
@@ -209,6 +212,7 @@ TEST_F(DebugToolsTests, EveryOverlayRendersWithoutCrashing)
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(homing, nullptr);
 	ASSERT_NE(target, nullptr);
+	this->focusCamera({attacker, homing, target});
 	this->player->uiState.selectedObjects.insert(attacker);
 	this->player->uiState.selectedObjects.insert(homing);
 	// The player UI (selection boxes...) is drawn by the mod's own shared library,

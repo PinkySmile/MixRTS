@@ -54,6 +54,7 @@ TEST_F(WeaponTests, HitscanDamagesTargetImmediately)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
+	this->focusCamera({attacker, target});
 
 	attacker->attack(target, false, true);
 	this->tick(5);
@@ -71,6 +72,7 @@ TEST_F(WeaponTests, BasicProjectileHitsStationaryTarget)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
+	this->focusCamera({attacker, target});
 
 	attacker->attack(target, false, true);
 	this->tick(60);
@@ -99,13 +101,14 @@ TEST_F(WeaponTests, BasicProjectileMissesWhenTargetTeleportsAway)
 	ASSERT_NE(target, nullptr);
 	ASSERT_NE(decoy, nullptr);
 
-	attacker->attack(target, false, true);
-	this->tick(1);
-
 	Vector2f dir = (targetStart - base).normalized();
 	Vector2f perp{-dir.y, dir.x};
 	Vector2u tileSize = this->getMcv()->map->tileSize;
 	Vector2f newPos = targetStart + perp * (tileSize.x * 5.f);
+
+	this->focusCamera({attacker, target, decoy, newPos});
+	attacker->attack(target, false, true);
+	this->tick(1);
 
 	placeAt(*target, newPos);
 	this->tick(60);
@@ -139,13 +142,14 @@ TEST_F(WeaponTests, HomingProjectileFollowsTeleportedTarget)
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
 
-	attacker->attack(target, false, true);
-	this->tick(1);
-
 	Vector2f dir = (targetStart - base).normalized();
 	Vector2f perp{-dir.y, dir.x};
 	Vector2u tileSize = this->getMcv()->map->tileSize;
 	Vector2f newPos = targetStart + perp * (tileSize.x * 5.f);
+
+	this->focusCamera({attacker, target, newPos});
+	attacker->attack(target, false, true);
+	this->tick(1);
 
 	placeAt(*target, newPos);
 	this->tick(150);
@@ -177,6 +181,8 @@ TEST_F(WeaponTests, HomingProjectileSelfDestructsWhenItCanNeverCatchUp)
 	ASSERT_NE(target, nullptr);
 	ASSERT_NE(bystanderFront, nullptr);
 	ASSERT_NE(bystanderBehind, nullptr);
+	// The target jumps between both of the places it was given.
+	this->focusCamera({attacker, bystanderFront, bystanderBehind, front, behind});
 
 	attacker->attack(target, false, true);
 
@@ -217,6 +223,9 @@ TEST_F(WeaponTests, MultiWeaponUnitPicksSingleBestWeaponPerTarget)
 	constexpr unsigned GROUND_WEAPON_DAMAGE = 50;
 	constexpr unsigned AIR_WEAPON_DAMAGE = 77;
 	Vector2f base{2000, 2000};
+
+	// Both rounds happen in the same place.
+	this->focusCamera({base, base + Vector2f{200, 0}});
 
 	{
 		GameObject *attacker = spawnAt(*this->manager, this->player->state.index, "test:atk_multi", base);
@@ -261,6 +270,7 @@ TEST_F(WeaponTests, OverlappingWeaponsOnSameBarrelFireOnlyOnePerShot)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
+	this->focusCamera({attacker, target});
 
 	attacker->attack(target, false, true);
 	this->tick(5);

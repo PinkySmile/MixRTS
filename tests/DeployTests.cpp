@@ -63,6 +63,7 @@ TEST_F(GameFixture, DeployingMcvBuildsConstructionYardAndUnlocksBuildings)
 			conyard = obj;
 
 	ASSERT_NE(conyard, nullptr) << "The MCV should have deployed into a construction yard";
+	this->focusCamera({conyard});
 	EXPECT_EQ(this->getMcv(), nullptr) << "The MCV should be gone once it has deployed";
 
 	ASSERT_TRUE(this->player->state.queues["d2k:building"].entries.contains("d2k:wtra"));

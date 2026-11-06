@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <vector>
 #include <unordered_map>
 #include <gtest/gtest.h>
 #include "Data/Animation.hpp"
@@ -20,6 +21,52 @@
 #include "Data/Warhead.hpp"
 #include "Data/Weapon.hpp"
 #include "Resources/Game.hpp"
+
+//! A part of the world that a test is about (see GameFixture::focusCamera()).
+//!
+//! It is a rectangle in world coordinates, that can be built from a point, a
+//! rectangle, an object (its whole hitbox) or a block of tiles. A region built
+//! from a null object is empty: it is ignored, so that tests can build their
+//! regions straight from spawnObject()'s result.
+struct FocusRegion {
+	Vector2f topLeft;
+	Vector2f size;
+	bool empty = false;
+
+	FocusRegion(Vector2f topLeft, Vector2f size) :
+		topLeft(topLeft),
+		size(size)
+	{
+	}
+
+	//! A single point (the margin given to GameFixture::focusCamera() is what gives it some room).
+	FocusRegion(Vector2f point) :
+		topLeft(point),
+		size(0, 0)
+	{
+	}
+
+	FocusRegion(const GameObject *object) :
+		topLeft(object ? object->getPosition().to<float>() : Vector2f{}),
+		size(object ? object->getSize().to<float>() : Vector2f{}),
+		empty(!object)
+	{
+	}
+
+	FocusRegion(const GameObject &object) :
+		FocusRegion(&object)
+	{
+	}
+
+	//! A block of \a count tiles, the first one being at \a tile.
+	static FocusRegion tiles(const MapState &map, Vector2i tile, Vector2u count = {1, 1})
+	{
+		return {
+			map.topLeftCoordToAbs(tile).to<float>(),
+			Vector2f(static_cast<float>(count.x * map.tileSize.x), static_cast<float>(count.y * map.tileSize.y))
+		};
+	}
+};
 
 //! Base fixture for tests that need to run an actual game simulation.
 //!
@@ -53,6 +100,19 @@ protected:
 	[[nodiscard]] GameObject *getMcv() const;
 
 	void tick(unsigned steps = 1);
+
+	//! Centers the camera on the middle of everything in \a regions, and zooms
+	//! as much as possible while still showing all of it (and \a margin more
+	//! pixels around it) in the part of the screen that isn't covered by the UI.
+	//! The camera is no longer kept inside the map afterward, so that what is
+	//! shown stays exactly centered, even close to the map's border.
+	//!
+	//! It is meant to show what a test is about on the video recorded by
+	//! --mode=record (or on the window of --mode=debug): call it again whenever
+	//! the interesting part of the test moves somewhere else. Every test starts
+	//! with the camera on the player's MCV (see SetUp()).
+	void focusCamera(const std::vector<FocusRegion> &regions, float margin = 64, float maxZoom = 3);
+
 	std::unique_ptr<GameManager> manager;
 	Player *player = nullptr;
 

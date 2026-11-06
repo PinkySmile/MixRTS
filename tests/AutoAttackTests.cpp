@@ -80,6 +80,7 @@ TEST_F(AutoAttackTests, IdleObjectShootsEnemyUnitInRange)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
+	this->focusCamera({attacker, target});
 
 	this->tick(ACQUIRE_TICKS);
 
@@ -97,6 +98,7 @@ TEST_F(AutoAttackTests, IdleObjectIgnoresEnemiesThatDoNotTrigger)
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(building, nullptr);
 	ASSERT_NE(plain, nullptr);
+	this->focusCamera({attacker, building, plain});
 
 	// Buildings placed without concrete start (and stay) damaged: take the
 	// reference once the building has settled instead of assuming full health.
@@ -119,6 +121,7 @@ TEST_F(AutoAttackTests, IdleObjectShootsEnemyTurretInRange)
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(turret, nullptr);
 	ASSERT_TRUE(turret->triggersAutoAttack());
+	this->focusCamera({attacker, turret});
 
 	this->tick(ACQUIRE_TICKS);
 
@@ -134,6 +137,7 @@ TEST_F(AutoAttackTests, IdleTurretShootsEnemyUnitInRange)
 
 	ASSERT_NE(turret, nullptr);
 	ASSERT_NE(unit, nullptr);
+	this->focusCamera({turret, unit});
 
 	this->tick(ACQUIRE_TICKS);
 
@@ -148,6 +152,8 @@ TEST_F(AutoAttackTests, IdleObjectOnlyShootsEnemiesInRange)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
+	// The target starts out of range, then comes in range.
+	this->focusCamera({attacker, target, this->base + Vector2f{IN_RANGE, 0}});
 
 	this->tick(ACQUIRE_TICKS);
 	EXPECT_EQ(target->getHealth(), target->getMaxHealth()) << "The target is out of range and the attacker can't move: nothing should happen";
@@ -165,6 +171,7 @@ TEST_F(AutoAttackTests, IdleObjectIgnoresAllies)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(ally, nullptr);
+	this->focusCamera({attacker, ally});
 
 	this->tick(ACQUIRE_TICKS);
 
@@ -182,6 +189,7 @@ TEST_F(AutoAttackTests, IdleObjectIgnoresEnemiesItCannotHit)
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(air, nullptr);
 	ASSERT_NE(ground, nullptr);
+	this->focusCamera({attacker, air, ground});
 
 	this->tick(ACQUIRE_TICKS);
 
@@ -199,6 +207,7 @@ TEST_F(AutoAttackTests, IdleObjectShootsClosestEnemy)
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(far, nullptr);
 	ASSERT_NE(close, nullptr);
+	this->focusCamera({attacker, far, close});
 
 	this->tick(ACQUIRE_TICKS);
 
@@ -217,6 +226,7 @@ TEST_F(AutoAttackTests, BusyObjectKeepsItsOrder)
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(ordered, nullptr);
 	ASSERT_NE(bystander, nullptr);
+	this->focusCamera({attacker, ordered, bystander});
 
 	attacker->attack(ordered, false, true);
 	this->tick(ACQUIRE_TICKS);
@@ -234,6 +244,8 @@ TEST_F(AutoAttackTests, IdleObjectDropsTargetThatLeavesAndLooksForNewOnes)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(first, nullptr);
+	// The first target leaves, and the second one shows up.
+	this->focusCamera({attacker, first, this->base + Vector2f{OUT_OF_RANGE, 0}, this->base + Vector2f{0, IN_RANGE}});
 
 	this->tick(ACQUIRE_TICKS);
 	ASSERT_EQ(this->damageTaken(first), SHOT_DAMAGE);

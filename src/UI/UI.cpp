@@ -1075,7 +1075,7 @@ void UI::_tileClickedNormal()
 			) {
 				if (obj->isDeployable()) {
 					if (!obj->canDeploy())
-						this->playEVA(UI::EVA_CANNOT_DEPLOY, 300, 2, 300, "");
+						this->playEVA(EVA_CANNOT_DEPLOY, 300, 2, 300, "");
 					else
 						this->_eventQueue.emplace_back(DeployUnitEvent{obj->index});
 					return;
@@ -1126,7 +1126,7 @@ void UI::_tileClickedNormal()
 				continue;
 
 			for (auto &o : this->_objectBuffer)
-				if (s->canAttack(o)) {
+				if (o->owner->state.team != s->owner->state.team && s->canAttack(o)) {
 					auto &a = attack[o->index];
 
 					a.target = o->index;

@@ -22,6 +22,18 @@
 #include "Debug/DebugOverlay.hpp"
 #include "Debug/DebugPanel.hpp"
 
+// TODO: Hardcoded UI offsets. Size, in GUI pixels (to be multiplied by guiScale), of the
+// sidebar covering the right of the screen and of the bar covering the top of it.
+static constexpr float UI_SIDEBAR_WIDTH = 160;
+static constexpr float UI_TOP_BAR_HEIGHT = 20;
+
+static Vector2f getScreenSize()
+{
+	auto size = game->screen->getSize();
+
+	return {static_cast<float>(size.x), static_cast<float>(size.y)};
+}
+
 static bool isMouseOverUI()
 {
 	Vector2i pos = game->screen->getMousePosition();
@@ -187,14 +199,15 @@ void GameManager::_checkScroll()
 		this->_cameraTranslate.x += SCROLL_SPEED;
 	}
 
-	size /= this->_cameraZoom;
-	// TODO: Hardcoded UI offset
-	size.x -= 160 * guiScale;
+	Vector2f visible = this->getVisibleSize();
+
+	// The vertical size also includes the part covered by the top bar, which the camera is allowed to scroll under.
+	visible.y = static_cast<float>(size.y) / this->_cameraZoom;
 	if (this->debugOptions.limitCamera) {
-		this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, static_cast<float>(this->_map.grid.gridSize.x) * this->_map.grid.tileSize.x - size.x);
-		this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, static_cast<float>(this->_map.grid.gridSize.y) * this->_map.grid.tileSize.y - size.y);
+		this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, static_cast<float>(this->_map.grid.gridSize.x) * this->_map.grid.tileSize.x - visible.x);
+		this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, static_cast<float>(this->_map.grid.gridSize.y) * this->_map.grid.tileSize.y - visible.y);
 		this->_cameraTranslate.x = std::max<float>(this->_cameraTranslate.x, 0);
-		this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -20 * guiScale);
+		this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -UI_TOP_BAR_HEIGHT * guiScale / this->_cameraZoom);
 	}
 	if (cursor != UI::CURSOR_SCROLL_ALL_DIRS) {
 		if (old == this->_cameraTranslate)
@@ -207,7 +220,7 @@ void GameManager::_checkScroll()
 		for (auto &u : p.getUIs())
 			if (u)
 				u->forcedCursor.reset();
-	game->soundMgr.setCamera(this->_cameraTranslate + size / 2, size);
+	game->soundMgr.setCamera(this->_cameraTranslate + visible / 2, visible);
 }
 
 void GameManager::_updateStealthDetection()
@@ -595,8 +608,8 @@ void GameManager::render()
 	game->screen->setView(sf::View{sf::FloatRect{
 		this->_cameraTranslate + extraTranslate,
 		sf::Vector2f{
-			old.getSize().x * this->_cameraZoom,
-			old.getSize().y * this->_cameraZoom
+			old.getSize().x / this->_cameraZoom,
+			old.getSize().y / this->_cameraZoom
 		}
 	}});
 	if (opts.showTerrain) {
@@ -1894,21 +1907,76 @@ const GameManager::LobbySettings &GameManager::getSettings() const
 
 void GameManager::centerCameraOn(Vector2f target)
 {
-	Vector2u size = game->screen->getSize();
+	Vector2f screenSize = getScreenSize();
+	Vector2f size = {
+		(screenSize.x - UI_SIDEBAR_WIDTH * guiScale) / this->_cameraZoom,
+		(screenSize.y - UI_TOP_BAR_HEIGHT * guiScale) / this->_cameraZoom
+	};
 
-	// TODO: Hardcoded UI offset
-	size /= this->_cameraZoom;
-	size.x -= 160 * guiScale;
-	size.y -= 20 * guiScale;
 	this->_cameraTranslate = {
 		target.x - size.x / 2,
-		target.y - size.y / 2 + 20 * guiScale
+		target.y - size.y / 2 + UI_TOP_BAR_HEIGHT * guiScale / this->_cameraZoom
 	};
 	this->_cameraTranslate.x = std::min<float>(this->_cameraTranslate.x, static_cast<float>(this->_map.grid.gridSize.x) * this->_map.grid.tileSize.x - size.x);
 	this->_cameraTranslate.y = std::min<float>(this->_cameraTranslate.y, static_cast<float>(this->_map.grid.gridSize.y) * this->_map.grid.tileSize.y - size.y);
 	this->_cameraTranslate.x = std::max<float>(this->_cameraTranslate.x, 0);
-	this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -20 * guiScale);
+	this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -UI_TOP_BAR_HEIGHT * guiScale / this->_cameraZoom);
 	game->soundMgr.setCamera(this->_cameraTranslate + size / 2, size);
+}
+
+void GameManager::setCameraZoom(float zoom)
+{
+	assert_exp(zoom > 0);
+	this->_cameraZoom = zoom;
+}
+
+float GameManager::getCameraZoom() const
+{
+	return this->_cameraZoom;
+}
+
+Vector2f GameManager::getCameraTranslate() const
+{
+	return this->_cameraTranslate;
+}
+
+Vector2f GameManager::getVisibleSize() const
+{
+	Vector2f screenSize = getScreenSize();
+
+	return {
+		(screenSize.x - UI_SIDEBAR_WIDTH * guiScale) / this->_cameraZoom,
+		(screenSize.y - UI_TOP_BAR_HEIGHT * guiScale) / this->_cameraZoom
+	};
+}
+
+void GameManager::fitCameraTo(Vector2f topLeft, Vector2f size, float margin, float minZoom, float maxZoom)
+{
+	assert_exp(minZoom > 0 && minZoom <= maxZoom);
+
+	Vector2f screenSize = getScreenSize();
+	// What is left of the screen once the UI is out of the way. The camera is placed
+	// relative to the screen, so this area goes from (0, topBar) to (width - sidebar, height).
+	Vector2f viewport = {
+		screenSize.x - UI_SIDEBAR_WIDTH * guiScale,
+		screenSize.y - UI_TOP_BAR_HEIGHT * guiScale
+	};
+	Vector2f viewportCenter = {
+		viewport.x / 2,
+		UI_TOP_BAR_HEIGHT * guiScale + viewport.y / 2
+	};
+	Vector2f wanted = {
+		std::max(size.x + margin * 2, 1.f),
+		std::max(size.y + margin * 2, 1.f)
+	};
+	Vector2f target = topLeft + size / 2.f;
+
+	this->_cameraZoom = std::clamp(std::min(viewport.x / wanted.x, viewport.y / wanted.y), minZoom, maxZoom);
+	this->_cameraTranslate = target - viewportCenter / this->_cameraZoom;
+
+	Vector2f visible = this->getVisibleSize();
+
+	game->soundMgr.setCamera(this->_cameraTranslate + visible / 2, visible);
 }
 
 void ShakeParams::pushUserType(sol::state &state)

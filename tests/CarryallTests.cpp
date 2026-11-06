@@ -88,6 +88,8 @@ TEST_F(GameFixture, CarryallHarvestOrderIsCarriedToSpiceField)
 	ASSERT_NE(carryall, nullptr);
 	ASSERT_NE(harvester, nullptr);
 	ASSERT_GE(Vector2i(farTile).distance(spiceTile) * map.tileSize.x, CARRYALL_PICKUP_DIST) << "The harvester needs to be far enough away for a pickup to be expected";
+	// The carryall flies to the harvester, then both of them go to the spice field.
+	this->focusCamera({carryall, harvester, FocusRegion::tiles(map, spiceTile)});
 
 	Vector2i spiceAbs = tileCenterAbs(map, spiceTile);
 	auto *mockedUi = installMockedUI(*this->player);
@@ -154,6 +156,8 @@ TEST_F(GameFixture, CarryallDumpOrderIsCarriedToRefinery)
 	auto *mockedUi = installMockedUI(*this->player);
 
 	mockedUi->orderQueue.emplace_back(UI::DumpUnitEvent{{harvester->index}, refinery->index});
+	// The carryall flies to the harvester, then both of them go to the refinery.
+	this->focusCamera({carryall, harvester, refinery});
 
 	bool wasCarried = false;
 	bool reachedDumpTile = false;
@@ -196,6 +200,8 @@ TEST_F(GameFixture, CarryallLandingSpotBlockedByUnitPicksAnotherTile)
 	auto *mockedUi = installMockedUI(*this->player);
 
 	mockedUi->orderQueue.emplace_back(UI::HarvestUnitEvent{{harvester->index}, Vector2u(spiceAbs.to<unsigned>())});
+	// The carryall flies to the harvester and brings it back to the spice, where the trike goes too.
+	this->focusCamera({carryall, harvester, trike, FocusRegion::tiles(map, spiceTile)});
 
 	// Let the pickup actually start (carryall commits to flying towards the
 	// harvester) before moving the trike in: the carryall is a long way off
@@ -263,6 +269,9 @@ TEST_F(GameFixture, CarryallLandingSpotBlockedByBuildingsPicksAnotherTile)
 	Vector2i dumpTile = map.absToTileCoord(refinery->getPosition() + refinery->getPoint());
 	auto *mockedUi = installMockedUI(*this->player);
 
+	// The carryall brings the harvester that came with the refinery to it.
+	this->focusCamera({carryall, harvester, FocusRegion::tiles(map, refineryTile, {7, 7})});
+
 	// Wait for harvester to be delivered
 	for (unsigned i = 0; i < 4000 && harvester->isBeingPickedUp(); i++)
 		this->tick();
@@ -272,11 +281,13 @@ TEST_F(GameFixture, CarryallLandingSpotBlockedByBuildingsPicksAnotherTile)
 	auto old = harvester->getPosition();
 
 	mockedUi->orderQueue.emplace_back(UI::MoveUnitEvent{{harvester->index}, old + Vector2f{700, 0}});
+	// The harvester goes away from the refinery.
+	this->focusCamera({carryall, harvester, FocusRegion::tiles(map, refineryTile, {7, 7}), Vector2f(old + Vector2i{700, 0})});
 	for (unsigned i = 0; i < 4000 && harvester->getPosition().x - old.x < 500; i++)
 		this->tick();
 	ASSERT_TRUE(harvester->getPosition().x - old.x >= 500) << "The harvester should be far";
 
-	// Wait for harvester to be picked up
+	// Wait for harvester to be picked up (from where it stands, to the refinery)
 	mockedUi->orderQueue.emplace_back(UI::DumpUnitEvent{{harvester->index}, refinery->index});
 	for (unsigned i = 0; i < 4000 && !harvester->isBeingPickedUp(); i++)
 		this->tick();
@@ -335,6 +346,8 @@ TEST_F(GameFixture, BusyCarryallIsNotAssignedToASecondPickup)
 	Vector2i harvester2Start = harvester2->getPosition();
 	auto *mockedUi = installMockedUI(*this->player);
 
+	this->focusCamera({carryall, harvester1, harvester2, FocusRegion::tiles(map, spiceTile)});
+
 	mockedUi->orderQueue.emplace_back(UI::HarvestUnitEvent{{harvester1->index}, Vector2u(spiceAbs.to<unsigned>())});
 	this->tick(20);
 	ASSERT_TRUE(harvester1->isBeingPickedUp()) << "The first harvester's pickup should have already started";
@@ -392,6 +405,8 @@ TEST_F(GameFixture, BuildingCanBePlacedUnderAFlyingCarryall)
 	Vector2i conyardTile = map.absToTileCoord(conyard->getPosition());
 	Vector2i placementTile = findFreeBuildableTile(*this->manager, map, conyardTile, 1, {2, 2});
 	Vector2i placementAbs = map.topLeftCoordToAbs(placementTile);
+
+	this->focusCamera({conyard, FocusRegion::tiles(map, placementTile, {2, 2})});
 
 	ASSERT_TRUE(this->manager->canSpawnBuilding(this->player->state.index, placementAbs, "d2k:wtra", {}))
 		<< "Setup issue: the wind trap should be placeable there before the carryall shows up";

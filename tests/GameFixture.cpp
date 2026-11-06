@@ -2,6 +2,8 @@
 // Created for the MixRTS test target.
 //
 
+#include <algorithm>
+#include <optional>
 #include "GameFixture.hpp"
 #include "Resources/Assert.hpp"
 
@@ -27,6 +29,11 @@ void GameFixture::SetUpTestSuite()
 	if (_game)
 		return;
 
+	// The real game scales the views (and so the UI) by guiScale, see reloadViews() in
+	// src/main.cpp. Nothing does in the tests, so the UI is displayed at its native size.
+	// Keep guiScale consistent with that, or the part of the screen the UI covers
+	// (see GameManager::fitCameraTo()) would be wrong.
+	guiScale = 1;
 	// Deliberately leaked, see the comment on the declaration in GameFixture.hpp.
 	_game = new Game("assets/NotoSans-Regular.ttf", _mode, _video, _size);
 	game->modManager.loadMod("mods/dune2000/");
@@ -52,6 +59,35 @@ void GameFixture::SetUp()
 	this->manager->addPlayer(0, HSLColor{214, 375, 919}, 0, 0);
 	this->player = &this->manager->getPlayers()[0];
 	this->player->setEnabled(true);
+	// Tests that are about something else than the player's base move the camera themselves.
+	this->focusCamera({this->getMcv()});
+}
+
+void GameFixture::focusCamera(const std::vector<FocusRegion> &regions, float margin, float maxZoom)
+{
+	assert_exp(this->manager);
+
+	std::optional<Vector2f> min;
+	std::optional<Vector2f> max;
+
+	for (auto &region : regions) {
+		if (region.empty)
+			continue;
+
+		Vector2f bottomRight = region.topLeft + region.size;
+
+		if (!min) {
+			min = region.topLeft;
+			max = bottomRight;
+			continue;
+		}
+		min = Vector2f{std::min(min->x, region.topLeft.x), std::min(min->y, region.topLeft.y)};
+		max = Vector2f{std::max(max->x, bottomRight.x), std::max(max->y, bottomRight.y)};
+	}
+	if (!min)
+		return;
+	this->manager->debugOptions.limitCamera = false;
+	this->manager->fitCameraTo(*min, *max - *min, margin, 0.05f, maxZoom);
 }
 
 GameObject *GameFixture::getMcv() const

@@ -99,6 +99,7 @@ TEST_F(StealthTests, PermanentStealthIsHiddenFromEnemiesOnly)
 	ASSERT_NE(theirs, nullptr);
 	ASSERT_NE(mine, nullptr);
 	ASSERT_NE(plain, nullptr);
+	this->focusCamera({theirs, mine, plain});
 	this->tick(1);
 
 	EXPECT_EQ(theirs->getStealthState(), STEALTH_CLOAKED);
@@ -119,6 +120,8 @@ TEST_F(StealthTests, AutoAttackIgnoresHiddenEnemiesUntilRevealed)
 
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
+	// The revealer shows up next to the target later.
+	this->focusCamera({attacker, target});
 
 	this->tick(ACQUIRE_TICKS);
 	EXPECT_EQ(target->getHealth(), target->getMaxHealth()) << "Hidden enemies must be left alone";
@@ -140,6 +143,7 @@ TEST_F(StealthTests, AttackStopsWhenTargetCloaksAgain)
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(target, nullptr);
 	ASSERT_NE(revealer, nullptr);
+	this->focusCamera({attacker, target, revealer});
 
 	// Revealed by the revealer, which can then be targeted
 	this->tick(2);
@@ -171,6 +175,7 @@ TEST_F(StealthTests, StealthAndCamouflageAreRevealedByDifferentObjects)
 
 	ASSERT_NE(detector, nullptr);
 	ASSERT_NE(revealer, nullptr);
+	this->focusCamera({attacker, stealth, camo, detector, revealer});
 	this->tick(ACQUIRE_TICKS);
 	EXPECT_TRUE(this->hiddenFromUs(stealth)) << "A detector doesn't reveal stealth";
 	EXPECT_TRUE(this->hiddenFromUs(camo)) << "A reveal_stealth object doesn't reveal camouflage";
@@ -199,6 +204,8 @@ TEST_F(StealthTests, DetectorHasARange)
 
 	ASSERT_NE(camo, nullptr);
 	ASSERT_NE(detector, nullptr);
+	// Only the places the detector is moved to matter, not where it starts.
+	this->focusCamera({camo, this->base + Vector2f{ADJACENT * 5, 0}});
 
 	// The detector has a radius of 3 tiles
 	placeAt(*detector, this->base + Vector2f{ADJACENT * 5, 0});
@@ -220,6 +227,7 @@ TEST_F(StealthTests, ObjectsWithoutAutoAttackOnlyShootWhenTold)
 	ASSERT_NE(manual, nullptr);
 	ASSERT_NE(automatic, nullptr);
 	ASSERT_NE(target, nullptr);
+	this->focusCamera({manual, automatic, target});
 	EXPECT_FALSE(manual->autoAttacks());
 	EXPECT_TRUE(automatic->autoAttacks()) << "Auto attack is on by default";
 
@@ -242,6 +250,7 @@ TEST_F(StealthTests, FiringKeepsTheShooterVisible)
 	ASSERT_NE(shooter, nullptr);
 	ASSERT_NE(victim, nullptr);
 	ASSERT_TRUE(this->hiddenFromUs(shooter));
+	this->focusCamera({shooter, victim});
 
 	bool fired = false;
 
@@ -265,6 +274,8 @@ TEST_F(StealthTests, FiringKeepsTheShooterVisible)
 
 	// Stops shooting
 	placeAt(*victim, this->base + Vector2f{0, 1000});
+	// The victim runs away.
+	this->focusCamera({shooter, victim});
 	this->tick(25);
 	EXPECT_FALSE(this->hiddenFromUs(shooter)) << "Less than 50 ticks since the last shot";
 	this->tick(35);
@@ -280,6 +291,7 @@ TEST_F(StealthTests, ProximityRevealIsTemporary)
 
 	ASSERT_NE(stealth, nullptr);
 	ASSERT_NE(revealer, nullptr);
+	this->focusCamera({stealth, revealer});
 	this->tick(5);
 	ASSERT_TRUE(this->hiddenFromUs(stealth));
 
@@ -323,6 +335,7 @@ TEST_F(StealthTests, RevealedAgainDoesNotResetTheTimer)
 	ASSERT_NE(stealth, nullptr);
 	ASSERT_NE(revealer, nullptr);
 	ASSERT_NE(second, nullptr);
+	this->focusCamera({stealth, revealer, second});
 	this->tick(2);
 
 	placeAt(*revealer, this->base + Vector2f{ADJACENT, 0});
@@ -344,6 +357,7 @@ TEST_F(StealthTests, DamagedObjectFailsToCloakAndFlickers)
 	ASSERT_NE(stealth, nullptr);
 	ASSERT_NE(attacker, nullptr);
 	ASSERT_NE(revealer, nullptr);
+	this->focusCamera({stealth, attacker, revealer});
 	// Under half of the health: red
 	stealth->setHealth(400);
 
@@ -372,6 +386,7 @@ TEST_F(StealthTests, DamagedObjectWithCertainRecloakChanceCloaks)
 
 	ASSERT_NE(stealth, nullptr);
 	ASSERT_NE(revealer, nullptr);
+	this->focusCamera({stealth, revealer});
 	stealth->setHealth(400);
 	this->tick(40);
 
@@ -386,6 +401,7 @@ TEST_F(StealthTests, TemporaryStealthChargesActivatesAndWearsOff)
 	GameObject *stealth = this->spawnTheirs("test:stealth_temp", this->base);
 
 	ASSERT_NE(stealth, nullptr);
+	this->focusCamera({stealth});
 	this->tick(1);
 
 	EXPECT_EQ(stealth->getStealthState(), STEALTH_VISIBLE);
@@ -429,6 +445,7 @@ TEST_F(StealthTests, CancelableStealthCanBeEndedByHand)
 	GameObject *stealth = this->spawnTheirs("test:stealth_temp", this->base);
 
 	ASSERT_NE(stealth, nullptr);
+	this->focusCamera({stealth});
 	this->tick(40);
 	ASSERT_TRUE(stealth->canDeploy());
 	stealth->deploy();
@@ -451,6 +468,7 @@ TEST_F(StealthTests, StealthThatIsNotCancelableRunsOut)
 	GameObject *stealth = this->spawnTheirs("test:stealth_temp_locked", this->base);
 
 	ASSERT_NE(stealth, nullptr);
+	this->focusCamera({stealth});
 	this->tick(40);
 	ASSERT_TRUE(stealth->canDeploy());
 	stealth->deploy();
@@ -473,6 +491,7 @@ TEST_F(StealthTests, TemporaryStealthIsRevealedWhileRevealersAreClose)
 	GameObject *stealth = this->spawnTheirs("test:stealth_temp", this->base);
 
 	ASSERT_NE(stealth, nullptr);
+	this->focusCamera({stealth});
 	this->tick(40);
 	ASSERT_TRUE(stealth->canDeploy());
 	stealth->deploy();
@@ -482,6 +501,8 @@ TEST_F(StealthTests, TemporaryStealthIsRevealedWhileRevealersAreClose)
 	GameObject *revealer = this->spawnNextTo("test:revealer", stealth);
 
 	ASSERT_NE(revealer, nullptr);
+	// The revealer leaves again at the end.
+	this->focusCamera({stealth, revealer, this->base + Vector2f{0, 400}});
 	this->tick(2);
 	EXPECT_FALSE(this->hiddenFromUs(stealth));
 	EXPECT_EQ(stealth->getStealthState(), STEALTH_CLOAKED) << "Still cloaked, only seen by those who are close";
@@ -501,6 +522,8 @@ TEST_F(StealthTests, FiringEndsTemporaryStealth)
 
 	ASSERT_NE(stealth, nullptr);
 	ASSERT_NE(victim, nullptr);
+	// Only where the victim shows up matters, not where it waits.
+	this->focusCamera({stealth, this->base + Vector2f{IN_RANGE, 0}});
 	this->tick(40);
 	ASSERT_TRUE(stealth->canDeploy());
 	stealth->deploy();
@@ -524,6 +547,7 @@ TEST_F(StealthTests, DamagedTemporaryStealthFlickersUntilItWearsOff)
 	GameObject *stealth = this->spawnTheirs("test:stealth_temp_damaged", this->base);
 
 	ASSERT_NE(stealth, nullptr);
+	this->focusCamera({stealth});
 	stealth->setHealth(400);
 	this->tick(2);
 	ASSERT_TRUE(stealth->canDeploy());
@@ -556,6 +580,7 @@ TEST_F(StealthTests, DrawingStealthedObjectsInEveryStateWorks)
 	ASSERT_NE(enemyFlicker, nullptr);
 	ASSERT_NE(theirRevealer, nullptr);
 	ASSERT_NE(myRevealer, nullptr);
+	this->focusCamera({ally, allyTransparent, enemyObj, enemyFlicker, theirRevealer, myRevealer});
 	enemyFlicker->setHealth(100);
 	this->tick(5);
 	for (unsigned i = 0; i < 4; i++) {

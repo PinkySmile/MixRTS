@@ -68,6 +68,7 @@ TEST_F(GameFixture, TwoHarvestersDoNotFightOverTheSameTile)
 		// Don't let the spawn order ("harvest") start doing its own thing.
 		h->clearOrders();
 	}
+	this->focusCamera({harvesters[0], harvesters[1], FocusRegion::tiles(map, spiceTile)});
 	// Spawn (and the free harvester that may come with other buildings) aside,
 	// the ones above are the only harvesters on the map.
 	ASSERT_EQ(this->player->getObjects("d2k:harv").size(), 2);
@@ -129,6 +130,7 @@ TEST_F(GameFixture, TwoTrikesToSameTileOnlyOneArrives)
 
 	for (auto *t : trikes)
 		ASSERT_NE(t, nullptr);
+	this->focusCamera({trikes[0], trikes[1], FocusRegion::tiles(map, target)});
 	for (auto *t : trikes)
 		t->moveTo(tileCenterAbs(map, target), MOVEREASON_MOVE_COMMAND);
 
@@ -185,6 +187,7 @@ TEST_F(GameFixture, TwoAdjacentTrikesMeetingInTheMiddleOnlyOneStarts)
 
 	for (auto *t : trikes)
 		ASSERT_NE(t, nullptr);
+	this->focusCamera({FocusRegion::tiles(map, left, {3, 1})});
 
 	std::array<Vector2i, 2> start = {trikes[0]->getPosition(), trikes[1]->getPosition()};
 
@@ -231,6 +234,7 @@ namespace {
 //! not be considered as an obstacle on that trip.
 void checkFactoryUnitLeavesTheBuilding(
 	GameManager &manager, Player &player, MapState &map, const std::function<void()> &tick,
+	const std::function<void(const std::vector<FocusRegion> &)> &focus,
 	const std::string &factoryId, const std::string &queue, const std::string &unitId
 ) {
 	Vector2i spiceTile = findResourceTile(map);
@@ -251,6 +255,7 @@ void checkFactoryUnitLeavesTheBuilding(
 
 	ASSERT_NE(unit, nullptr) << "The factory should have been able to spawn a unit";
 	ASSERT_EQ(unit->getOccupiedTile(), spawnTile) << "The unit should appear on the factory's spawn tile";
+	focus({factory, unit, FocusRegion::tiles(map, spawnTile), FocusRegion::tiles(map, exitTile)});
 
 	Vector2i start = unit->getPosition();
 	bool moved = false;
@@ -274,13 +279,13 @@ void checkFactoryUnitLeavesTheBuilding(
 //! tile to its exit tile, both blocked by the building itself.
 TEST_F(GameFixture, LightFactoryUnitMovesFromSpawnPointToExit)
 {
-	checkFactoryUnitLeavesTheBuilding(*this->manager, *this->player, *this->getMcv()->map, [this] { this->tick(); }, "d2k:a_lfac", "d2k:light_vehicle", "d2k:trik");
+	checkFactoryUnitLeavesTheBuilding(*this->manager, *this->player, *this->getMcv()->map, [this] { this->tick(); }, [this](const std::vector<FocusRegion> &regions) { this->focusCamera(regions); }, "d2k:a_lfac", "d2k:light_vehicle", "d2k:trik");
 }
 
 //! Same as above for the heavy factory.
 TEST_F(GameFixture, HeavyFactoryUnitMovesFromSpawnPointToExit)
 {
-	checkFactoryUnitLeavesTheBuilding(*this->manager, *this->player, *this->getMcv()->map, [this] { this->tick(); }, "d2k:a_hfac", "d2k:heavy_vehicle", "d2k:misl");
+	checkFactoryUnitLeavesTheBuilding(*this->manager, *this->player, *this->getMcv()->map, [this] { this->tick(); }, [this](const std::vector<FocusRegion> &regions) { this->focusCamera(regions); }, "d2k:a_hfac", "d2k:heavy_vehicle", "d2k:misl");
 }
 
 namespace {
@@ -291,6 +296,7 @@ namespace {
 //! aside rather than staying stuck on the spawn tile forever.
 void checkSecondFactoryUnitCanLeaveTheBuilding(
 	GameManager &manager, Player &player, MapState &map, const std::function<void()> &tick,
+	const std::function<void(const std::vector<FocusRegion> &)> &focus,
 	const std::string &factoryId, const std::string &queue, const std::string &unitId
 ) {
 	Vector2i spiceTile = findResourceTile(map);
@@ -306,6 +312,7 @@ void checkSecondFactoryUnitCanLeaveTheBuilding(
 	GameObject *first = manager.spawnObject(player.state.index, {-1, -1}, queue, unitId);
 
 	ASSERT_NE(first, nullptr);
+	focus({factory, first, FocusRegion::tiles(map, spawnTile), FocusRegion::tiles(map, exitTile)});
 	for (unsigned i = 0; i < 600 && !(first->getOccupiedTile() == exitTile && first->getPosition() == restingPosition(map, *first, exitTile)); i++)
 		tick();
 	ASSERT_EQ(first->getOccupiedTile(), exitTile) << "Setup issue: the first unit should be parked on the exit tile";
@@ -337,13 +344,13 @@ void checkSecondFactoryUnitCanLeaveTheBuilding(
 //! Two units coming out of the same light factory.
 TEST_F(GameFixture, TwoUnitsCanLeaveTheSameLightFactory)
 {
-	checkSecondFactoryUnitCanLeaveTheBuilding(*this->manager, *this->player, *this->getMcv()->map, [this] { this->tick(); }, "d2k:a_lfac", "d2k:light_vehicle", "d2k:trik");
+	checkSecondFactoryUnitCanLeaveTheBuilding(*this->manager, *this->player, *this->getMcv()->map, [this] { this->tick(); }, [this](const std::vector<FocusRegion> &regions) { this->focusCamera(regions); }, "d2k:a_lfac", "d2k:light_vehicle", "d2k:trik");
 }
 
 //! Two units coming out of the same heavy factory.
 TEST_F(GameFixture, TwoUnitsCanLeaveTheSameHeavyFactory)
 {
-	checkSecondFactoryUnitCanLeaveTheBuilding(*this->manager, *this->player, *this->getMcv()->map, [this] { this->tick(); }, "d2k:a_hfac", "d2k:heavy_vehicle", "d2k:misl");
+	checkSecondFactoryUnitCanLeaveTheBuilding(*this->manager, *this->player, *this->getMcv()->map, [this] { this->tick(); }, [this](const std::vector<FocusRegion> &regions) { this->focusCamera(regions); }, "d2k:a_hfac", "d2k:heavy_vehicle", "d2k:misl");
 }
 
 namespace {
@@ -439,6 +446,8 @@ protected:
 			ASSERT_TRUE(b->isStackable());
 			ASSERT_TRUE(b->isCrushable());
 		}
+		// The lane and the walls around it (see buildLane()).
+		this->focusCamera({FocusRegion::tiles(this->map(), this->lane[0] - Vector2i{1, 1}, {6, 3})});
 	}
 
 	GameObject *spawnOnLane(Player &owner, const std::string &id)
