@@ -1260,10 +1260,10 @@ void GameManager::spawnCustomObject(size_t owner, Vector2i absPos, GameObject *o
 {
 	auto &player = this->_players[owner];
 	auto &map = this->_mapStates[player.state.factionIndex];
-	Vector2i pos = map.absToTileCoord(absPos);
 
 	this->_liveObjects.emplace_back(obj);
-	this->_onObjectSpawned(pos, *obj);
+	this->_initObject(map, player, *obj);
+	this->_onObjectSpawned(absPos, *obj);
 }
 
 std::vector<Faction> & GameManager::getFactions()

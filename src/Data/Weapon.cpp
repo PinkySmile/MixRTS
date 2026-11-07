@@ -57,6 +57,8 @@ Weapon::Weapon(
 	this->_damage = data["damage"];
 	this->_range = data["range"];
 	this->_canHitTags = data["can_hit_tags"];
+	if (std::ranges::find(this->_canHitTags, "no_force_fire") == this->_canHitTags.end())
+		this->_canHitTags.emplace_back("force_fire");
 
 	std::string warhead = RESOURCE(base.getName(), data["warhead"].get<std::string>());
 

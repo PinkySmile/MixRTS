@@ -90,13 +90,20 @@ struct MYDLL_API MoveCheckOrder {
 };
 struct MYDLL_API AttackUnitOrder {
 	GameObject *target;
+	unsigned maxShots;
 	bool automatic;
 	bool force;
 };
-//! Missile flight: climb until above the map, reappear above \a target, then fall onto it.
 struct MYDLL_API AttackPosOrder {
 	Vector2f target;
+	unsigned maxShots;
+	bool automatic;
+	bool force;
 };
+struct MYDLL_API KeepMovingOrder {
+	unsigned duration;
+};
+struct MYDLL_API KeepMovingAndDieOrder {};
 typedef std::variant<
 	SpinOrder,
 	TurnOrder,
@@ -113,7 +120,9 @@ typedef std::variant<
 	WaitPickupOrder,
 	DieOrder,
 	DeliveryOrder,
-	ExecCbOrder
+	ExecCbOrder,
+	KeepMovingOrder,
+	KeepMovingAndDieOrder
 > Order;
 
 struct MYDLL_API WaitPickupOrder {
@@ -344,6 +353,7 @@ public:
 	enum Behavior {
 		BEHAVIOR_NORMAL,
 		BEHAVIOR_MISSILE,
+		BEHAVIOR_NONE,
 	};
 
 	unsigned index;
@@ -354,7 +364,7 @@ public:
 	Player *owner = nullptr;
 
 protected:
-	std::reference_wrapper<const Faction> _base;
+	const Faction *_base = nullptr;
 	const MultiSound *_crushSound = nullptr;
 	const MultiSound *_buildSound = nullptr;
 	const MultiSound *_doSound = nullptr;
@@ -480,18 +490,15 @@ protected:
 	unsigned _spawnDelay = 0;
 	//! Missile only: how many volleys to fire once the missile reaches its target.
 	unsigned _shootRounds = 1;
-	//! Volleys left to fire while the missile is dying.
-	unsigned _missileRoundsLeft = 0;
-	Vector2f _missileTarget;
 	Behavior _behavior = BEHAVIOR_NORMAL;
-	//! True once the missile has reappeared above its target and is falling toward it.
-	bool _missileDescending = false;
 	float _alpha = 1;
-	PFFreeMask _currentTilePosition;
+	PFFreeMask _currentTilePosition = PFFREEMASK_NONE;
 	unsigned char _buildMaxDistance = 0;
 	mutable bool _cachedDebugTexLoaded = false;
 	bool _countsForGame;
 	bool _countsForShortGame;
+	bool _shootsFacing = true;
+	bool _moveWhileFire = false;
 	bool _requiresPower = false;
 	bool _boundToGrid = false;
 	bool _disposable = false;
@@ -542,7 +549,7 @@ protected:
 	//! The dissolve mask plays backward.
 	bool _stealthReverse = false;
 
-	GameObjectData(const Faction &base);
+	GameObjectData() = default;
 	GameObjectData(const GameObjectData &);
 };
 
@@ -550,6 +557,7 @@ typedef std::vector<std::pair<std::string, std::string>> DebugInfoList;
 
 class MYDLL_API GameObject : public GameObjectData {
 public:
+	GameObject() = default;
 	GameObject(const GameObject &b);
 	GameObject(
 		const Faction &base,
@@ -586,7 +594,7 @@ public:
 	void harvest(const Vector2i &pos, bool automatic, bool straight = false);
 	void harvest();
 	void attack(GameObject *obj, bool automatic, bool force);
-	void attackPos(Vector2f target);
+	void attackPos(Vector2f target, unsigned maxShots = UINT32_MAX);
 	void moveOut(const Vector2i &pos);
 	//! \param ignore Object that is never considered an obstacle on the way (e.g. the building a unit just came out of).
 	void moveTo(const Vector2i &pos, MoveReason reason, bool straight = false, GameObject *ignore = nullptr);
@@ -619,6 +627,8 @@ public:
 	void connectTo(const GameObject *object);
 	void disconnectFrom(const GameObject *object);
 	void disposeOf();
+	void keepMoving(unsigned duration);
+	void keepMovingAndDie();
 
 	[[nodiscard]] bool boundToGrid() const;
 	[[nodiscard]] bool countsForGame() const;
@@ -777,6 +787,8 @@ protected:
 	CollisionResolution _resolveGridCollision(bool ignoreSolid, const GameObject *ignoreObject, bool pushBlockers = false);
 	CollisionResolution _resolveFreeCollision(bool ignoreSolid, const GameObject *ignoreObject);
 
+	bool _updateAttack(GameObject *obj, Vector2f target, unsigned maxShots, bool automatic, bool force);
+
 	bool _updateOrder(const TurnOrder &order);
 	bool _updateOrder(const MoveOrder &order);
 	bool _updateOrder(const MoveCheckOrder &order);
@@ -793,6 +805,8 @@ protected:
 	bool _updateOrder(const DeliveryOrder &order);
 	bool _updateOrder(const ExecCbOrder &order);
 	bool _updateOrder(const DieOrder &order);
+	bool _updateOrder(const KeepMovingOrder &order);
+	bool _updateOrder(const KeepMovingAndDieOrder &order);
 	bool _updateOrder(Order &order);
 
 	void _reduceTimeControlTimer(unsigned dec);

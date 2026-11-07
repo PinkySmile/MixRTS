@@ -18,9 +18,12 @@
 #include "Debug/Profiler.hpp"
 
 #define currentSpeed _gpTimerF[0]
+#define missileTargetX _gpTimerF[0]
+#define missileTargetY _gpTimerF[1]
 
 #define pickupOldAltitude _gpTimerI[7]
 
+#define moveTimer _gpTimerU[0]
 #define dumpTimer _gpTimerU[0]
 #define harvestTimer _gpTimerU[0]
 #define cancel _gpTimerU[1]
@@ -30,8 +33,11 @@
 #define dropTimer _gpTimerU[12]
 #define dropLast _gpTimerU[13]
 #define currentDrop _gpTimerU[14]
+#define shotCount _gpTimerU[14]
 #define pickupState _gpTimerU[15]
 #define attackFirst _gpTimerU[15]
+#define missileRoundsLeft _gpTimerU[14]
+#define missileDescending _gpTimerU[15]
 
 #define waitBlocked 60
 #define PATH_UNIT_PENALTY 1000
@@ -493,8 +499,7 @@ GameObject::GameObject(
 	const std::unordered_map<std::string, Effect> &effects,
 	const std::unordered_map<std::string, Weapon> &weapons,
 	const nlohmann::json &json
-) :
-	GameObjectData(faction)
+)
 {
 	assert_exp(!json.contains("requires_queue_building") || json["requires_queue_building"].is_boolean());
 	assert_exp(!json.contains("requires_placement") || json["requires_placement"].is_boolean());
@@ -519,6 +524,8 @@ GameObject::GameObject(
 		for (size_t i = 0; i < json["turrets"].size(); i++)
 			assert_msg(json["turrets"][i].is_object(), "json[\"turrets\"][\"" + std::to_string(i) + "\"]");
 	}
+	assert_exp(!json.contains("move_while_fire") || json["move_while_fire"].is_boolean());
+	assert_exp(!json.contains("shoots_facing") || json["shoots_facing"].is_boolean());
 	assert_exp(!json.contains("spawn_params") || json["spawn_params"].is_object());
 	assert_exp(!json.contains("select") || json["select"].is_object());
 	assert_exp(!json.contains("decel") || json["decel"].is_object());
@@ -687,6 +694,7 @@ GameObject::GameObject(
 	auto &base = faction.getBase();
 	std::optional<unsigned> directions;
 
+	this->_base = &faction;
 	this->_id = id;
 	this->_hp = json["hp"];
 	this->_decayTarget = this->_maxHp = this->_hp;
@@ -696,9 +704,6 @@ GameObject::GameObject(
 	this->_armor = RESOURCE(base.getName(), json["armor"].get<std::string>());
 	this->_countsForGame = json["counts_for_game"];
 	this->_countsForShortGame = json["counts_for_short_game"];
-	// TODO: Apply right any_ flag
-	this->_tags.emplace_back("any_ground");
-	this->_tags.emplace_back("any");
 	this->_requirements = std::make_shared<ReqAndCombinator>(base.getName(), json["requirements"]);
 
 	assert_exp(!json.contains("connected") || !json.contains("directions"));
@@ -706,6 +711,10 @@ GameObject::GameObject(
 		directions = json["directions"].get<unsigned>();
 		assert_msg(*directions % 8 == 0, "Number of directions must be divisible by 8");
 	}
+	if (json.contains("move_while_fire"))
+		this->_moveWhileFire = json["move_while_fire"];
+	if (json.contains("shoots_facing"))
+		this->_shootsFacing = json["shoots_facing"];
 	if (json.contains("spawn_params"))
 		this->_spawnParams = { json["spawn_params"] };
 	if (json.contains("spawn_delay"))
@@ -1155,6 +1164,11 @@ GameObject::GameObject(
 		assert_msg(json.contains("death"), "A missile object needs a \"death\" block");
 		assert_msg(!this->_barrels.empty(), "A missile object needs at least one barrel");
 	}
+	if (this->_altitude)
+		this->_tags.emplace_back("any_air");
+	else
+		this->_tags.emplace_back("any_ground");
+	this->_tags.emplace_back("any");
 }
 
 GameObject::~GameObject() = default;
@@ -2073,14 +2087,14 @@ MoveResult GameObject::_updateMove(const MoveOrder &order)
 	auto lmapCoords = lmap.grid.absToTileCoord(pos);
 	float speedMul = 1;
 
+	if (diff.magnitude2() < this->_decel.dist2) {
+		this->currentSpeed -= this->_decel.step;
+		if (this->currentSpeed < this->_decel.min)
+			this->currentSpeed = this->_decel.min;
+	}
 	if (!this->_ignoreTerrain) {
 		assert_exp(lmapCoords.x >= 0 && static_cast<unsigned>(lmapCoords.x) < lmap.grid.gridSize.x);
 		assert_exp(lmapCoords.y >= 0 && static_cast<unsigned>(lmapCoords.y) < lmap.grid.gridSize.y);
-		if (diff.magnitude2() < this->_decel.dist2) {
-			this->currentSpeed -= this->_decel.step;
-			if (this->currentSpeed < this->_decel.min)
-				this->currentSpeed = this->_decel.min;
-		}
 
 		uint32_t tile = lmap.grid.grid[lmapCoords.x + lmapCoords.y * lmap.grid.gridSize.x];
 		unsigned terrain = GRID_TERRAIN_TYPE(tile);
@@ -2309,23 +2323,55 @@ bool GameObject::_updateOrder(const DeployOrder &)
 	return true;
 }
 
-bool GameObject::_updateOrder(const AttackUnitOrder &order)
+bool GameObject::_updateAttack(GameObject *obj, Vector2f target, unsigned maxShots, bool automatic, bool force)
 {
-	GameObject *obj = order.target;
+	if (this->_behavior == BEHAVIOR_MISSILE) {
+		if (this->_firstEvent) {
+			this->missileDescending = false;
+			this->missileTargetX = target.x;
+			this->missileTargetY = target.y;
+		}
 
-	// Targets that cloaked (and aren't revealed) can't be attacked anymore
-	if (obj == nullptr || obj->isDead() || obj->owner->state.team == this->owner->state.team || obj->isHiddenFrom(this->owner->state.team))
-		return this->_updateOrder(FinishMovementOrder{});
-	if (this->_firstEvent)
+		auto pos = this->_position;
+
+		if (!this->missileDescending) {
+			pos.y -= this->_speed;
+			// Offscreen once the bottom of the sprite is above the top of the map.
+			if (this->_position.y - static_cast<float>(this->_size.y) < 0) {
+				pos.x = this->missileTargetX - this->_size.x / 2;
+				this->missileDescending = true;
+			}
+			this->setPosition(pos);
+			return false;
+		}
+
+		// anim_move plays while _moving is set (the falling sprite).
+		this->_moving = true;
+		pos.y += this->_speed;
+		if (pos.y <= this->missileTargetY) {
+			this->setPosition(pos);
+			return false;
+		}
+		// setHealth(0) would announce the unit as lost.
+		this->_hp = 0;
+		this->animationState.health = 0;
+		if (this->_deathSound)
+			this->_deathSound->play(this->_position + this->_size / 2);
+		this->missileRoundsLeft = this->_shootRounds;
+		this->_die(DMGTYPE_GENERIC);
+		return true;
+	}
+
+	if (this->_firstEvent) {
 		this->attackFirst = 1;
+		this->shotCount = maxShots;
+	}
 
 	if (this->_requiresPower && this->owner->state.consumedPower > this->owner->state.producedPower)
 		return true;
 
 	Vector2f myCenter = this->_getAttackOrigin();
-	Vector2f opCenter = obj->getHitboxCenter(myCenter);
-	Vector2f diff = opCenter - myCenter;
-	Vector2f diffAbs = diff.abs();
+	Vector2f diff = target - myCenter;
 	const ObjectWeapon *weapon = this->getBestWeaponFor(obj, UINT32_MAX, true);
 	if (weapon == nullptr)
 		weapon = this->getBestWeaponFor(obj, UINT32_MAX, false);
@@ -2334,29 +2380,31 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 	unsigned range = weapon->weapon->getRange();
 
 	range *= range;
-	if (range < diffAbs.magnitude2()) {
+	if (range < diff.magnitude2()) {
 		// Automatic attacks never chase: the target got away, so go back to idling.
-		if (order.automatic || !this->canMove())
+		if (automatic || !this->canMove())
 			return true;
 		this->_firstEvent = this->attackFirst;
 		this->attackFirst = 0;
 		if (this->_updateOrder(MoveOrder{
-			.destination = opCenter,
-			.reason = order.force ?
+			.destination = target,
+			.reason = force ?
 				MOVEREASON_FORCE_ATTACK_COMMAND :
-			order.automatic ?
+			automatic ?
 				MOVEREASON_AUTO_AGRO :
 				MOVEREASON_ATTACK_COMMAND,
 			.ignore = obj,
 			.force = false
 		})) {
 			// TODO: Handle when unit is blocked
-			if (opCenter != this->_cachedDest)
+			if (target != this->_cachedDest)
 				this->_pathCached = false;
 		}
 		return false;
 	}
-	if (!this->_updateOrder(FinishMovementOrder{}))
+	if (this->_moveWhileFire)
+		this->_updateOrder(KeepMovingOrder{UINT32_MAX});
+	else if (!this->_updateOrder(FinishMovementOrder{}))
 		return false;
 
 	ObjectBarrel &barrel = this->_barrels[weapon->barrel];
@@ -2381,7 +2429,7 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 			turret->shotTimer = 1;
 			return false;
 		}
-	} else if (!this->_updateOrder(TurnOrder{static_cast<float>(angle)}))
+	} else if (this->_shootsFacing && !this->_updateOrder(TurnOrder{static_cast<float>(angle)}))
 		return false;
 
 	double inaccuracy = weapon->weapon->getInaccuracy(diff.magnitude());
@@ -2389,24 +2437,23 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 	const MultiSound *sound = weapon->weapon->getSound();
 	const Effect *effect = weapon->weapon->getEffect();
 	const Effect *hitEffect = weapon->weapon->getHitEffect();
-	Vector2f targetPos = opCenter;
 	Vector2f spawnPos = this->_position + this->_size / 2;
 
 	spawnPos.y -= this->_altitude;
 	barrel.shootTimer = weapon->cooldown;
 	if (weapon->weapon->sendsForward()) {
-		double dist = (targetPos - spawnPos).magnitude();
+		double dist = (target - spawnPos).magnitude();
 		double myAngle = this->_facingAngle;
 
-		targetPos = spawnPos;
-		targetPos.x += std::cos(myAngle) * dist;
-		targetPos.y += std::sin(myAngle) * dist;
+		target = spawnPos;
+		target.x += std::cos(myAngle) * dist;
+		target.y += std::sin(myAngle) * dist;
 	} else {
 		double offset = dist(game->gameRandom);
 		uint64_t dangle = random_distrib(game->gameRandom, 0, 360);
 
-		targetPos.x += std::cos(dangle * M_PI / 180) * offset;
-		targetPos.y += std::sin(dangle * M_PI / 180) * offset;
+		target.x += std::cos(dangle * M_PI / 180) * offset;
+		target.y += std::sin(dangle * M_PI / 180) * offset;
 	}
 	if (sound)
 		sound->play(spawnPos);
@@ -2421,17 +2468,17 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 	switch (weapon->weapon->getType()) {
 	case WEAPONTYPE_HITSCAN:
 		if (hitEffect)
-			this->manager->spawnEffect(*hitEffect, targetPos, this->owner);
-		this->manager->weaponUsedAt(weapon->weapon->getDamage(), weapon->weapon, targetPos, this->owner->state.index);
+			this->manager->spawnEffect(*hitEffect, target, this->owner);
+		this->manager->weaponUsedAt(weapon->weapon->getDamage(), weapon->weapon, target, this->owner->state.index);
 		break;
 	case WEAPONTYPE_PROJECTILE:
-		this->manager->spawnProjectile(this, weapon->weapon, spawnPos, obj, targetPos);
+		this->manager->spawnProjectile(this, weapon->weapon, spawnPos, obj, target);
 		break;
 	case WEAPONTYPE_ENTER:
 		this->manager->weaponUsedOn(
 			weapon->weapon->getDamage(),
 			weapon->weapon,
-			targetPos.distance(obj->getHitboxCenter(targetPos)),
+			target.distance(obj->getHitboxCenter(target)),
 			this->owner->state.index,
 			*obj
 		);
@@ -2440,46 +2487,25 @@ bool GameObject::_updateOrder(const AttackUnitOrder &order)
 	default:
 		assert_not_reached();
 	}
-	return false;
+	return --this->shotCount == 0;
+}
+
+bool GameObject::_updateOrder(const AttackUnitOrder &order)
+{
+	GameObject *obj = order.target;
+
+	// Targets that cloaked (and aren't revealed) can't be attacked anymore
+	if (obj == nullptr || obj->isDead() || obj->owner->state.team == this->owner->state.team || obj->isHiddenFrom(this->owner->state.team))
+		return this->_updateOrder(FinishMovementOrder{});
+
+	Vector2f opCenter = obj->getHitboxCenter(this->_getAttackOrigin());
+
+	return this->_updateAttack(obj, opCenter, UINT32_MAX, order.automatic, order.force);
 }
 
 bool GameObject::_updateOrder(const AttackPosOrder &order)
 {
-	if (this->_behavior != BEHAVIOR_MISSILE)
-		return true;
-	if (this->_firstEvent) {
-		this->_missileTarget = order.target;
-		this->_missileDescending = false;
-	}
-
-	auto pos = this->_position;
-
-	if (!this->_missileDescending) {
-		pos.y -= this->_speed;
-		// Offscreen once the bottom of the sprite is above the top of the map.
-		if (this->_position.y - static_cast<float>(this->_size.y) < 0) {
-			pos.x = (this->_missileTarget - this->_size / 2).x;
-			this->_missileDescending = true;
-		}
-		this->setPosition(pos);
-		return false;
-	}
-
-	// anim_move plays while _moving is set (the falling sprite).
-	this->_moving = true;
-	pos.y += this->_speed;
-	if (pos.y <= this->_missileTarget.y) {
-		this->setPosition(pos);
-		return false;
-	}
-	// setHealth(0) would announce the unit as lost.
-	this->_hp = 0;
-	this->animationState.health = 0;
-	if (this->_deathSound)
-		this->_deathSound->play(this->_position + this->_size / 2);
-	this->_missileRoundsLeft = this->_shootRounds;
-	this->_die(DMGTYPE_GENERIC);
-	return true;
+	return this->_updateAttack(nullptr, order.target, order.maxShots, order.automatic, order.force);
 }
 
 bool GameObject::_updateOrder(const SpinOrder &order)
@@ -2597,7 +2623,7 @@ bool GameObject::_updateOrder(const FinishMovementOrder &)
 	if (!this->_boundToGrid || this->_pathCache.empty())
 		return true;
 
-	auto center = this->_getTileOffsetFromCenter();
+	Vector2f center = this->_getTileOffsetFromCenter();
 	Vector2f pos = this->_position - center - this->map->tileSize / 2;
 	float x = std::fmod(pos.x, this->map->tileSize.x);
 	float y = std::fmod(pos.y, this->map->tileSize.y);
@@ -2606,7 +2632,7 @@ bool GameObject::_updateOrder(const FinishMovementOrder &)
 		return true;
 	this->_pathCache.erase(this->_pathCache.begin() + 1, this->_pathCache.end());
 
-	auto p = this->_pathCache.back() - this->map->tileSize / 2;
+	Vector2u p = this->_pathCache.back() - this->map->tileSize / 2;
 	Vector2f diff = p - pos;
 
 	// TODO: Handle non-square grids
@@ -2736,6 +2762,38 @@ bool GameObject::_updateOrder(const DieOrder &)
 	return true;
 }
 
+bool GameObject::_updateOrder(const KeepMovingOrder &order)
+{
+	float facing = this->_facingAngle;
+	Vector2f dest = {
+		std::cos(facing) * this->_speed,
+		std::sin(facing) * this->_speed
+	};
+	Vector2f pos = this->_position;
+
+	this->moveTimer++;
+	if (this->_crouchTimer != 0)
+		dest /= 2;
+	pos += dest;
+	this->setPosition(pos);
+	return this->moveTimer >= order.duration;
+}
+
+bool GameObject::_updateOrder(const KeepMovingAndDieOrder &)
+{
+	if (
+		this->_position.x < -static_cast<int>(this->_size.x) * 2 ||
+		this->_position.y < -static_cast<int>(this->_size.y) * 2 ||
+		this->_position.x > this->map->gridSize.x * this->map->tileSize.x + this->_size.x * 2 ||
+		this->_position.y > this->map->gridSize.y * this->map->tileSize.y + this->_size.y * 2
+	) {
+		this->_disposable = true;
+		return true;
+	}
+	this->_updateOrder(KeepMovingOrder{UINT32_MAX});
+	return false;
+}
+
 bool GameObject::_updateOrder(Order &order)
 {
 	return std::visit([this](auto &&arg) {
@@ -2760,14 +2818,14 @@ void GameObject::update()
 	if (this->_deathAnim) {
 		if (this->_animFinished || !this->_deathAnim->anim || this->_deathAnim->anim->update())
 			this->_animFinished = true;
-		if (this->_missileRoundsLeft)
+		if (this->missileRoundsLeft)
 			this->_updateMissileShots();
 		if (this->_deathAnim->stayTime && this->_gpTimerU[3] < *this->_deathAnim->stayTime)
 			this->_gpTimerU[3]++;
 		else if (this->_deathAnim->fadeTime && this->_gpTimerU[2] < *this->_deathAnim->fadeTime) {
 			this->_gpTimerU[2]++;
 			this->_alpha = static_cast<float>(*this->_deathAnim->fadeTime - this->_gpTimerU[2]) / *this->_deathAnim->fadeTime;
-		} else if (this->_animFinished && this->_missileRoundsLeft == 0)
+		} else if (this->_animFinished && this->missileRoundsLeft == 0)
 			this->_disposable = true;
 		return;
 	}
@@ -3230,7 +3288,7 @@ void GameObject::_die(DamageType type)
 {
 	if (this->_deathAnims.empty() || type == DMGTYPE_VOID) {
 		// A missile that still has volleys to fire stays until those are done.
-		if (this->_behavior != BEHAVIOR_MISSILE || this->_missileRoundsLeft == 0)
+		if (this->_behavior != BEHAVIOR_MISSILE || this->missileRoundsLeft == 0)
 			this->_disposable = true;
 		return;
 	}
@@ -3325,7 +3383,7 @@ void GameObject::_updateMissileShots()
 		const Weapon *weapon = objectWeapon.weapon;
 		const MultiSound *sound = weapon->getSound();
 		const Effect *effect = weapon->getEffect();
-		Vector2f targetPos = this->_missileTarget;
+		Vector2f targetPos = {this->missileTargetX, this->missileTargetY};
 
 		targetPos.x += random_distrib(game->gameRandom, -inaccuracy, inaccuracy);
 		targetPos.y += random_distrib(game->gameRandom, -inaccuracy, inaccuracy);
@@ -3355,7 +3413,7 @@ void GameObject::_updateMissileShots()
 		}
 	}
 	if (fired)
-		this->_missileRoundsLeft--;
+		this->missileRoundsLeft--;
 }
 
 void GameObject::setHealth(unsigned health)
@@ -3424,12 +3482,12 @@ const ReqAndCombinator &GameObject::getRequirements() const
 
 const Mod &GameObject::getBase() const
 {
-	return this->_base.get().getBase();
+	return this->_base->getBase();
 }
 
 const Faction &GameObject::getFaction() const
 {
-	return this->_base;
+	return *this->_base;
 }
 
 unsigned GameObject::getBuildSpeed() const
@@ -3944,12 +4002,12 @@ void GameObject::harvest()
 
 void GameObject::attack(GameObject *obj, bool automatic, bool force)
 {
-	this->_orderQueue.emplace_back(AttackUnitOrder{.target = obj, .automatic = automatic, .force = force});
+	this->_orderQueue.emplace_back(AttackUnitOrder{.target = obj, .maxShots=UINT32_MAX, .automatic = automatic, .force = force});
 }
 
-void GameObject::attackPos(Vector2f target)
+void GameObject::attackPos(Vector2f target, unsigned maxShots)
 {
-	this->_orderQueue.emplace_back(AttackPosOrder{target});
+	this->_orderQueue.emplace_back(AttackPosOrder{target, maxShots, false, false});
 }
 
 void GameObject::moveOut(const Vector2i &pos)
@@ -4168,7 +4226,7 @@ void GameObject::clearPrimaryDump()
 
 void GameObject::initGlobalGrid()
 {
-	if (this->_behavior == BEHAVIOR_MISSILE)
+	if (this->_behavior == BEHAVIOR_MISSILE || this->_behavior == BEHAVIOR_NONE)
 		return;
 	if (this->_initGrid)
 		return;
@@ -4691,6 +4749,18 @@ void GameObject::disposeOf()
 	this->deinitGlobalGrid();
 }
 
+void GameObject::keepMoving(unsigned duration)
+{
+	assert_exp(this->_ignoreTerrain);
+	this->_orderQueue.emplace_back(KeepMovingOrder{duration});
+}
+
+void GameObject::keepMovingAndDie()
+{
+	assert_exp(this->_ignoreTerrain);
+	this->_orderQueue.emplace_back(KeepMovingAndDieOrder{});
+}
+
 bool GameObject::boundToGrid() const
 {
 	return this->_boundToGrid || this->_tiles; // TODO
@@ -4844,30 +4914,47 @@ Vector2f GameObject::getHitboxCenter(Vector2f pos) const
 
 const ObjectWeapon *GameObject::getBestWeaponFor(const GameObject *obj, unsigned barrel, bool isFree) const
 {
-	const std::vector<std::string> &tags = obj->getTags();
-	bool air = obj->getAltitude() > 0;
-	bool gnd = obj->getAltitude() == 0;
-	bool und = obj->getAltitude() < 0;
-
-	for (const std::string &tag : tags) {
-		auto it = this->_weaponByTag.find(tag);
+	if (obj == nullptr) {
+		auto it = this->_weaponByTag.find("force_fire");
 
 		if (it == this->_weaponByTag.end())
-			continue;
+			return nullptr;
 
 		for (auto &weapon : it->second) {
 			if (barrel != UINT32_MAX && weapon->barrel != barrel)
 				continue;
 			if (isFree && this->_barrels[weapon->barrel].shootTimer != 0)
 				continue;
-			if (air) {
-				if (!weapon->weapon->hitsAir())
-					continue;
-			} else if (gnd) {
-				if (!weapon->weapon->hitsGround())
-					continue;
-			}
+			if (!weapon->weapon->hitsGround())
+				continue;
 			return weapon;
+		}
+	} else {
+		const std::vector<std::string> &tags = obj->getTags();
+		bool air = obj->getAltitude() > 0;
+		bool gnd = obj->getAltitude() == 0;
+		bool und = obj->getAltitude() < 0;
+
+		for (const std::string &tag : tags) {
+			auto it = this->_weaponByTag.find(tag);
+
+			if (it == this->_weaponByTag.end())
+				continue;
+
+			for (auto &weapon : it->second) {
+				if (barrel != UINT32_MAX && weapon->barrel != barrel)
+					continue;
+				if (isFree && this->_barrels[weapon->barrel].shootTimer != 0)
+					continue;
+				if (air) {
+					if (!weapon->weapon->hitsAir())
+						continue;
+				} else if (gnd) {
+					if (!weapon->weapon->hitsGround())
+						continue;
+				}
+				return weapon;
+			}
 		}
 	}
 	return nullptr;
@@ -5158,11 +5245,6 @@ ObjectWeapon::ObjectWeapon(unsigned short extraPrio, unsigned barrel, const Mod 
 	this->priority = (j.contains("priority") ? j["priority"].get<unsigned short>() : 0) + extraPrio;
 	this->barrel = barrel;
 	this->cooldown = j["cooldown"];
-}
-
-GameObjectData::GameObjectData(const Faction &base) :
-	_base(base)
-{
 }
 
 GameObjectData::GameObjectData(const GameObjectData &) = default;

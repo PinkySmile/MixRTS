@@ -24,6 +24,8 @@ Projectile::Projectile(const GameObject *parent, const Weapon *weapon, Vector2f 
 	assert_exp(weapon->getProjectileData());
 	const WeaponProjectile &data = *weapon->getProjectileData();
 
+	this->_position.y += data.startY;
+	this->_startPos.y += data.startY;
 	this->_anims.reserve(data.anims.size());
 	for (auto &anim : data.anims) {
 		this->_anims.emplace_back(parent, anim);

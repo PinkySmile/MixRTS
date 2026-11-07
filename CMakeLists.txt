@@ -287,6 +287,8 @@ set(MIXRTS_CORE_SOURCES
 	src/Utils.cpp
 	src/Utils.hpp
 	src/Data/SharedLibrary.hpp
+	src/Data/ObjectSpawner.cpp
+	src/Data/ObjectSpawner.hpp
 )
 add_library(MixRTS_Core SHARED ${MIXRTS_CORE_SOURCES})
 target_link_libraries(

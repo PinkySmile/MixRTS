@@ -175,6 +175,16 @@ namespace
 		{
 			return "ExecCb";
 		}
+
+		std::string operator()(const KeepMovingOrder &o) const
+		{
+			return "KeepMoving(duration=" + std::to_string(o.duration) + ")";
+		}
+
+		std::string operator()(const KeepMovingAndDieOrder &o) const
+		{
+			return "KeepMovingAndDie";
+		}
 	};
 
 	template<typename T, size_t N>
