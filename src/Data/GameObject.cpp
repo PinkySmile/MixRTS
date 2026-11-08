@@ -2818,14 +2818,14 @@ void GameObject::update()
 	if (this->_deathAnim) {
 		if (this->_animFinished || !this->_deathAnim->anim || this->_deathAnim->anim->update())
 			this->_animFinished = true;
-		if (this->missileRoundsLeft)
+		if (this->_behavior == BEHAVIOR_MISSILE && this->missileRoundsLeft)
 			this->_updateMissileShots();
 		if (this->_deathAnim->stayTime && this->_gpTimerU[3] < *this->_deathAnim->stayTime)
 			this->_gpTimerU[3]++;
 		else if (this->_deathAnim->fadeTime && this->_gpTimerU[2] < *this->_deathAnim->fadeTime) {
 			this->_gpTimerU[2]++;
 			this->_alpha = static_cast<float>(*this->_deathAnim->fadeTime - this->_gpTimerU[2]) / *this->_deathAnim->fadeTime;
-		} else if (this->_animFinished && this->missileRoundsLeft == 0)
+		} else if (this->_animFinished && (this->_behavior != BEHAVIOR_MISSILE || this->missileRoundsLeft == 0))
 			this->_disposable = true;
 		return;
 	}
