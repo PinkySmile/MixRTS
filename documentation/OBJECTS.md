@@ -88,6 +88,7 @@ Every object definition contains the following core properties:
 	"shoot_rounds": uint?,                            // Missile only. Number of volleys fired on arrival (default: 1). Each volley fires every barrel that is ready, in a single frame.
 	"inaccuracy": float?,                             // Missile only. Each projectile is aimed at the target offset by a random integer in [-inaccuracy, inaccuracy] on both axes (default: 0).
 	"deploy": DeployObject?,                          // Structure or unit conversion rules upon deployment.
+	"self_destruct": SelfDestructObject?,             // Countdown, then fires a weapon at its own center. Mutually exclusive with "deploy".
 	"stealth": StealthObject?,                        // Makes the object hidden from its enemies (stealth or camouflage, permanent or temporary).
 	"reveal_stealth": float?,                         // Radius (in tiles) in which this object reveals enemy objects with a stealth of type "stealth" (infantry and turrets in Dune 2000).
 	"detector": float?,                               // Radius (in tiles) in which this object reveals enemy objects with a stealth of type "camouflage".
@@ -190,6 +191,20 @@ Defines the structure spawned upon unit deployment.
 	"name": string,    // Target building identifier to construct. (Must be a valid Object)
 	"queue": string,   // Production queue type associated with the created structure.
 	"offset": Vector2f // Positional offset relative to the deploying unit.
+}
+```
+
+## SelfDestructObject
+
+Clicking the unit with the deploy cursor finishes its current movement step, then plays the weapon's `effect` on the unit's center for `delay` ticks. The animation starts over whenever it ends before the delay does. During that countdown the unit accepts no orders. When the delay elapses the effect is removed, the weapon fires at the unit's center (hitscan weapons only) and the unit dies.
+
+A command given while the unit is still finishing its step cancels the self destruct.
+
+```jsonc
+{
+	"delay": uint,    // Ticks the charge effect is shown before the weapon fires.
+	"weapon": string, // Weapon fired at the unit's own center. Must be an existing hitscan Weapon.
+	"cursor": string? // Cursor shown when hovering the unit to start it (default: "deploy").
 }
 ```
 

@@ -24,6 +24,7 @@
 #define pickupOldAltitude _gpTimerI[7]
 
 #define moveTimer _gpTimerU[0]
+#define selfDestructTimer _gpTimerU[0]
 #define dumpTimer _gpTimerU[0]
 #define harvestTimer _gpTimerU[0]
 #define cancel _gpTimerU[1]
@@ -228,7 +229,8 @@ static StealthParams parseStealth(
 
 bool GameObject::_shortenOrder(Order &o)
 {
-	if (std::holds_alternative<FinishMovementOrder>(o))
+	// Once the countdown is the order being executed, it runs to completion.
+	if (std::holds_alternative<SelfDestructOrder>(o) || std::holds_alternative<FinishMovementOrder>(o))
 		return false;
 	if (std::holds_alternative<MoveOrder>(o) || std::holds_alternative<AttackUnitOrder>(o)) {
 		this->_orderQueue.emplace_front(FinishMovementOrder{});
@@ -665,6 +667,12 @@ GameObject::GameObject(
 	if (json.contains("storage"))
 		for (auto &[key, value] : json["storage"].items())
 			assert_msg(value.is_number(), "json[\"storage\"][\"" + key + "\"]");
+	if (json.contains("self_destruct")) {
+		assert_exp(json["self_destruct"].is_object());
+		assert_exp(json["self_destruct"].contains("delay") && json["self_destruct"]["delay"].is_number_unsigned());
+		assert_exp(json["self_destruct"].contains("weapon") && json["self_destruct"]["weapon"].is_string());
+		assert_exp(!json["self_destruct"].contains("cursor") || json["self_destruct"]["cursor"].is_string());
+	}
 	if (json.contains("deploy")) {
 		assert_exp(!json["deploy"].contains("direction") || json["deploy"]["direction"].is_number());
 		assert_exp(!json["deploy"].contains("spawn_building") || json["deploy"]["spawn_building"].is_object());
@@ -689,6 +697,24 @@ GameObject::GameObject(
 			this->_onDeploy->spawnBuilding->offset.x = json["deploy"]["spawn_building"]["offset"]["x"];
 			this->_onDeploy->spawnBuilding->offset.y = json["deploy"]["spawn_building"]["offset"]["y"];
 		}
+	}
+	if (json.contains("self_destruct")) {
+		// A unit can't both turn into a building and blow itself up.
+		assert_exp(!this->_onDeploy);
+
+		std::string weaponId = RESOURCE(faction.getBase().getName(), json["self_destruct"]["weapon"].get<std::string>());
+
+		assert_msg(weapons.contains(weaponId), weaponId);
+
+		const Weapon *weapon = &weapons.at(weaponId);
+
+		assert_exp(weapon->getType() == WEAPONTYPE_HITSCAN);
+		this->_selfDestruct.emplace();
+		this->_selfDestruct->delay = json["self_destruct"]["delay"];
+		this->_selfDestruct->weapon = weapon;
+		this->_selfDestruct->cursor = json["self_destruct"].contains("cursor") ?
+			UI::stringToCursor(json["self_destruct"]["cursor"]) :
+			UI::CURSOR_DEPLOY;
 	}
 
 	auto &base = faction.getBase();
@@ -2323,6 +2349,31 @@ bool GameObject::_updateOrder(const DeployOrder &)
 	return true;
 }
 
+bool GameObject::_updateOrder(const SelfDestructOrder &)
+{
+	assert_exp(this->_selfDestruct);
+
+	const Weapon *weapon = this->_selfDestruct->weapon;
+	Vector2f center = this->_position - Vector2i{0, this->_altitude} + this->_size / 2;
+
+	// The charge effect stays on the unit for the whole delay, replaying its animation when it ends early.
+	if (this->_firstEvent)
+		if (const Effect *effect = weapon->getEffect())
+			this->manager->spawnEffect(*effect, center, this->owner).repeatFor(this->_selfDestruct->delay);
+	if (selfDestructTimer++ < this->_selfDestruct->delay)
+		return false;
+	if (const MultiSound *sound = weapon->getSound())
+		sound->play(center);
+	if (const Effect *hitEffect = weapon->getHitEffect())
+		this->manager->spawnEffect(*hitEffect, center, this->owner);
+	this->manager->weaponUsedAt(weapon->getDamage(), weapon, center, this->owner->state.index);
+	// The blast may already have killed us. Anything left dies here, with a normal death animation:
+	// DMGTYPE_TRUE is not a death-animation index.
+	if (!this->isDead())
+		this->damage(this->_hp, DMGTYPE_GENERIC);
+	return true;
+}
+
 bool GameObject::_updateAttack(GameObject *obj, Vector2f target, unsigned maxShots, bool automatic, bool force)
 {
 	if (this->_behavior == BEHAVIOR_MISSILE) {
@@ -3536,9 +3587,21 @@ const std::unordered_map<std::string, unsigned> &GameObject::getCost() const
 
 bool GameObject::isDeployable() const
 {
-	if (this->_onDeploy)
+	if (this->_onDeploy || this->_selfDestruct)
 		return true;
 	return this->isTemporaryStealth();
+}
+
+bool GameObject::isSelfDestructing() const
+{
+	return !this->_orderQueue.empty() && std::holds_alternative<SelfDestructOrder>(this->_orderQueue.front());
+}
+
+std::optional<UI::Cursor> GameObject::getDeployCursor() const
+{
+	if (this->_selfDestruct)
+		return this->_selfDestruct->cursor;
+	return std::nullopt;
 }
 
 bool GameObject::deployKeepsOrders() const
@@ -3875,6 +3938,8 @@ void GameObject::deploy()
 			this->_orderQueue.emplace_back(TurnOrder{*this->_onDeploy->direction * static_cast<float>(M_PI) / 180.f - static_cast<float>(M_PI_2)});
 		this->_orderQueue.emplace_back(DeployOrder{});
 	}
+	if (this->_selfDestruct)
+		this->_orderQueue.emplace_back(SelfDestructOrder{});
 	if (this->_doSound)
 		this->_doSound->play(this->_position + this->_size / 2);
 }
@@ -3888,6 +3953,8 @@ bool GameObject::canDeploy() const
 				// Ends it by hand, unless it has to run out
 				this->_stealth->cancelable && this->_stealthState != STEALTH_UNCLOAKING :
 				this->_stealthState == STEALTH_VISIBLE && this->_energy >= this->_stealth->activationThreshold);
+	if (this->_selfDestruct)
+		return !this->isDead() && !this->isSelfDestructing();
 	if (this->_onDeploy) {
 		if (this->_onDeploy->spawnBuilding) {
 			auto &s = *this->_onDeploy->spawnBuilding;
@@ -4043,7 +4110,7 @@ void GameObject::moveTo(const Vector2i &pos, MoveReason reason, bool straight, G
 bool GameObject::moveAside(const GameObject *asker, std::vector<Vector2i> *claimed)
 {
 	assert_exp(this->canMove());
-	if (this->_dumpStart || this->_dumping || this->_dumpStop || this->_harvesting)
+	if (this->_dumpStart || this->_dumping || this->_dumpStop || this->_harvesting || this->isSelfDestructing())
 		return false;
 	if (this->_asideCooldown != 0)
 		return true;
@@ -5361,6 +5428,7 @@ void GameObject::pushUserType(sol::state &state)
 	type["health"] = sol::property(&GameObject::getHealth, &GameObject::setHealth);
 	type["can_deploy"] = sol::property(&GameObject::canDeploy);
 	type["deployable"] = sol::property(&GameObject::isDeployable);
+	type["self_destructing"] = sol::property(&GameObject::isSelfDestructing);
 	type["middle"] = sol::property(&GameObject::getMiddle);
 	type["being_picked_up"] = sol::property(&GameObject::isBeingPickedUp);
 	type["can_pickup"] = sol::property(&GameObject::canPickup);

@@ -726,7 +726,7 @@ void UI::_updateCursorNormal()
 				if (std::find(this->_objectBuffer.begin(), this->_objectBuffer.end(), obj) != this->_objectBuffer.end()) {
 					if (obj->isDeployable()) {
 						if (obj->canDeploy())
-							this->_cursor = CURSOR_DEPLOY;
+							this->_cursor = obj->getDeployCursor().value_or(CURSOR_DEPLOY);
 						else
 							this->_cursor = CURSOR_NO_DEPLOY;
 						return;

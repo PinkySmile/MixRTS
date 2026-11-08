@@ -49,8 +49,18 @@ Effect::Effect(
 	}
 }
 
+void Effect::repeatFor(unsigned ticks)
+{
+	this->_repeating = true;
+	this->_repeatFor = ticks;
+}
+
 bool Effect::update()
 {
+	// Counted at the start so the effect is still drawn on its last tick and removed on the next one.
+	if (this->_repeating && this->_played >= this->_repeatFor)
+		return true;
+	this->_played++;
 	this->_position += this->_speed;
 	if (this->_totalDelay < this->_delay) {
 		this->_totalDelay++;
@@ -60,7 +70,8 @@ bool Effect::update()
 	this->_index++;
 	if (this->_index >= this->_anim.size()) {
 		this->_index = 0;
-		return true;
+		// A repeating effect wraps back to the first frame for as long as its duration allows.
+		return !this->_repeating;
 	}
 	return false;
 }

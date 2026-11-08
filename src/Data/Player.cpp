@@ -808,6 +808,9 @@ void Player::_handleUiEvent(const UI::DeployUnitEvent &event)
 {
 	GameObject *obj = this->parent.getObjectById(event.index);
 
+	// The countdown has started: nothing can interrupt it, not even deploying again.
+	if (obj->isSelfDestructing())
+		return;
 	// Activating a stealth is not an order: the unit keeps doing what it was doing.
 	if (obj->deployKeepsOrders()) {
 		obj->deploy();
@@ -823,6 +826,8 @@ void Player::_handleUiEvent(const UI::MoveUnitEvent &event)
 	for (unsigned i : event.indices) {
 		GameObject *obj = this->parent.getObjectById(i);
 
+		if (obj->isSelfDestructing())
+			continue;
 		obj->clearOrders();
 		obj->moveTo(event.position, MOVEREASON_MOVE_COMMAND);
 		obj->playDoSound();
@@ -834,6 +839,8 @@ void Player::_handleUiEvent(const UI::HarvestUnitEvent &event)
 	for (unsigned i : event.indices) {
 		GameObject *obj = this->parent.getObjectById(i);
 
+		if (obj->isSelfDestructing())
+			continue;
 		obj->clearPrimaryDump();
 		obj->clearOrders();
 		obj->harvest(event.position, false);
@@ -848,6 +855,8 @@ void Player::_handleUiEvent(const UI::DumpUnitEvent &event)
 	for (unsigned i : event.indices) {
 		GameObject *obj = this->parent.getObjectById(i);
 
+		if (obj->isSelfDestructing())
+			continue;
 		obj->clearOrders();
 		obj->dumpResourcesTo(hole, false);
 		obj->playDoSound();
@@ -892,6 +901,8 @@ void Player::_handleUiEvent(const UI::AttackUnitEvent &event)
 	for (unsigned o : event.indices) {
 		GameObject *obj = this->parent.getObjectById(o);
 
+		if (obj->isSelfDestructing())
+			continue;
 		obj->clearOrders();
 		obj->attack(target, false, false);
 		obj->playDoSound();
@@ -900,8 +911,13 @@ void Player::_handleUiEvent(const UI::AttackUnitEvent &event)
 
 void Player::_handleUiEvent(const UI::StopEvent &event)
 {
-	for (unsigned i : event.indices)
-		this->parent.getObjectById(i)->clearOrders();
+	for (unsigned i : event.indices) {
+		GameObject *obj = this->parent.getObjectById(i);
+
+		if (obj->isSelfDestructing())
+			continue;
+		obj->clearOrders();
+	}
 }
 
 void Player::_handleUiEvent(const UI::OpenQueueEvent &event)

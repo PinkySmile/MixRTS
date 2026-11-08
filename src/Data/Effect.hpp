@@ -24,6 +24,10 @@ private:
 	unsigned _delay = 0;
 	unsigned _totalDelay = 0;
 	unsigned _index = 0;
+	//! When set, the animation restarts instead of ending, and the effect is removed after this many updates.
+	unsigned _repeatFor = 0;
+	unsigned _played = 0;
+	bool _repeating = false;
 	float _opacity = 1;
 	int _layer = 0;
 
@@ -35,6 +39,8 @@ public:
 		const nlohmann::json &data
 	);
 	bool update();
+	//! Repeats the animation for \a ticks updates, then removes the effect. A \a ticks of 0 removes it on the next update.
+	void repeatFor(unsigned ticks);
 	void render();
 	void playSound() const;
 	void setPosition(Vector2f pos);

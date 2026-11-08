@@ -106,6 +106,11 @@ namespace
 			return "Deploy";
 		}
 
+		std::string operator()(const SelfDestructOrder &) const
+		{
+			return "SelfDestruct";
+		}
+
 		std::string operator()(const HarvestOrder &o) const
 		{
 			return "Harvest(tile=" + vec(o.destination) + ", reason=" + moveReasonToString(o.reason) + (o.force ? ", force" : "") + ")";

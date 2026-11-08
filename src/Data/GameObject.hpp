@@ -17,6 +17,7 @@
 #include "forward.hpp"
 #include "Data/Requirements/ReqAndCombinator.hpp"
 #include "Screen.hpp"
+#include "UI/UI.hpp"
 #include "Utils.hpp"
 #include "MultiSound.hpp"
 #include "FindPath.hpp"
@@ -80,6 +81,7 @@ struct MYDLL_API HarvestOrder {
 };
 struct MYDLL_API HarvestCloseOrder {};
 struct MYDLL_API DeployOrder {};
+struct MYDLL_API SelfDestructOrder {};
 struct MYDLL_API DieOrder {};
 struct MYDLL_API DumpOrder {
 	GameObject *target;
@@ -109,6 +111,7 @@ typedef std::variant<
 	TurnOrder,
 	MoveOrder,
 	DeployOrder,
+	SelfDestructOrder,
 	HarvestOrder,
 	HarvestCloseOrder,
 	DumpOrder,
@@ -194,6 +197,13 @@ struct MYDLL_API UnitDeployParams {
 	std::optional<SpawnBuilding> spawnBuilding;
 
 	static void pushUserType(sol::state &state);
+};
+
+//! Clicking the unit (the deploy cursor) starts a countdown, then fires \a weapon at its own center.
+struct MYDLL_API SelfDestructParams {
+	unsigned delay;
+	const Weapon *weapon;
+	UI::Cursor cursor;
 };
 
 //! Parameters of the "stealth" block of an object (see documentation/OBJECTS.md).
@@ -380,6 +390,7 @@ protected:
 	std::vector<std::string> _tags;
 	std::optional<std::string> _giveQueue;
 	std::optional<UnitDeployParams> _onDeploy;
+	std::optional<SelfDestructParams> _selfDestruct;
 	std::optional<StealthParams> _stealth;
 	//! Radius (in tiles) in which enemy objects with a stealth of type STEALTH are revealed.
 	float _revealStealthRange = 0;
@@ -575,6 +586,10 @@ public:
 	void setColor(const HSLColor &color);
 	bool canDeploy() const;
 	bool isDeployable() const;
+	//! True only once the self destruct countdown itself is the order being executed.
+	[[nodiscard]] bool isSelfDestructing() const;
+	//! Cursor shown when hovering this unit to deploy it. Empty when it has no preference.
+	[[nodiscard]] std::optional<UI::Cursor> getDeployCursor() const;
 	bool canMove() const;
 	void deploy();
 	void built();
@@ -796,6 +811,7 @@ protected:
 	bool _updateOrder(const HarvestCloseOrder &order);
 	bool _updateOrder(const DumpOrder &order);
 	bool _updateOrder(const DeployOrder &order);
+	bool _updateOrder(const SelfDestructOrder &order);
 	bool _updateOrder(const AttackUnitOrder &order);
 	bool _updateOrder(const AttackPosOrder &order);
 	bool _updateOrder(const SpinOrder &order);
