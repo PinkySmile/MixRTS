@@ -376,6 +376,10 @@ public:
 protected:
 	const Faction *_base = nullptr;
 	const MultiSound *_crushSound = nullptr;
+	//! Hitscan weapon applied to whatever crushed this object. Not fired on a normal death.
+	const Weapon *_crushWeapon = nullptr;
+	//! Hitscan weapon detonated at this object's center when it dies. Not fired when crushed.
+	const Weapon *_deathWeapon = nullptr;
 	const MultiSound *_buildSound = nullptr;
 	const MultiSound *_doSound = nullptr;
 	const MultiSound *_selectSound = nullptr;
@@ -826,6 +830,9 @@ protected:
 	bool _updateOrder(Order &order);
 
 	void _reduceTimeControlTimer(unsigned dec);
+	//! Plays \a weapon's sound and hit effect at \a pos, then applies it.
+	//! When \a target is set, only that object is hit, at distance 0. Otherwise the weapon detonates at \a pos.
+	void _fireWeaponAt(const Weapon *weapon, Vector2f pos, GameObject *target);
 	//! Starts the death animation, effects and spawned units. Missile objects are not removed immediately.
 	void _die(DamageType type);
 	//! Fires one volley from every barrel that is ready. One volley is every ready barrel in this frame.

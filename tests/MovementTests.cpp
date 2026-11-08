@@ -554,3 +554,147 @@ TEST_F(BlobMovementTests, EnemyCrusherCrushesWholeBlobAtOnce)
 	EXPECT_EQ(first, last) << "The whole blob should be crushed at once (first one at tick " << first << ", last one at tick " << last << ")";
 	EXPECT_LE(last, enteredAt) << "The crusher went in before the whole blob was crushed";
 }
+
+//! A crush weapon hits only the crusher, for its full damage (distance 0, so the
+//! warhead radius does not reduce it). weapon.sardaukar_crush deals 300 with the
+//! at_mis warhead, and a harvester's armor takes half of that: 150.
+TEST_F(GameFixture, SardaukarDamagesTheUnitThatCrushesIt)
+{
+	MapState &map = *this->getMcv()->map;
+	Vector2i tile = findFreePassableTile(
+		*this->manager, map, map.absToTileCoord(this->getMcv()->getPosition()),
+		8, {2, 1}, GRIDMASK_VEHICLES_CAN_PASS, 2
+	);
+	Vector2f base = tileCenterAbs(map, tile).to<float>();
+	GameObject *sardaukar = spawnAt(*this->manager, this->player->state.index, "d2k:sard", base);
+	GameObject *harvester = spawnAt(*this->manager, this->player->state.index, "d2k:harv", base + Vector2f{static_cast<float>(map.tileSize.x), 0});
+
+	ASSERT_NE(sardaukar, nullptr);
+	ASSERT_NE(harvester, nullptr);
+	harvester->clearOrders();
+	this->focusCamera({sardaukar, harvester});
+
+	sardaukar->crushedBy(harvester);
+
+	EXPECT_EQ(sardaukar->getHealth(), 0u);
+	EXPECT_EQ(harvester->getHealth(), harvester->getMaxHealth() - 150);
+}
+
+//! A death weapon detonates on the dying unit. weapon.grenadier_death deals 150
+//! with the he warhead (radius 64); a trike's wood armor takes 0.7 of that.
+//! Point blank, the radius does not reduce it: ceil(150 * 0.7) = 105.
+TEST_F(GameFixture, GrenadierExplodesWhenItDies)
+{
+	MapState &map = *this->getMcv()->map;
+	Vector2i tile = findFreePassableTile(
+		*this->manager, map, map.absToTileCoord(this->getMcv()->getPosition()),
+		8, {3, 1}, GRIDMASK_VEHICLES_CAN_PASS, 2
+	);
+	Vector2f base = tileCenterAbs(map, tile).to<float>();
+	GameObject *grenadier = spawnAt(*this->manager, this->player->state.index, "d2k:gren", base);
+	GameObject *bystander = spawnAt(*this->manager, this->player->state.index, "d2k:trik", base + Vector2f{map.tileSize.x * 2.f, 0});
+
+	ASSERT_NE(grenadier, nullptr);
+	ASSERT_NE(bystander, nullptr);
+	// Sit on the grenadier, so this measures the blast itself and not a range falloff.
+	placeAt(*bystander, grenadier->getHitboxCenter({}));
+	this->focusCamera({grenadier, bystander});
+
+	grenadier->damage(grenadier->getHealth(), DMGTYPE_BULLET);
+
+	EXPECT_EQ(grenadier->getHealth(), 0u);
+	EXPECT_EQ(bystander->getHealth(), bystander->getMaxHealth() - 105);
+}
+
+//! Being crushed is not a normal death: the grenadier's death weapon stays quiet,
+//! and with no crush weapon the harvester is not hurt either.
+TEST_F(GameFixture, CrushedGrenadierDoesNotExplode)
+{
+	MapState &map = *this->getMcv()->map;
+	Vector2i tile = findFreePassableTile(
+		*this->manager, map, map.absToTileCoord(this->getMcv()->getPosition()),
+		8, {3, 1}, GRIDMASK_VEHICLES_CAN_PASS, 2
+	);
+	Vector2f base = tileCenterAbs(map, tile).to<float>();
+	float tileWidth = static_cast<float>(map.tileSize.x);
+	GameObject *grenadier = spawnAt(*this->manager, this->player->state.index, "d2k:gren", base);
+	GameObject *bystander = spawnAt(*this->manager, this->player->state.index, "d2k:trik", base + Vector2f{tileWidth, 0});
+	GameObject *harvester = spawnAt(*this->manager, this->player->state.index, "d2k:harv", base + Vector2f{tileWidth * 2, 0});
+
+	ASSERT_NE(grenadier, nullptr);
+	ASSERT_NE(bystander, nullptr);
+	ASSERT_NE(harvester, nullptr);
+	harvester->clearOrders();
+	// Close enough that the death weapon (radius 64) would hit if it went off.
+	placeAt(*bystander, grenadier->getHitboxCenter({}));
+	this->focusCamera({grenadier, bystander, harvester});
+
+	grenadier->crushedBy(harvester);
+
+	EXPECT_EQ(grenadier->getHealth(), 0u);
+	EXPECT_EQ(bystander->getHealth(), bystander->getMaxHealth());
+	EXPECT_EQ(harvester->getHealth(), harvester->getMaxHealth());
+}
+
+//! The sardaukar's crush weapon kills the harvester while it is resolving the
+//! collision. The harvester must not reserve the tile it was stepping into
+//! (that would leave a dead unit on the pathfinding grid), and once its death
+//! animation is over another unit has to be able to take the lane.
+TEST_F(BlobMovementTests, CrusherKilledByCrushWeaponLeavesTheGridUsable)
+{
+	this->lane = buildLane(*this->manager, *this->player, this->map());
+	for (auto &b : this->blob) {
+		b = this->manager->spawnObject(this->player->state.index, tileCenterAbs(this->map(), this->lane[1]), "", "d2k:sard");
+		ASSERT_NE(b, nullptr);
+		ASSERT_TRUE(b->isCrushable());
+		b->clearOrders();
+		// Busy forever, so they don't shoot the harvester before it crushes them.
+		b->execCb([] { return false; });
+	}
+	this->focusCamera({FocusRegion::tiles(this->map(), this->lane[0] - Vector2i{1, 1}, {6, 3})});
+
+	GameObject *crusher = this->spawnOnLane(*this->enemy, "d2k:harv");
+
+	ASSERT_NE(crusher, nullptr);
+	// One sardaukar deals 150 to a harvester. 100 dies on the first crush,
+	// before a second shot could matter, and the other four still get crushed.
+	crusher->setHealth(100);
+
+	int diedAt = -1;
+
+	for (int i = 0; i < 1500 && diedAt < 0; i++) {
+		this->tick();
+		if (crusher->getHealth() == 0)
+			diedAt = i;
+	}
+	ASSERT_GE(diedAt, 0) << "The harvester was never killed";
+	EXPECT_FALSE(crusher->isDisposable()) << "It should still be playing its death animation, not already removed";
+	for (auto *b : this->blob)
+		EXPECT_EQ(b->getHealth(), 0u);
+
+	size_t enemyTeam = this->enemy->state.team;
+	PathFindingGrid &grid = this->map().pathFindingGrid;
+
+	for (Vector2i tile : this->lane) {
+		unsigned index = tile.x + tile.y * grid.gridSize.x;
+
+		EXPECT_EQ(grid.usedSpaces[enemyTeam][index], 0) << "Dead harvester still occupies tile " << tile.x << "," << tile.y;
+		EXPECT_EQ(grid.usedSpaces[this->player->state.team][index], 0) << "Crushed infantry still occupy tile " << tile.x << "," << tile.y;
+	}
+
+	// Stay 30 ticks, then the corpse is removed. Don't touch it after this.
+	this->tick(80);
+
+	GameObject *follower = this->spawnOnLane(*this->player, "d2k:trik");
+
+	ASSERT_NE(follower, nullptr);
+
+	int arrived = -1;
+
+	for (int i = 0; i < 1500 && arrived < 0; i++) {
+		this->tick();
+		if (follower->getOccupiedTile() == this->lane[3])
+			arrived = i;
+	}
+	EXPECT_GE(arrived, 0) << "The lane stayed blocked after the harvester died";
+}

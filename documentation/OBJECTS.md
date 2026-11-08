@@ -89,6 +89,7 @@ Every object definition contains the following core properties:
 	"inaccuracy": float?,                             // Missile only. Each projectile is aimed at the target offset by a random integer in [-inaccuracy, inaccuracy] on both axes (default: 0).
 	"deploy": DeployObject?,                          // Structure or unit conversion rules upon deployment.
 	"self_destruct": SelfDestructObject?,             // Countdown, then fires a weapon at its own center. Mutually exclusive with "deploy".
+	"death_weapon": string?,                          // Hitscan weapon detonated at this object's center when it dies (it splashes). Not fired when the object is crushed, nor when it is removed by damage of type "void". (Must be an existing hitscan Weapon)
 	"stealth": StealthObject?,                        // Makes the object hidden from its enemies (stealth or camouflage, permanent or temporary).
 	"reveal_stealth": float?,                         // Radius (in tiles) in which this object reveals enemy objects with a stealth of type "stealth" (infantry and turrets in Dune 2000).
 	"detector": float?,                               // Radius (in tiles) in which this object reveals enemy objects with a stealth of type "camouflage".
@@ -103,6 +104,7 @@ Every object definition contains the following core properties:
 	"harvest_anim": HarvestAnimObject?,               // Directional harvesting animation configuration.
 	"build_anim": ConditionalAnimObject?,             // Animation played while under construction.
 	"crush_anim": ConditionalAnimObject?,             // Animation triggered when crushing targets.
+	"crush_weapon": string?,                          // Hitscan weapon applied to the unit that crushed this object, at distance 0 (no splash). Not fired on a normal death. (Must be an existing hitscan Weapon)
 	"producing_anim": ConditionalAnimObject?,         // Animation displayed while actively manufacturing items.
 	"produced_anim": ConditionalAnimObject?,          // Animation played upon completing production.
 	"anim_move": ConditionalAnimObject?,              // Movement animation definition.

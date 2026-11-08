@@ -571,6 +571,8 @@ GameObject::GameObject(
 	assert_exp(!json.contains("produced_anim") || json["produced_anim"].is_null() || json["produced_anim"].is_object());
 	assert_exp(!json.contains("stackable") || json["stackable"].is_boolean());
 	assert_exp(!json.contains("crush_sound") || json["crush_sound"].is_string());
+	assert_exp(!json.contains("crush_weapon") || json["crush_weapon"].is_string());
+	assert_exp(!json.contains("death_weapon") || json["death_weapon"].is_string());
 	assert_exp(!json.contains("death_sound") || json["death_sound"].is_string());
 	assert_exp(!json.contains("altitude") || json["altitude"].is_number());
 	assert_exp(!json.contains("can_crush") || json["can_crush"].is_boolean());
@@ -875,6 +877,20 @@ GameObject::GameObject(
 
 		assert_msg(sounds.contains(crushSound), crushSound);
 		this->_crushSound = &sounds.at(crushSound);
+	}
+	if (json.contains("crush_weapon")) {
+		std::string weaponId = RESOURCE(base.getName(), json["crush_weapon"].get<std::string>());
+
+		assert_msg(weapons.contains(weaponId), weaponId);
+		this->_crushWeapon = &weapons.at(weaponId);
+		assert_exp(this->_crushWeapon->getType() == WEAPONTYPE_HITSCAN);
+	}
+	if (json.contains("death_weapon")) {
+		std::string weaponId = RESOURCE(base.getName(), json["death_weapon"].get<std::string>());
+
+		assert_msg(weapons.contains(weaponId), weaponId);
+		this->_deathWeapon = &weapons.at(weaponId);
+		assert_exp(this->_deathWeapon->getType() == WEAPONTYPE_HITSCAN);
 	}
 	if (json.contains("death_sound")) {
 		auto deathSound = RESOURCE(base.getName(), json["death_sound"]);
@@ -2095,6 +2111,11 @@ MoveResult GameObject::_updateMove(const MoveOrder &order)
 		break;
 	}
 
+	// A crush weapon may have killed us while clearing the way. Reserving the
+	// next tile now would put a dead unit back on the pathfinding grid.
+	if (this->isDead())
+		return MOVE_DONE;
+
 	if (this->_boundToGrid && this->_altitude == 0) {
 		// The path may have been recomputed while resolving the collision:
 		// start over (turning included) towards the new next tile.
@@ -2179,6 +2200,9 @@ bool GameObject::_updateOrder(HarvestOrder &order)
 
 		if (result == MOVE_IN_PROGRESS)
 			return false;
+		// Died on the way (a crush weapon, for instance): don't go looking for another resource.
+		if (this->isDead())
+			return true;
 
 		Vector2i destTile = this->map->absToTileCoord(order.destination);
 
@@ -3335,8 +3359,24 @@ void GameObject::damage(unsigned amount, DamageType type)
 	this->_die(type);
 }
 
+void GameObject::_fireWeaponAt(const Weapon *weapon, Vector2f pos, GameObject *target)
+{
+	if (const MultiSound *sound = weapon->getSound())
+		sound->play(pos);
+	if (const Effect *hitEffect = weapon->getHitEffect())
+		this->manager->spawnEffect(*hitEffect, pos, this->owner);
+	if (target)
+		this->manager->weaponUsedOn(weapon->getDamage(), weapon, 0, this->owner->state.index, *target);
+	else
+		this->manager->weaponUsedAt(weapon->getDamage(), weapon, pos, this->owner->state.index);
+}
+
 void GameObject::_die(DamageType type)
 {
+	// Crushed units never get here (crushedBy() sets the health directly), so this
+	// does not also fire when an object is crushed.
+	if (this->_deathWeapon && type != DMGTYPE_VOID)
+		this->_fireWeaponAt(this->_deathWeapon, this->_position - Vector2i{0, this->_altitude} + this->_size / 2, nullptr);
 	if (this->_deathAnims.empty() || type == DMGTYPE_VOID) {
 		// A missile that still has volleys to fire stays until those are done.
 		if (this->_behavior != BEHAVIOR_MISSILE || this->missileRoundsLeft == 0)
@@ -4445,7 +4485,7 @@ std::optional<float> GameObject::getStorageDisplay() const
 	return percent;
 }
 
-void GameObject::crushedBy(GameObject *)
+void GameObject::crushedBy(GameObject *crusher)
 {
 	this->deinitGlobalGrid();
 	this->setHealth(0);
@@ -4454,6 +4494,13 @@ void GameObject::crushedBy(GameObject *)
 	this->_gpTimerU[2] = 0;
 	this->_gpTimerU[3] = 0;
 	this->_solid = false;
+	// A whole blob is crushed in one loop: whoever died on the first victims
+	// must not be hit again by the rest.
+	if (this->_crushWeapon && crusher && !crusher->isDead()) {
+		Vector2f impact = crusher->_position - Vector2i{0, crusher->_altitude} + crusher->_size / 2;
+
+		this->_fireWeaponAt(this->_crushWeapon, impact, crusher);
+	}
 }
 
 bool GameObject::isSolid() const
