@@ -85,7 +85,7 @@ else()
 endif()
 find_package(TGUI)
 find_package(SFML 3 REQUIRED COMPONENTS Graphics Audio Network)
-include_directories(thirdparty src src/SFML)
+include_directories(thirdparty src/Engine src/Engine/SFML)
 
 if (CMAKE_BUILD_TYPE STREQUAL Debug)
 	if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -159,7 +159,7 @@ if (NOT NO_TRACE)
 	set(EXTRA_LIBS cpptrace::cpptrace)
 else (NOT NO_TRACE)
 	add_compile_definitions(NO_TRACE)
-	set(EXTRA_SOURCES src/Debug/CrashNone.cpp)
+	set(EXTRA_SOURCES src/Game/Debug/CrashNone.cpp)
 endif (NOT NO_TRACE)
 
 find_package(Lua 5.1 REQUIRED)
@@ -184,111 +184,111 @@ endif ()
 if (WIN32)
 	set(EXTRA_LIBS ${EXTRA_LIBS} ntdll dbghelp)
 	if (NOT NO_TRACE)
-		set(EXTRA_SOURCES src/Debug/CrashWindows.cpp src/Debug/CrashHandlerMain.cpp)
+		set(EXTRA_SOURCES src/Game/Debug/CrashWindows.cpp src/Game/Debug/CrashHandlerMain.cpp)
 	endif (NOT NO_TRACE)
 else ()
 	if (NOT NO_TRACE)
-		set(EXTRA_SOURCES src/Debug/CrashUnix.cpp src/Debug/CrashHandlerMain.cpp)
+		set(EXTRA_SOURCES src/Game/Debug/CrashUnix.cpp src/Game/Debug/CrashHandlerMain.cpp)
 	endif (NOT NO_TRACE)
 endif()
 
 set(MIXRTS_CORE_SOURCES
-	src/Data/Animation.cpp
-	src/Data/Animation.hpp
-	src/Data/ConditionalAnim.cpp
-	src/Data/ConditionalAnim.hpp
-	src/Data/CursorAnimation.cpp
-	src/Data/CursorAnimation.hpp
-	src/Data/Cursor.cpp
-	src/Data/Cursor.hpp
-	src/Data/Effect.cpp
-	src/Data/Effect.hpp
-	src/Data/Extra.cpp
-	src/Data/Extra.hpp
-	src/Data/Faction.cpp
-	src/Data/Faction.hpp
-	src/Data/FindPathAStar.cpp
-	src/Data/FindPathCrashAndTurn.cpp
-	src/Data/FindPath.hpp
-	src/Data/GameManager.cpp
-	src/Data/GameManager.hpp
-	src/Data/GameObject.cpp
-	src/Data/GameObject.hpp
-	src/Data/GameObjectDebug.cpp
-	src/Data/GridMask.hpp
-	src/Data/JsonLua.cpp
-	src/Data/JsonLua.hpp
-	src/Data/Logger.cpp
-	src/Data/Logger.hpp
-	src/Data/Map.cpp
-	src/Data/Map.hpp
-	src/Data/MapState.inl
-	src/Data/Mod.cpp
-	src/Data/Mod.hpp
-	src/Data/ModManager.cpp
-	src/Data/ModManager.hpp
-	src/Data/MultiSound.cpp
-	src/Data/MultiSound.hpp
-	src/Data/Player.cpp
-	src/Data/Player.hpp
-	src/Data/Projectile.cpp
-	src/Data/Projectile.hpp
-	src/Data/Requirements/IReq.hpp
-	src/Data/Requirements/ReqAndCombinator.cpp
-	src/Data/Requirements/ReqAndCombinator.hpp
-	src/Data/Requirements/ReqConst.cpp
-	src/Data/Requirements/ReqConst.hpp
-	src/Data/Requirements/Req.cpp
-	src/Data/Requirements/Req.hpp
-	src/Data/Requirements/ReqOrCombinator.cpp
-	src/Data/Requirements/ReqOrCombinator.hpp
-	src/Data/Upgrade.cpp
-	src/Data/Upgrade.hpp
-	src/Data/Warhead.cpp
-	src/Data/Warhead.hpp
-	src/Data/Weapon.cpp
-	src/Data/Weapon.hpp
-	src/Debug/DebugOptions.hpp
-	src/Debug/DebugOverlay.cpp
-	src/Debug/DebugOverlay.hpp
-	src/Debug/DebugPanel.cpp
-	src/Debug/DebugPanel.hpp
-	src/Debug/Profiler.cpp
-	src/Debug/Profiler.hpp
-	src/forward.hpp
-	src/Resources/Assert.cpp
-	src/Resources/Assert.hpp
-	src/Resources/Game.cpp
-	src/Resources/Game.hpp
-	src/Resources/IScene.hpp
-	src/Resources/RandomWrapper.cpp
-	src/Resources/RandomWrapper.hpp
-	src/Resources/SceneArgument.hpp
-	src/Resources/SceneManager.cpp
-	src/Resources/SceneManager.hpp
-	src/SFML/Color.cpp
-	src/SFML/Color.hpp
-	src/SFML/Screen.cpp
-	src/SFML/Screen.hpp
-	src/SFML/Sound.cpp
-	src/SFML/Sound.hpp
-	src/SFML/SoundManager.cpp
-	src/SFML/SoundManager.hpp
-	src/SFML/Sprite.cpp
-	src/SFML/Sprite.hpp
-	src/SFML/TextureManager.cpp
-	src/SFML/TextureManager.hpp
-	src/UI/LuaUI.cpp
-	src/UI/LuaUI.hpp
-	src/UI/TGUILua.cpp
-	src/UI/TGUILua.hpp
-	src/UI/UI.cpp
-	src/UI/UI.hpp
-	src/Utils.cpp
-	src/Utils.hpp
-	src/Data/SharedLibrary.hpp
-	src/Data/ObjectSpawner.cpp
-	src/Data/ObjectSpawner.hpp
+	src/Engine/Data/Animation.cpp
+	src/Engine/Data/Animation.hpp
+	src/Engine/Data/ConditionalAnim.cpp
+	src/Engine/Data/ConditionalAnim.hpp
+	src/Engine/Data/CursorAnimation.cpp
+	src/Engine/Data/CursorAnimation.hpp
+	src/Engine/Data/Cursor.cpp
+	src/Engine/Data/Cursor.hpp
+	src/Engine/Data/Effect.cpp
+	src/Engine/Data/Effect.hpp
+	src/Engine/Data/Extra.cpp
+	src/Engine/Data/Extra.hpp
+	src/Engine/Data/Faction.cpp
+	src/Engine/Data/Faction.hpp
+	src/Engine/Data/FindPathAStar.cpp
+	src/Engine/Data/FindPathCrashAndTurn.cpp
+	src/Engine/Data/FindPath.hpp
+	src/Engine/Data/GameManager.cpp
+	src/Engine/Data/GameManager.hpp
+	src/Engine/Data/GameObject.cpp
+	src/Engine/Data/GameObject.hpp
+	src/Engine/Data/GameObjectDebug.cpp
+	src/Engine/Data/GridMask.hpp
+	src/Engine/Data/JsonLua.cpp
+	src/Engine/Data/JsonLua.hpp
+	src/Engine/Data/Logger.cpp
+	src/Engine/Data/Logger.hpp
+	src/Engine/Data/Map.cpp
+	src/Engine/Data/Map.hpp
+	src/Engine/Data/MapState.inl
+	src/Engine/Data/Mod.cpp
+	src/Engine/Data/Mod.hpp
+	src/Engine/Data/ModManager.cpp
+	src/Engine/Data/ModManager.hpp
+	src/Engine/Data/MultiSound.cpp
+	src/Engine/Data/MultiSound.hpp
+	src/Engine/Data/Player.cpp
+	src/Engine/Data/Player.hpp
+	src/Engine/Data/Projectile.cpp
+	src/Engine/Data/Projectile.hpp
+	src/Engine/Data/Requirements/IReq.hpp
+	src/Engine/Data/Requirements/ReqAndCombinator.cpp
+	src/Engine/Data/Requirements/ReqAndCombinator.hpp
+	src/Engine/Data/Requirements/ReqConst.cpp
+	src/Engine/Data/Requirements/ReqConst.hpp
+	src/Engine/Data/Requirements/Req.cpp
+	src/Engine/Data/Requirements/Req.hpp
+	src/Engine/Data/Requirements/ReqOrCombinator.cpp
+	src/Engine/Data/Requirements/ReqOrCombinator.hpp
+	src/Engine/Data/Upgrade.cpp
+	src/Engine/Data/Upgrade.hpp
+	src/Engine/Data/Warhead.cpp
+	src/Engine/Data/Warhead.hpp
+	src/Engine/Data/Weapon.cpp
+	src/Engine/Data/Weapon.hpp
+	src/Engine/Debug/DebugOptions.hpp
+	src/Engine/Debug/DebugOverlay.cpp
+	src/Engine/Debug/DebugOverlay.hpp
+	src/Engine/Debug/DebugPanel.cpp
+	src/Engine/Debug/DebugPanel.hpp
+	src/Engine/Debug/Profiler.cpp
+	src/Engine/Debug/Profiler.hpp
+	src/Engine/forward.hpp
+	src/Engine/Resources/Assert.cpp
+	src/Engine/Resources/Assert.hpp
+	src/Engine/Resources/Game.cpp
+	src/Engine/Resources/Game.hpp
+	src/Engine/Resources/IScene.hpp
+	src/Engine/Resources/RandomWrapper.cpp
+	src/Engine/Resources/RandomWrapper.hpp
+	src/Engine/Resources/SceneArgument.hpp
+	src/Engine/Resources/SceneManager.cpp
+	src/Engine/Resources/SceneManager.hpp
+	src/Engine/SFML/Color.cpp
+	src/Engine/SFML/Color.hpp
+	src/Engine/SFML/Screen.cpp
+	src/Engine/SFML/Screen.hpp
+	src/Engine/SFML/Sound.cpp
+	src/Engine/SFML/Sound.hpp
+	src/Engine/SFML/SoundManager.cpp
+	src/Engine/SFML/SoundManager.hpp
+	src/Engine/SFML/Sprite.cpp
+	src/Engine/SFML/Sprite.hpp
+	src/Engine/SFML/TextureManager.cpp
+	src/Engine/SFML/TextureManager.hpp
+	src/Engine/UI/LuaUI.cpp
+	src/Engine/UI/LuaUI.hpp
+	src/Engine/UI/TGUILua.cpp
+	src/Engine/UI/TGUILua.hpp
+	src/Engine/UI/UI.cpp
+	src/Engine/UI/UI.hpp
+	src/Engine/Utils.cpp
+	src/Engine/Utils.hpp
+	src/Engine/Data/SharedLibrary.hpp
+	src/Engine/Data/ObjectSpawner.cpp
+	src/Engine/Data/ObjectSpawner.hpp
 )
 add_library(MixRTS_Core SHARED ${MIXRTS_CORE_SOURCES})
 target_link_libraries(
@@ -308,8 +308,8 @@ endif ()
 
 add_executable(
 	MixRTS
-	src/main.cpp
-	src/Debug/Crash.hpp
+	src/Game/main.cpp
+	src/Game/Debug/Crash.hpp
 	${EXTRA_SOURCES}
 )
 target_link_libraries(MixRTS MixRTS_Core)
@@ -325,14 +325,14 @@ if (NOT NO_TEST)
 
 		${MIXRTS_CORE_SOURCES}
 
-		src/Mock/MockedScreen.cpp
-		src/Mock/MockedScreen.hpp
-		src/Mock/MockedSoundManager.cpp
-		src/Mock/MockedSoundManager.hpp
-		src/Mock/MockedTextureManager.cpp
-		src/Mock/MockedTextureManager.hpp
-		src/Mock/MockedUI.cpp
-		src/Mock/MockedUI.hpp
+		src/Engine/Mock/MockedScreen.cpp
+		src/Engine/Mock/MockedScreen.hpp
+		src/Engine/Mock/MockedSoundManager.cpp
+		src/Engine/Mock/MockedSoundManager.hpp
+		src/Engine/Mock/MockedTextureManager.cpp
+		src/Engine/Mock/MockedTextureManager.hpp
+		src/Engine/Mock/MockedUI.cpp
+		src/Engine/Mock/MockedUI.hpp
 	)
 	target_link_libraries(
 		MixRTS_Core_Mock
