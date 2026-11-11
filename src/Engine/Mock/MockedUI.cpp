@@ -56,9 +56,9 @@ void MockedUI::tileClicked(Vector2i absPos)
 	this->_wrapped->tileClicked(absPos);
 }
 
-void MockedUI::mouseMovedToTile(Vector2i absPos)
+void MockedUI::mouseMoved(Vector2i absPos)
 {
-	this->_wrapped->mouseMovedToTile(absPos);
+	this->_wrapped->mouseMoved(absPos);
 }
 
 void MockedUI::onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta)

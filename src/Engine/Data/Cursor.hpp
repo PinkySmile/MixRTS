@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <SFML/Graphics.hpp>
 #include <nlohmann/json_fwd.hpp>
+#include "forward.hpp"
 #include "Vector.hpp"
 #include "Resources/MSVCMacros.hpp"
 
@@ -19,7 +20,7 @@ private:
 	sf::Texture _texture;
 
 public:
-	Cursor(const std::filesystem::path &base, const nlohmann::json &json);
+	Cursor(const Mod &base, const nlohmann::json &json);
 	const sf::Texture &getTexture() const;
 	const Vector2u &getOffset() const;
 	unsigned getDuration() const;

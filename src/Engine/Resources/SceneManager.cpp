@@ -5,25 +5,15 @@
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
 #include "SceneManager.hpp"
+#include "UI/BaseUI.hpp"
 
 void SceneManager::update()
 {
-	if (this->_loading) {
-		std::unique_lock<std::recursive_mutex> guard{this->_sceneMutex};
-
-		if (!this->_loading)
-			this->_oldScene.reset();
-		if (this->_scene)
-			this->_scene->update();
-		return;
-	}
-	if (!this->_nextScene.name.empty() && this->_currentScene != this->_nextScene.name)
+	if (!this->_loading && !this->_nextScene.name.empty() && this->_currentScene != this->_nextScene.name)
 		this->_applySwitchScene();
 
 	std::unique_lock<std::recursive_mutex> guard{this->_sceneMutex};
 
-	if (!this->_loading)
-		this->_oldScene.reset();
 	if (this->_scene)
 		this->_scene->update();
 }
@@ -32,16 +22,27 @@ void SceneManager::render() const
 {
 	std::unique_lock<std::recursive_mutex> guard{this->_sceneMutex};
 
-	assert_exp(this->_scene || this->_oldScene);
-	(this->_scene ? this->_scene : this->_oldScene)->render();
+	assert_exp(this->_scene);
+	this->_scene->render();
+}
+
+void SceneManager::renderAbove() const
+{
+	{
+		std::unique_lock<std::recursive_mutex> guard{this->_sceneMutex};
+
+		assert_exp(this->_scene);
+		this->_scene->renderAbove();
+	}
+	dispFPS(this->_clock.restart().asSeconds());
 }
 
 void SceneManager::consumeEvent(const sf::Event &event)
 {
 	std::unique_lock<std::recursive_mutex> guard{this->_sceneMutex};
 
-	assert_exp(this->_scene || this->_oldScene);
-	(this->_scene ? this->_scene : this->_oldScene)->consumeEvent(event);
+	assert_exp(this->_scene);
+	this->_scene->consumeEvent(event);
 }
 
 void SceneManager::switchScene(const std::string &name, SceneArguments *args, bool force)
@@ -93,12 +94,17 @@ void SceneManager::_applySwitchScene()
 
 		std::unique_lock<std::recursive_mutex> guard{this->_sceneMutex};
 
-		this->_oldScene = this->_scene;
+		tgui::Panel::Ptr oldPan = this->_scene ? this->_scene->getPanel() : nullptr;
+		tgui::Panel::Ptr newPan = result->getPanel();
+
+		if (oldPan)
+			game->gui.remove(oldPan);
+		if (newPan)
+			game->gui.add(newPan);
 		this->_scene.reset(result);
 		this->_loading = false;
 	};
 
-	this->_oldScene = this->_scene;
 	if (factory.needLoading) {
 		LoadingArguments arg{factory.callback};
 
@@ -107,8 +113,16 @@ void SceneManager::_applySwitchScene()
 		arg.args = this->_nextScene.args;
 
 		std::unique_lock<std::recursive_mutex> guard{this->_sceneMutex};
+		IScene *result = this->_factory["loading"].callback(&arg);
+		assert_exp(result);
+		tgui::Panel::Ptr oldPan = this->_scene ? this->_scene->getPanel() : nullptr;
+		tgui::Panel::Ptr newPan = result->getPanel();
 
-		this->_scene.reset(this->_factory["loading"].callback(&arg));
+		if (oldPan)
+			game->gui.remove(oldPan);
+		if (newPan)
+			game->gui.add(newPan);
+		this->_scene.reset(result);
 	} else
 		cb(factory.callback(this->_nextScene.args));
 	this->_currentScene = this->_nextScene.name;

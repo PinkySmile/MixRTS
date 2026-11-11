@@ -35,5 +35,8 @@ void cleanStackTrace(Stacktrace &st);
 // bool fillReplayStruct(const CrashPacket &packet, ReplayData &data);
 // bool fillStateVector(const CrashPacket &packet, std::vector<byte> &data);
 
+tgui::Panel::Ptr generateCrashPanel(Stacktrace st, const std::exception &e);
+void handleCrash(Stacktrace st, const std::exception &e);
+
 
 #endif //MIXRTS_CRASH_HPP

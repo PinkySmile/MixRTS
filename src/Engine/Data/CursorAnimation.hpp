@@ -7,6 +7,7 @@
 
 
 #include <sol/forward.hpp>
+#include "forward.hpp"
 #include "Cursor.hpp"
 #include "Resources/MSVCMacros.hpp"
 
@@ -17,7 +18,7 @@ private:
 	std::vector<Cursor> _frames;
 
 public:
-	CursorAnimation(const std::filesystem::path &base, const nlohmann::json &json, const nlohmann::json &gen);
+	CursorAnimation(const Mod &base, const nlohmann::json &json, const nlohmann::json &gen);
 	void update();
 	void render() const;
 

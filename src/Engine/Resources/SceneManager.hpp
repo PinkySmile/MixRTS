@@ -35,10 +35,10 @@ private:
 	};
 
 	bool _loading = false;
+	mutable sf::Clock _clock;
 	std::string _currentScene;
 	SceneInitializer _nextScene;
 	mutable std::recursive_mutex _sceneMutex;
-	std::shared_ptr<IScene> _oldScene;
 	std::shared_ptr<IScene> _scene;
 	std::map<std::string, SceneConstructor> _factory;
 
@@ -47,6 +47,7 @@ private:
 public:
 	void update();
 	void render() const;
+	void renderAbove() const;
 	void consumeEvent(const sf::Event &event);
 	void switchScene(const std::string &name, SceneArguments *args = nullptr, bool force = false);
 	SceneConstructor registerScene(

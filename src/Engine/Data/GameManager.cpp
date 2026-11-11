@@ -34,25 +34,21 @@ static Vector2f getScreenSize()
 	return {static_cast<float>(size.x), static_cast<float>(size.y)};
 }
 
-static bool isMouseOverUI()
+static bool isMouseOverUI(const tgui::Container::Ptr &base = nullptr)
 {
 	Vector2i pos = game->screen->getMousePosition();
 
 	pos.x /= guiScale;
 	pos.y /= guiScale;
-	for (auto widget : game->gui.getWidgets()) {
+	for (const auto &widget : base ? base->getWidgets() : game->gui.getWidgets()) {
 		if (!widget->isVisible() || widget->getIgnoreMouseEvents())
 			continue;
 		// Floating windows (debug panel, ...) count fully
-		if (widget->getWidgetType() == "ChildWindow") {
-			if (widget->isMouseOnWidget(pos))
+		if (widget->getWidgetType() == "Panel") {
+			if (isMouseOverUI(widget->cast<tgui::Container>()))
 				return true;
-			continue;
-		}
-		if (auto container = widget->cast<tgui::Container>())
-			for (auto w : container->getWidgets())
-				if (w->isVisible() && w->isMouseOnWidget(pos + container->getPosition()))
-					return true;
+		} else if (widget->isMouseOnWidget(pos))
+			return true;
 	}
 	return false;
 }
@@ -72,24 +68,16 @@ ShakeParams::ShakeParams(const nlohmann::json &j)
 		this->freezeTime = j["freeze_time"];
 }
 
-GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers, LobbySettings settings) :
+GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers, const GameSettings &settings) :
 	_text{game->font},
 	_settings(settings),
 	_factions(factions)
 {
-	std::vector<std::string> allFactions;
-
 	this->_text.setCharacterSize(12 * guiScale);
 	this->_text.setOutlineThickness(1);
 	this->_text.setOutlineColor(sf::Color::Black);
 	this->_text.setPosition({2, 20 * guiScale});
-	allFactions.reserve(this->_factions.size());
-	for (auto &f : this->_factions)
-		allFactions.push_back(f.getName());
-	for (auto &f : this->_factions) {
-		f.load(allFactions);
-		this->_mapStates.emplace_back();
-	}
+	this->_mapStates.resize(this->_factions.size());
 	this->_validateArmors();
 	this->_players.reserve(nbPlayers);
 	this->_debugOverlay = std::make_unique<DebugOverlay>(*this);
@@ -114,11 +102,11 @@ void GameManager::_validateArmors() const
 				assert_msg(wh.getArmorMultipliers().contains(armor), "Warhead \"" + whId + "\" is missing a multiplier for armor \"" + armor + "\"");
 }
 
-void GameManager::loadMap(Mod &mod, const std::filesystem::path &path)
+void GameManager::loadMap(const std::string &path)
 {
 	TRY {
-		this->_map.load(mod, path);
-	} CATCH_AND_RETHROW("While loading map \"" + path.string() + "\"\n")
+		this->_map.load(path);
+	} CATCH_AND_RETHROW("While loading map \"" + path + "\"\n")
 
 	// TODO: Properly convert
 	for (auto &state : this->_mapStates)
@@ -139,10 +127,14 @@ void GameManager::loadMap(Mod &mod, const std::filesystem::path &path)
 	//this->_map.quadrants.resize(x * y);
 }
 
-void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea, unsigned team)
+void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, Vector2i startingArea, unsigned team)
 {
 	size_t index = this->_players.size();
 	auto &faction = this->_factions[factionIndex];
+	Vector2u mapSize = {
+		this->_mapStates[factionIndex].gridSize.x * this->_mapStates[factionIndex].tileSize.x,
+		this->_mapStates[factionIndex].gridSize.y * this->_mapStates[factionIndex].tileSize.y
+	};
 
 	assert_exp(team < MAX_TEAM_COUNT);
 	while (team >= this->_map.grid.placementGrid.size()) {
@@ -155,21 +147,12 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, unsigned
 	this->_players[index].state.team = team;
 	this->_players[index].state.systemMoney = faction.getStartingMoney();
 	for (auto &b : faction.getStartingObjects()) {
-		auto start = this->_mapStates[factionIndex].startAreas[startingArea];
+		Vector2i start = startingArea;
 
-		if (static_cast<int>(start.x) < -b.offset.x)
-			start.x = 0;
-		else
-			start.x = std::min(start.x + b.offset.x, this->_mapStates[factionIndex].gridSize.x * this->_mapStates[factionIndex].tileSize.x - 1);
-		if (static_cast<int>(start.y) < -b.offset.y)
-			start.y = 0;
-		else
-			start.y = std::min(start.y + b.offset.y, this->_mapStates[factionIndex].gridSize.y * this->_mapStates[factionIndex].tileSize.y - 1);
+		start.x = std::max(0, std::min<int>(start.x + b.offset.x, mapSize.x - 1));
+		start.y = std::max(0, std::min<int>(start.y + b.offset.y, mapSize.y - 1));
 		this->spawnObject(index, start, b.queue, b.name);
 	}
-	// FIXME: Always teleport to player 0 starting point
-	if (index == 0)
-		this->centerCameraOn(this->_mapStates[factionIndex].startAreas[startingArea]);
 }
 
 #define SCROLL_SPEED 24
@@ -315,9 +298,6 @@ void GameManager::update()
 			player.checkWon();
 		for (auto &player : this->_players)
 			player.handleUiEvents();
-		if (isMouseOverUI())
-			for (auto &p: this->_players)
-				p.mouseOnUi();
 	}
 
 	{
@@ -945,25 +925,19 @@ void GameManager::consumeEvent(const Event &event)
 
 		pos /= this->_cameraZoom;
 		pos += this->_cameraTranslate;
-		if (!isMouseOverUI()) {
-			for (auto &p : this->_players)
-				p.onMouseMoved(pos);
-		}
+		for (auto &p : this->_players)
+			p.onMouseMoved(pos);
 	} else if (auto mouseDown = event.getIf<sf::Event::MouseButtonPressed>()) {
 		Vector2i pos = mouseDown->position;
 
 		pos /= this->_cameraZoom;
 		pos += this->_cameraTranslate;
 		if (mouseDown->button == sf::Mouse::Button::Left) {
-			if (!isMouseOverUI()) {
-				for (auto &p: this->_players)
-					p.onLeftMouseClicked(pos);
-			}
+			for (auto &p: this->_players)
+				p.onLeftMouseClicked(pos);
 		} else if (mouseDown->button == sf::Mouse::Button::Right) {
-			if (!isMouseOverUI()) {
-				for (auto &p : this->_players)
-					p.onRightMouseClicked(pos);
-			}
+			for (auto &p : this->_players)
+				p.onRightMouseClicked(pos);
 		}
 	} else if (auto mouseUp = event.getIf<sf::Event::MouseButtonReleased>()) {
 		Vector2i pos = mouseUp->position;
@@ -971,15 +945,11 @@ void GameManager::consumeEvent(const Event &event)
 		pos /= this->_cameraZoom;
 		pos += this->_cameraTranslate;
 		if (mouseUp->button == sf::Mouse::Button::Left) {
-			if (!isMouseOverUI()) {
-				for (auto &p: this->_players)
-					p.onLeftMouseReleased(pos);
-			}
+			for (auto &p: this->_players)
+				p.onLeftMouseReleased(pos);
 		} else if (mouseUp->button == sf::Mouse::Button::Right) {
-			if (!isMouseOverUI()) {
-				for (auto &p : this->_players)
-					p.onRightMouseReleased(pos);
-			}
+			for (auto &p : this->_players)
+				p.onRightMouseReleased(pos);
 		}
 	} else if (event.is<sf::Event::FocusLost>()) {
 		game->paused = true;
@@ -1900,7 +1870,7 @@ void GameManager::preloadSprites()
 				this->_preloadedSprites.push_back(sprite.preload(player.getColor()));
 }
 
-const GameManager::LobbySettings &GameManager::getSettings() const
+const GameManager::GameSettings &GameManager::getSettings() const
 {
 	return this->_settings;
 }

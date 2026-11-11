@@ -9,7 +9,7 @@
 #include "../Resources/Game.hpp"
 
 
-Animation::Animation(const std::filesystem::path &base, const nlohmann::json &json)
+Animation::Animation(const Mod &base, const nlohmann::json &json)
 {
 	if (!json.contains("sprite"))
 		return;
@@ -26,7 +26,9 @@ Animation::Animation(const std::filesystem::path &base, const nlohmann::json &js
 	assert_exp(!json.contains("blending") || json["blending"].is_string());
 	assert_exp(!json.contains("coloring") || json["coloring"].is_object());
 
-	this->_file = base / json["sprite"].get<std::string>();
+	std::string relPath = RESOURCE(base.getName(), json["sprite"]);
+
+	this->_file = game->modManager.getPath(relPath).second;
 	if (json.contains("blending")) {
 		if (json["blending"] == "alpha")
 			this->_blending = BLEND_ALPHA;

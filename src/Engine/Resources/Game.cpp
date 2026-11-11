@@ -40,7 +40,7 @@ void Game::pushUserType(sol::state &state)
 {
 	sol::usertype<Game> type = state.new_usertype<Game>("Game");
 
-	type["locale"] = &Game::locale;
+	//type["locale"] = &Game::locale;
 	type["paused"] = &Game::paused;
 	// Minimal immediate-mode drawing API for UI scripts (e.g. drawing a
 	// health bar). Deliberately NOT real methods on Game (no "self" of type
@@ -147,6 +147,10 @@ void Game::init()
 	assert_exp(!::game);
 	::game = this;
 	this->lua["game"] = this;
+
+#ifdef _WIN32
+	ShowWindow(this->screen->getNativeHandle(), SW_MAXIMIZE);
+#endif
 }
 
 #ifdef MOCK

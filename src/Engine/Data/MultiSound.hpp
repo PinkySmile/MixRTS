@@ -15,9 +15,9 @@ class MYDLL_API MultiSound {
 private:
 	std::vector<Sound> _sounds;
 
-	void addObject(const std::filesystem::path &base, const nlohmann::json &json);
+	void addObject(const Mod &base, const nlohmann::json &json);
 public:
-	void init(const std::filesystem::path &base, const nlohmann::json &json);
+	void init(const Mod &base, const nlohmann::json &json);
 	void play(Vector2f pos) const;
 	void play() const;
 };

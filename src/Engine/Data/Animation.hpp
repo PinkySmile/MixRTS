@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <nlohmann/json_fwd.hpp>
 #include <sol/forward.hpp>
+#include "forward.hpp"
 #include "Screen.hpp"
 #include "Sprite.hpp"
 #include "Vector.hpp"
@@ -22,7 +23,7 @@ public:
 		BLEND_SUB
 	};
 
-	Animation(const std::filesystem::path &base, const nlohmann::json &json);
+	Animation(const Mod &base, const nlohmann::json &json);
 	Sprite &getSprite();
 	void setColor(const HSLColor &color);
 	HSLColor getColor() const;

@@ -20,6 +20,7 @@
 #include "Mod.hpp"
 #include "Utils.hpp"
 #include "GameObject.hpp"
+#include "Resources/Game.hpp"
 
 Mod::Mod(std::filesystem::path base, const nlohmann::json &metadata) :
 	_name(metadata["name"]),
@@ -27,14 +28,16 @@ Mod::Mod(std::filesystem::path base, const nlohmann::json &metadata) :
 {
 }
 
-void Mod::loadFactions(const std::filesystem::path &path, std::unordered_map<std::string, Faction> &factions) const
+void Mod::loadFactions(const std::string &relPath, std::unordered_map<std::string, Faction> &factions) const
 {
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
+
 	TRY {
-		std::ifstream stream{this->_base / path};
+		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
 
-		assert_msg(stream, "Failed to open " + path.string());
+		assert_msg(stream, "Failed to open " + path.second.string());
 		stream >> json;
 		if (json.contains("_general"))
 			gen = json["_general"];
@@ -45,23 +48,25 @@ void Mod::loadFactions(const std::filesystem::path &path, std::unordered_map<std
 				continue;
 
 			TRY {
-				std::string rid = RESOURCE(this->_name, id);
+				std::string rid = RESOURCE(path.first->_name, id);
 
 				assert(!factions.contains(rid));
-				factions.emplace(rid, Faction{*this, rid, mergeObjects(jfaction, gen)});
+				factions.emplace(rid, Faction{*path.first, rid, mergeObjects(jfaction, gen)});
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	} CATCH_AND_RETHROW("While loading factions file \"" + path.string() + "\"\n")
+	} CATCH_AND_RETHROW("While loading factions file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadCursors(const std::filesystem::path &path, std::unordered_map<std::string, CursorAnimation> &cursors) const
+void Mod::loadCursors(const std::string &relPath, std::unordered_map<std::string, CursorAnimation> &cursors) const
 {
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
+
 	TRY {
-		std::ifstream stream{this->_base / path};
+		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
 
-		assert_msg(stream, "Failed to open " + path.string());
+		assert_msg(stream, "Failed to open " + path.second.string());
 		stream >> json;
 		if (json.contains("_general"))
 			gen = json["_general"];
@@ -73,20 +78,22 @@ void Mod::loadCursors(const std::filesystem::path &path, std::unordered_map<std:
 
 			TRY {
 				assert(!cursors.contains(id));
-				cursors.emplace(id, CursorAnimation{this->_base, jcursorArr, gen});
+				cursors.emplace(id, CursorAnimation{*path.first, jcursorArr, gen});
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	} CATCH_AND_RETHROW("While loading cursors file \"" + path.string() + "\"\n")
+	} CATCH_AND_RETHROW("While loading cursors file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadSounds(const std::filesystem::path &path, std::unordered_map<std::string, MultiSound> &sounds) const
+void Mod::loadSounds(const std::string &relPath, std::unordered_map<std::string, MultiSound> &sounds) const
 {
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
+
 	TRY {
-		std::ifstream stream{this->_base / path};
+		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
 
-		assert_msg(stream, "Failed to open " + path.string());
+		assert_msg(stream, "Failed to open " + path.second.string());
 		stream >> json;
 		if (json.contains("_general"))
 			gen = json["_general"];
@@ -97,7 +104,7 @@ void Mod::loadSounds(const std::filesystem::path &path, std::unordered_map<std::
 				continue;
 
 			TRY {
-				std::string fullId = RESOURCE(this->_name, id);
+				std::string fullId = RESOURCE(path.first->_name, id);
 				assert_exp(!sounds.contains(fullId));
 				assert_exp(jsound.is_object() || jsound.is_array());
 
@@ -105,21 +112,23 @@ void Mod::loadSounds(const std::filesystem::path &path, std::unordered_map<std::
 					mergeObjects(jsound, gen);
 				else for (auto &s : jsound)
 					mergeObjects(s, gen);
-				sounds[fullId].init(this->_base, jsound);
+				sounds[fullId].init(*path.first, jsound);
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
 
-	} CATCH_AND_RETHROW("While loading sounds file \"" + path.string() + "\"\n")
+	} CATCH_AND_RETHROW("While loading sounds file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<std::string, std::vector<Animation>> &anims) const
+void Mod::loadAnimations(const std::string &relPath, std::unordered_map<std::string, std::vector<Animation>> &anims) const
 {
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
+
 	TRY {
-		std::ifstream stream{this->_base / path};
+		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
 
-		assert_msg(stream, "Failed to open " + path.string());
+		assert_msg(stream, "Failed to open " + path.second.string());
 		stream >> json;
 		if (json.contains("_general"))
 			gen = json["_general"];
@@ -130,9 +139,9 @@ void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<s
 				continue;
 
 			TRY {
-				std::string fullId = RESOURCE(this->_name, id);
+				std::string fullId = RESOURCE(path.first->_name, id);
 				assert_exp(!anims.contains(fullId));
-				auto &v = anims[fullId];
+				std::vector<Animation> &v = anims[fullId];
 
 				assert_exp(janimArr.is_array() || janimArr.is_object());
 				if (janimArr.is_array()) {
@@ -147,14 +156,14 @@ void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<s
 							assert_exp(count != 0);
 						}
 						while (count--)
-							v.emplace_back(this->_base, animJson);
+							v.emplace_back(*path.first, animJson);
 					}
 				} else {
 					assert_exp(janimArr.contains("copy") && janimArr["copy"].is_string());
 					assert_exp(janimArr.contains("inverted") && janimArr["inverted"].is_boolean());
 					assert_exp(!janimArr.contains("count") || janimArr["count"].is_number_unsigned());
 
-					std::string copy = RESOURCE(this->_name, janimArr["copy"]);
+					std::string copy = RESOURCE(path.first->_name, janimArr["copy"]);
 					assert_exp(anims.contains(copy));
 					auto &c = anims[copy];
 					size_t count = janimArr.contains("count") ? janimArr["count"].get<size_t>() : c.size();
@@ -169,11 +178,11 @@ void Mod::loadAnimations(const std::filesystem::path &path, std::unordered_map<s
 				}
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	} CATCH_AND_RETHROW("While loading animations file \"" + path.string() + "\"\n")
+	} CATCH_AND_RETHROW("While loading animations file \"" + path.second.string() + "\"\n")
 }
 
 void Mod::loadObjects(
-	const std::filesystem::path &path,
+	const std::string &relPath,
 	const Faction &base,
 	const std::unordered_map<std::string, std::vector<Animation>> &anims,
 	const std::unordered_map<std::string, MultiSound> &sounds,
@@ -182,12 +191,14 @@ void Mod::loadObjects(
 	std::unordered_map<std::string, GameObject> &objects
 ) const
 {
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
+
 	TRY {
-		std::ifstream stream{this->_base / path};
+		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
 
-		assert_msg(stream, "Failed to open " + path.string());
+		assert_msg(stream, "Failed to open " + path.second.string());
 		stream >> json;
 		if (json.contains("_general"))
 			gen = json["_general"];
@@ -198,23 +209,25 @@ void Mod::loadObjects(
 				continue;
 
 			TRY {
-				std::string fullId = RESOURCE(this->_name, id);
+				std::string fullId = RESOURCE(path.first->_name, id);
 
 				assert_exp(!objects.contains(fullId));
 				objects.emplace(fullId, GameObject{base, fullId, anims, sounds, effects, weapons, mergeObjects(jbuilding, gen)});
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	} CATCH_AND_RETHROW("While loading objects file \"" + path.string() + "\"\n")
+	} CATCH_AND_RETHROW("While loading objects file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadUpgrades(const std::filesystem::path &path, const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades) const
+void Mod::loadUpgrades(const std::string &relPath, const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades) const
 {
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
+
 	TRY {
-		std::ifstream stream{this->_base / path};
+		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
 
-		assert_msg(stream, "Failed to open " + path.string());
+		assert_msg(stream, "Failed to open " + path.second.string());
 		stream >> json;
 		if (json.contains("_general"))
 			gen = json["_general"];
@@ -225,23 +238,25 @@ void Mod::loadUpgrades(const std::filesystem::path &path, const Faction &base, s
 				continue;
 
 			TRY {
-				std::string fullId = RESOURCE(this->_name, id);
+				std::string fullId = RESOURCE(path.first->_name, id);
 
 				assert_exp(!upgrades.contains(fullId));
 				upgrades.emplace(fullId, Upgrade{base, fullId, mergeObjects(jupgrade, gen)});
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	} CATCH_AND_RETHROW("While loading upgrades file \"" + path.string() + "\"\n")
+	} CATCH_AND_RETHROW("While loading upgrades file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadEffects(const std::filesystem::path &path, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, MultiSound> &sounds, std::unordered_map<std::string, Effect> &effects) const
+void Mod::loadEffects(const std::string &relPath, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, MultiSound> &sounds, std::unordered_map<std::string, Effect> &effects) const
 {
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
+
 	TRY {
-		std::ifstream stream{this->_base / path};
+		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
 
-		assert_msg(stream, "Failed to open " + path.string());
+		assert_msg(stream, "Failed to open " + path.second.string());
 		stream >> json;
 		if (json.contains("_general"))
 			gen = json["_general"];
@@ -252,23 +267,25 @@ void Mod::loadEffects(const std::filesystem::path &path, const std::unordered_ma
 				continue;
 
 			TRY {
-				std::string fullId = RESOURCE(this->_name, id);
+				std::string fullId = RESOURCE(path.first->_name, id);
 
 				assert_exp(!effects.contains(fullId));
-				effects.emplace(fullId, Effect{*this, anims, sounds, mergeObjects(jeffect, gen)});
+				effects.emplace(fullId, Effect{*path.first, anims, sounds, mergeObjects(jeffect, gen)});
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	} CATCH_AND_RETHROW("While loading effects file \"" + path.string() + "\"\n")
+	} CATCH_AND_RETHROW("While loading effects file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, Effect> &effects, const std::unordered_map<std::string, MultiSound> &sounds, const std::unordered_map<std::string, Warhead> &warheads, std::unordered_map<std::string, Weapon> &weapons) const
+void Mod::loadWeapons(const std::string &relPath, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, Effect> &effects, const std::unordered_map<std::string, MultiSound> &sounds, const std::unordered_map<std::string, Warhead> &warheads, std::unordered_map<std::string, Weapon> &weapons) const
 {
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
+
 	TRY {
-		std::ifstream stream{this->_base / path};
+		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
 
-		assert_msg(stream, "Failed to open " + path.string());
+		assert_msg(stream, "Failed to open " + path.second.string());
 		stream >> json;
 		if (json.contains("_general"))
 			gen = json["_general"];
@@ -279,23 +296,25 @@ void Mod::loadWeapons(const std::filesystem::path &path, const std::unordered_ma
 				continue;
 
 			TRY {
-				std::string fullId = RESOURCE(this->_name, id);
+				std::string fullId = RESOURCE(path.first->_name, id);
 
 				assert_exp(!weapons.contains(fullId));
-				weapons.emplace(fullId, Weapon{*this, anims, effects, sounds, warheads, mergeObjects(jweapon, gen)});
+				weapons.emplace(fullId, Weapon{*path.first, anims, effects, sounds, warheads, mergeObjects(jweapon, gen)});
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	} CATCH_AND_RETHROW("While loading weapons file \"" + path.string() + "\"\n")
+	} CATCH_AND_RETHROW("While loading weapons file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadWarheads(const std::filesystem::path &path, std::unordered_map<std::string, Warhead> &warheads) const
+void Mod::loadWarheads(const std::string &relPath, std::unordered_map<std::string, Warhead> &warheads) const
 {
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
+
 	TRY {
-		std::ifstream stream{this->_base / path};
+		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
 
-		assert_msg(stream, "Failed to open " + path.string());
+		assert_msg(stream, "Failed to open " + path.second.string());
 		stream >> json;
 		if (json.contains("_general"))
 			gen = json["_general"];
@@ -306,13 +325,13 @@ void Mod::loadWarheads(const std::filesystem::path &path, std::unordered_map<std
 				continue;
 
 			TRY {
-				std::string fullId = RESOURCE(this->_name, id);
+				std::string fullId = RESOURCE(path.first->_name, id);
 
 				assert_exp(!warheads.contains(fullId));
 				warheads.emplace(fullId, Warhead{mergeObjects(jwarhead, gen)});
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
-	} CATCH_AND_RETHROW("While loading warheads file \"" + path.string() + "\"\n")
+	} CATCH_AND_RETHROW("While loading warheads file \"" + path.second.string() + "\"\n")
 }
 
 void Mod::loadArmors(const std::vector<std::string> &allFactions, std::unordered_map<std::string, Warhead> &warheads) const

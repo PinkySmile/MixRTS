@@ -12,7 +12,7 @@
 #include <optional>
 
 #include "MockType.hpp"
-#include "../src/SFML/Screen.hpp"
+#include "Screen.hpp"
 
 //! Drop-in replacement for Screen used by the tests target (see SCREEN_CLASS_IMPLEM
 //! in Resources/Game.hpp and CMakeLists.txt).

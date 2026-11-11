@@ -33,7 +33,7 @@ public:
 	void mouseOnUi() override;
 	void onCancel(Vector2i absPos) override;
 	void tileClicked(Vector2i absPos) override;
-	void mouseMovedToTile(Vector2i absPos) override;
+	void mouseMoved(Vector2i absPos) override;
 	void onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta) override;
 	void update() override;
 	void render() override;

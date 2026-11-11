@@ -288,8 +288,14 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 		UI *ui = f.createUI(&this->uiState, &parent, &this->state, &mapState[i]);
 
 		this->_uis.emplace_back(ui);
-		game->gui.add(ui->getPanel());
 	}
+}
+
+Player::~Player()
+{
+	for (auto &ui : this->_uis)
+		if (ui)
+			game->gui.remove(ui->getPanel());
 }
 
 bool Player::lost() const
@@ -636,7 +642,7 @@ HSLColor Player::getColor() const
 void Player::onMouseMoved(Vector2i pos)
 {
 	if (this->_enabled)
-		this->_uis[this->_currentUi]->mouseMovedToTile(pos);
+		this->_uis[this->_currentUi]->mouseMoved(pos);
 }
 
 void Player::onLeftMouseClicked(Vector2i pos)
@@ -661,10 +667,9 @@ void Player::onRightMouseReleased(Vector2i)
 {
 }
 
-void Player::mouseOnUi()
+bool Player::isMouseOnUi() const
 {
-	if (this->_enabled)
-		this->_uis[this->_currentUi]->mouseOnUi();
+	return this->_uis[this->_currentUi]->isMouseOnUi();
 }
 
 void Player::keyPressed(const Event::KeyPressed &key)
@@ -1095,7 +1100,7 @@ bool Player::consume(const std::string &type, unsigned int amount)
 	return true;
 }
 
-std::vector<std::unique_ptr<UI>> &Player::getUIs()
+std::vector<std::shared_ptr<UI>> &Player::getUIs()
 {
 	return this->_uis;
 }
@@ -1396,7 +1401,7 @@ void Player::pushUserType(sol::state &state)
 	type["render_above"] = &Player::renderAbove;
 	type["handle_ui_events"] = &Player::handleUiEvents;
 	type["color"] = sol::property(&Player::getColor);
-	type["mouse_on_ui"] = &Player::mouseOnUi;
+	type["mouse_on_ui"] = sol::property(&Player::isMouseOnUi);
 	type["primary_faction"] = sol::property(&Player::getPrimaryFaction);
 	type["play_eva"] = &Player::playEVA;
 	type["recompute_locked"] = &Player::recomputeLocked;

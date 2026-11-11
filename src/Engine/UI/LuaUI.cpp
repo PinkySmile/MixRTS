@@ -77,12 +77,6 @@ void LuaUI::updateRender()
 		UI::updateRender();
 }
 
-void LuaUI::mouseOnUi()
-{
-	if (!callLuaFunc(this->_table["mouseOn_ui"]))
-		UI::mouseOnUi();
-}
-
 void LuaUI::onCancel(Vector2i absPos)
 {
 	if (!callLuaFunc(this->_table["on_cancel"], absPos))
@@ -95,10 +89,10 @@ void LuaUI::tileClicked(Vector2i absPos)
 		UI::tileClicked(absPos);
 }
 
-void LuaUI::mouseMovedToTile(Vector2i absPos)
+void LuaUI::mouseMoved(Vector2i absPos)
 {
 	if (!callLuaFunc(this->_table["mouse_moved_to_tile"], absPos))
-		UI::mouseMovedToTile(absPos);
+		UI::mouseMoved(absPos);
 }
 
 void LuaUI::onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta)

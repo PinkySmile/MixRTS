@@ -19,6 +19,25 @@
 #include "Resources/Assert.hpp"
 
 
+static bool isMouseOverUI(const tgui::Container::Ptr &base = nullptr)
+{
+	Vector2i pos = game->screen->getMousePosition();
+
+	pos.x /= guiScale;
+	pos.y /= guiScale;
+	for (const auto &widget : base ? base->getWidgets() : game->gui.getWidgets()) {
+		if (!widget->isVisible() || widget->getIgnoreMouseEvents())
+			continue;
+		// Floating windows (debug panel, ...) count fully
+		if (widget->getWidgetType() == "Panel") {
+			if (isMouseOverUI(widget->cast<tgui::Container>()))
+				return true;
+		} else if (widget->isMouseOnWidget(pos))
+			return true;
+	}
+	return false;
+}
+
 std::string UI::EVAToString(EVASound snd)
 {
 	switch (snd) {
@@ -303,10 +322,10 @@ void UI::pushUserType(sol::state &state)
 	type["poll_event"] = [](UI &ui) { ui.UI::pollEvent(); };
 	type["render_above"] = [](UI &ui) { ui.UI::renderAbove(); };
 	type["update_render"] = [](UI &ui) { ui.UI::updateRender(); };
-	type["mouse_on_ui"] = [](UI &ui) { ui.UI::mouseOnUi(); };
+	type["mouse_on_ui"] = sol::property([](UI &ui) { return ui.UI::isMouseOnUi(); });
 	type["on_cancel"] = [](UI &ui, Vector2i absPos) { ui.UI::onCancel(absPos); };
 	type["tile_clicked"] = [](UI &ui, Vector2i absPos) { ui.UI::tileClicked(absPos); };
-	type["mouse_moved_to_tile"] = [](UI &ui, Vector2i absPos) { ui.UI::mouseMovedToTile(absPos); };
+	type["mouse_moved"] = [](UI &ui, Vector2i absPos) { ui.UI::mouseMoved(absPos); };
 	type["on_key_pressed"] = [](UI &ui, sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta) {
 		ui.UI::onKeyPressed(key, ctrl, shift, alt, meta);
 	};
@@ -468,6 +487,8 @@ void UI::setEnabled(bool enabled)
 {
 	this->_panel->setVisible(enabled);
 	this->_enabled = enabled;
+	if (enabled)
+		this->onUi = isMouseOverUI();
 }
 
 bool UI::isEnabled() const
@@ -542,7 +563,6 @@ void UI::update()
 		anim[1] = (anim[1] + 1) % placement[1].size();
 		anim[2] = (anim[2] + 1) % placement[2].size();
 	}
-	this->_updateCursor();
 	if (this->ownerState->hasRadar != this->_hasRadar) {
 		this->_hasRadar = this->ownerState->hasRadar;
 		if (this->_hasRadar)
@@ -555,7 +575,6 @@ void UI::update()
 		this->_hasLowPower = lowPower;
 		this->playEVA(lowPower ? EVA_POWER_OFF : EVA_POWER_ON, 300, 1, 0);
 	}
-	this->_settings->setVisible(game->paused);
 	for (auto &i : this->_evaCooldown)
 		if (i)
 			i--;
@@ -703,6 +722,8 @@ void UI::renderAbove()
 
 void UI::updateRender()
 {
+	this->_updateCursor();
+	this->_settings->setVisible(game->paused);
 	for (auto &c : this->_cursors)
 		c.second.update();
 }
@@ -853,6 +874,10 @@ void UI::_updateCursorSell()
 
 void UI::_updateCursor()
 {
+	if (this->onUi) {
+		this->_cursor = CURSOR_NORMAL;
+		return;
+	}
 	if (this->_placementBuilding != nullptr) {
 		if (!this->_placementBuilding->getTileData()) {
 			const auto &queueId = this->_placementBuilding->getBuildQueue();
@@ -1230,8 +1255,9 @@ void UI::tileClicked(Vector2i absPos)
 	this->_placementPos = absPos;
 }
 
-void UI::mouseMovedToTile(Vector2i absPos)
+void UI::mouseMoved(Vector2i absPos)
 {
+	this->onUi = isMouseOverUI();
 	if (this->_startDrag)
 		if (std::abs(this->_startDrag->x - absPos.x) > 12 && std::abs(this->_startDrag->y - absPos.y) > 12)
 			this->_dragging = true;
@@ -1256,7 +1282,7 @@ void UI::mouseReleased(Vector2i)
 			this->_tileClickedRepair();
 		else
 			this->_tileClickedNormal();
-	} else {
+	} else if (!this->onUi) {
 		Vector2i tl = {
 			std::min(this->_startDrag->x, this->_placementPos.x),
 			std::min(this->_startDrag->y, this->_placementPos.y)
@@ -1284,18 +1310,20 @@ void UI::mouseReleased(Vector2i)
 
 void UI::onCancel(Vector2i absPos)
 {
+	if (this->onUi)
+		return;
 	if (this->_placementBuilding)
 		this->_placementBuilding = nullptr;
 	else if (!this->state->selectedObjects.empty())
 		this->state->selectedObjects.clear();
 	this->_selling = false;
 	this->_repairing = false;
-	this->mouseMovedToTile(absPos);
+	this->mouseMoved(absPos);
 }
 
-void UI::mouseOnUi()
+bool UI::isMouseOnUi() const
 {
-	this->_cursor = CURSOR_NORMAL;
+	return this->onUi;
 }
 
 void UI::_displaySelectBox(Vector2i top, Vector2u size)

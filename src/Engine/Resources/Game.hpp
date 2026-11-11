@@ -37,6 +37,17 @@ typedef SoundManager SoundManagerImpl;
 //! Random from r, between mi and ma (included)
 #define random_distrib(r, mi, ma) ((((int64_t)(r)() - (int64_t)(r).min()) * (int64_t)((ma) + 1 - (mi))) / ((int64_t)(r).max() - (int64_t)(r).min() + 1) + (int64_t)(mi))
 
+enum LoadingStrategy {
+	LOADING_LAZY,
+	LOADING_BASE_SPRITES,
+	LOADING_ALL
+};
+
+struct Settings {
+	std::string locale = "en";
+	LoadingStrategy loading = LOADING_LAZY;
+};
+
 struct MYDLL_API Game {
 	bool hosting = false;
 	bool paused = false;
@@ -44,7 +55,7 @@ struct MYDLL_API Game {
 	RandomWrapper gameRandom;
 	Logger logger;
 	sf::Font font;
-	std::string locale = "en";
+	Settings settings;
 	std::string lastIp = "127.0.0.1";
 	unsigned short lastPort = 0;
 	std::unique_ptr<ScreenImpl> screen;

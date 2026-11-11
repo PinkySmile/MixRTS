@@ -19,7 +19,7 @@
 #endif
 
 #ifdef _DEBUG
-#define checked_cast(s, t, a) auto s = dynamic_cast<t *>(a); assert_exp(s)
+#define checked_cast(s, t, a) auto s = dynamic_cast<t *>(a); if (!s) throw AssertionFailedException("dynamic_cast<" #t " *>(" #a ")");
 #else
 #define checked_cast(s, t, a) auto s = reinterpret_cast<t *>(a)
 #endif

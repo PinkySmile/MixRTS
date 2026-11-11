@@ -27,7 +27,6 @@ struct MYDLL_API MapState {
 	Vector2u tileSize;
 	Vector2u gridSize;
 	Vector2i translate;
-	std::vector<Vector2u> startAreas;
 
 	struct Quad {
 		Vector2f pt1;
@@ -93,6 +92,7 @@ struct MYDLL_API MapMetadata {
 	std::map<Vector2u, std::vector<unsigned>> skirts;
 	std::vector<sf::Color> mapColors;
 	std::unordered_map<std::string, std::vector<float>> speedMuls;
+	Vector2u tileSize;
 
 	void load(Mod &mod, const std::filesystem::path &path);
 	void loadColors(const std::filesystem::path &path);
@@ -106,6 +106,7 @@ struct MYDLL_API LoadedMap {
 	std::vector<uint32_t> displayedIndices;
 	sf::Image minimap;
 	std::vector<std::vector<uint8_t>> usedSpaces;
+	std::vector<Vector2u> startAreas;
 	//std::vector<std::set<GameObject *>> quadrants;
 	//std::vector<std::unique_ptr<GameObject>> mapObjects;
 	//std::vector<ResourcePatch> resources;
@@ -115,10 +116,25 @@ struct MYDLL_API LoadedMap {
 	sf::Sprite sprite{this->tileSet};
 	sf::RenderTexture renderCache;
 
-	void load(Mod &mod, const std::filesystem::path &path);
+	void load(const std::string &path);
 	void buildCache();
 	void refreshTile(unsigned x, unsigned y, bool commit = true, bool reload = true);
 	float getSpeedMul(const std::vector<std::string> &tags, unsigned terrain) const;
+
+	static sf::Image renderDetailedPreview(const std::string &path);
+};
+
+struct MYDLL_API MapInfo {
+	std::string path;
+	sf::Image preview;
+	std::string name;
+	std::string origin;
+	std::string author;
+	Vector2u gridSize;
+	Vector2u tileSize;
+	std::vector<Vector2u> startAreas;
+
+	void load(const std::string &path);
 };
 
 

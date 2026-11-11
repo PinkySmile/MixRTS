@@ -62,7 +62,7 @@ struct MYDLL_API WarheadHit {
 
 class MYDLL_API GameManager {
 public:
-	struct LobbySettings {
+	struct GameSettings {
 		bool shortGame;
 	};
 
@@ -72,10 +72,10 @@ public:
 	//! Set by projectiles around their calls to weaponUsedAt so that the debug tools know where a hit comes from.
 	const Projectile *hitSource = nullptr;
 
-	GameManager(const std::vector<Faction> &factions, size_t nbPlayers, LobbySettings settings);
+	GameManager(const std::vector<Faction> &factions, size_t nbPlayers, const GameSettings &settings);
 	~GameManager();
-	void loadMap(Mod &mod, const std::filesystem::path &path);
-	void addPlayer(size_t factionIndex, const HSLColor &color, unsigned startingArea, unsigned team);
+	void loadMap(const std::string &path);
+	void addPlayer(size_t factionIndex, const HSLColor &color, Vector2i startingArea, unsigned team);
 	void update();
 	void updateRender();
 	void render();
@@ -133,7 +133,7 @@ public:
 	void shakeScreen(const ShakeParams &params);
 	void preloadAllSprites();
 	void preloadSprites();
-	const LobbySettings &getSettings() const;
+	const GameSettings &getSettings() const;
 
 	// Debug tools
 	//! Opens/closes the debug panel
@@ -168,7 +168,7 @@ public:
 
 private:
 	sf::Text _text;
-	LobbySettings _settings;
+	GameSettings _settings;
 	ShakeParams _shake;
 	unsigned _shakeTimer = 0;
 	float _cameraZoom = 1;

@@ -8,6 +8,8 @@
 
 #include <functional>
 #include <string>
+#include "Utils.hpp"
+#include "Data/GameManager.hpp"
 
 struct SceneArguments {
 	std::function<void (const std::string &)> reportProgressA;
@@ -16,28 +18,40 @@ struct SceneArguments {
 	virtual ~SceneArguments() = default;
 };
 
+struct LobbySettings {
+	float speed;
+	bool shortGame;
+	bool randomSpawn;
+};
+
+struct PlayerArg {
+	std::string faction;
+	std::optional<Vector2f> spawnPoint;
+	std::optional<unsigned> spawnPointIndex;
+	HSLColor color;
+	char team;
+	bool control;
+};
+
+struct PlayerParams {
+	std::string faction;
+	Vector2f spawnPoint;
+	HSLColor color;
+	char team;
+	bool control;
+};
+
 struct GameStartParams {
 	unsigned seed;
-	unsigned p1chr;
-	unsigned p1pal;
-	unsigned p2chr;
-	unsigned p2pal;
-	unsigned stage;
-	unsigned platformConfig;
+	std::string map;
+	std::vector<PlayerParams> players;
+	LobbySettings settings;
 };
 
 struct TitleScreenArguments : public SceneArguments {
-	std::string errorMessage;
 };
 struct InGameArguments : public SceneArguments {
-	class Connection *connection;
 	GameStartParams startParams;
-	class IScene *currentScene;
-};
-struct CharSelectArguments : public SceneArguments {
-	class Connection *connection;
-	GameStartParams startParams;
-	bool restore;
 };
 struct SpectatorArguments : public SceneArguments {
 	class SpectatorConnection *connection;

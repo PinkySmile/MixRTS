@@ -155,6 +155,7 @@ public:
 	};
 
 	Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &state);
+	~Player();
 	bool lost() const;
 	void update();
 	void checkWon();
@@ -164,7 +165,7 @@ public:
 	void handleUiEvents();
 	void setEnabled(bool enabled);
 	HSLColor getColor() const;
-	void mouseOnUi();
+	bool isMouseOnUi() const;
 	void keyPressed(const sf::Event::KeyPressed &key);
 	const Faction &getPrimaryFaction() const;
 	const std::unordered_map<std::string, const GameObject *> &getObjects() const;
@@ -174,7 +175,7 @@ public:
 	void lockQueue(const std::string &queueId);
 	void resetQueue(const std::string &queueId);
 	void refreshQueue(const std::string &queueId);
-	std::vector<std::unique_ptr<UI>> &getUIs();
+	std::vector<std::shared_ptr<UI>> &getUIs();
 	void onMouseMoved(Vector2i pos);
 	void onLeftMouseClicked(Vector2i pos);
 	void onRightMouseClicked(Vector2i pos);
@@ -205,7 +206,7 @@ private:
 	HSLColor _color;
 	const Faction &_primaryFaction;
 	const std::vector<Faction> &_factions;
-	std::vector<std::unique_ptr<UI>> _uis;
+	std::vector<std::shared_ptr<UI>> _uis;
 	std::unordered_map<std::string, const GameObject *> _loadedObjects;
 	std::unordered_map<std::string, const Upgrade *> _loadedUpgrades;
 

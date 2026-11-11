@@ -11,7 +11,7 @@
 #include "../Resources/Game.hpp"
 
 
-CursorAnimation::CursorAnimation(const std::filesystem::path &base, const nlohmann::json &json, const nlohmann::json &gen)
+CursorAnimation::CursorAnimation(const Mod &base, const nlohmann::json &json, const nlohmann::json &gen)
 {
 	for (auto jcursor : json)
 		this->_frames.emplace_back(base, mergeObjects(jcursor, gen));

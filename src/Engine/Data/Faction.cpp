@@ -242,21 +242,21 @@ Faction::~Faction()
 void Faction::load(const std::vector<std::string> &allFactions)
 {
 	TRY {
-		for (auto &a: this->_animations)
+		for (auto &a : this->_animations)
 			this->_base.loadAnimations(a, this->_loadedAnimations);
-		for (auto &a: this->_sounds)
+		for (auto &a : this->_sounds)
 			this->_base.loadSounds(a, this->_loadedSounds);
-		for (auto &e: this->_effects)
+		for (auto &e : this->_effects)
 			this->_base.loadEffects(e, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects);
-		for (auto &w: this->_warheads)
+		for (auto &w : this->_warheads)
 			this->_base.loadWarheads(w, this->_loadedWarheads);
 		if (!this->_warheads.empty())
 			this->_base.loadArmors(allFactions, this->_loadedWarheads);
-		for (auto &w: this->_weapons)
+		for (auto &w : this->_weapons)
 			this->_base.loadWeapons(w, this->_loadedAnimations, this->_loadedEffects, this->_loadedSounds, this->_loadedWarheads, this->_loadedWeapons);
-		for (auto &u: this->_objects)
+		for (auto &u : this->_objects)
 			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects, this->_loadedWeapons, this->_loadedObjects);
-		for (auto &u: this->_upgrades)
+		for (auto &u : this->_upgrades)
 			this->_base.loadUpgrades(u, *this, this->_loadedUpgrades);
 		for (auto &[n, q] : this->_queues)
 			if (q.starportParams)

@@ -186,7 +186,7 @@ namespace
 			return "KeepMoving(duration=" + std::to_string(o.duration) + ")";
 		}
 
-		std::string operator()(const KeepMovingAndDieOrder &o) const
+		std::string operator()(const KeepMovingAndDieOrder &) const
 		{
 			return "KeepMovingAndDie";
 		}

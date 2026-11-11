@@ -9,7 +9,7 @@
 #include "../Resources/Game.hpp"
 #include "Resources/Assert.hpp"
 
-Cursor::Cursor(const std::filesystem::path &base, const nlohmann::json &json)
+Cursor::Cursor(const Mod &base, const nlohmann::json &json)
 {
 	assert_exp(json.contains("center"));
 	assert_exp(json["center"].is_object());
@@ -23,7 +23,11 @@ Cursor::Cursor(const std::filesystem::path &base, const nlohmann::json &json)
 	assert_exp(json["duration"].is_number());
 	this->_offset.x = json["center"]["x"].get<unsigned>();
 	this->_offset.y = json["center"]["y"].get<unsigned>();
-	assert_exp(this->_texture.loadFromFile(base / json["sprite"].get<std::string>()));
+
+	std::string relPath = RESOURCE(base.getName(), json["sprite"]);
+	std::filesystem::path path = game->modManager.getPath(relPath).second;
+
+	assert_exp(this->_texture.loadFromFile(path));
 	this->_duration = json["duration"];
 }
 

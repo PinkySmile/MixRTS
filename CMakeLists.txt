@@ -284,6 +284,8 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/UI/TGUILua.hpp
 	src/Engine/UI/UI.cpp
 	src/Engine/UI/UI.hpp
+	src/Engine/UI/BaseUI.cpp
+	src/Engine/UI/BaseUI.hpp
 	src/Engine/Utils.cpp
 	src/Engine/Utils.hpp
 	src/Engine/Data/SharedLibrary.hpp
@@ -309,7 +311,16 @@ endif ()
 add_executable(
 	MixRTS
 	src/Game/main.cpp
+	src/Game/Debug/Crash.cpp
 	src/Game/Debug/Crash.hpp
+	src/Game/Scenes/TitleScreen.cpp
+	src/Game/Scenes/TitleScreen.hpp
+	src/Game/Scenes/LoadingScene.cpp
+	src/Game/Scenes/LoadingScene.hpp
+	src/Game/Args.cpp
+	src/Game/Args.hpp
+	src/Game/Scenes/InGame.cpp
+	src/Game/Scenes/InGame.hpp
 	${EXTRA_SOURCES}
 )
 target_link_libraries(MixRTS MixRTS_Core)

@@ -215,6 +215,7 @@ public:
 	std::optional<Cursor> forcedCursor;
 	bool lost = false;
 	bool won = false;
+	bool onUi = false;
 
 	UI(const Faction &faction, UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map);
 	virtual ~UI();
@@ -223,16 +224,16 @@ public:
 	tgui::Panel::Ptr getPanel() const;
 	const Faction &getFaction() const;
 	void selectBuildingForPlacement(const std::string &id);
+	bool isMouseOnUi() const;
 
 	virtual void playEVA(EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
 	virtual std::optional<Event> pollEvent();
 	virtual void renderAbove();
 	virtual void updateRender();
 
-	virtual void mouseOnUi();
 	virtual void onCancel(Vector2i absPos);
 	virtual void tileClicked(Vector2i absPos);
-	virtual void mouseMovedToTile(Vector2i absPos);
+	virtual void mouseMoved(Vector2i absPos);
 	virtual void mouseReleased(Vector2i absPos);
 	virtual void onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta);
 	virtual void update();
