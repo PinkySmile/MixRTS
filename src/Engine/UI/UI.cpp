@@ -1251,7 +1251,8 @@ void UI::_tileClickedSell()
 
 void UI::tileClicked(Vector2i absPos)
 {
-	this->_startDrag = absPos;
+	if (!this->onUi)
+		this->_startDrag = absPos;
 	this->_placementPos = absPos;
 }
 
@@ -1266,23 +1267,7 @@ void UI::mouseMoved(Vector2i absPos)
 
 void UI::mouseReleased(Vector2i)
 {
-	if (!this->_dragging) {
-		this->_startDrag.reset();
-		if (this->_placementBuilding != nullptr)
-			return this->_handleTryPlace();
-		this->_objectBuffer.clear();
-		this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer, true, [this](const GameObject *obj) {
-			// Stealthed enemies can't be hovered, selected nor targeted.
-			return !obj->isHiddenFrom(this->ownerState->team);
-		});
-
-		if (this->_selling)
-			this->_tileClickedSell();
-		else if (this->_repairing)
-			this->_tileClickedRepair();
-		else
-			this->_tileClickedNormal();
-	} else if (!this->onUi) {
+	if (this->_dragging) {
 		Vector2i tl = {
 			std::min(this->_startDrag->x, this->_placementPos.x),
 			std::min(this->_startDrag->y, this->_placementPos.y)
@@ -1304,6 +1289,24 @@ void UI::mouseReleased(Vector2i)
 			this->_objectBuffer.front()->select();
 			for (auto t : this->_objectBuffer)
 				this->state->selectedObjects.emplace(t);
+		}
+	} else {
+		this->_startDrag.reset();
+		if (!this->onUi) {
+			if (this->_placementBuilding != nullptr)
+				return this->_handleTryPlace();
+			this->_objectBuffer.clear();
+			this->manager->getObjectsInArea(this->_placementPos, {1, 1}, this->_objectBuffer, true, [this](const GameObject *obj) {
+				// Stealthed enemies can't be hovered, selected nor targeted.
+				return !obj->isHiddenFrom(this->ownerState->team);
+			});
+
+			if (this->_selling)
+				this->_tileClickedSell();
+			else if (this->_repairing)
+				this->_tileClickedRepair();
+			else
+				this->_tileClickedNormal();
 		}
 	}
 }
