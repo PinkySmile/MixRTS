@@ -46,6 +46,7 @@ public:
 	//! Drains every owned UI. Each returned event is recorded with the current tick.
 	virtual std::optional<UI::Event> pollEvent();
 	[[nodiscard]] const std::vector<RecordedAction> &getRecordedActions() const;
+	[[nodiscard]] CrashJournal &getCrashJournal();
 
 protected:
 	void _updateUis();
@@ -59,6 +60,7 @@ protected:
 	size_t _currentUi = 0;
 	bool _enabled = false;
 	std::vector<RecordedAction> _recorded;
+	CrashJournal _journal;
 
 private:
 	bool _haveEnvironment = false;

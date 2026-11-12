@@ -2,6 +2,7 @@
 // Created by PinkySmile on 07/04/2026.
 //
 
+#include <atomic>
 #include <set>
 #include <fstream>
 #include <sol/sol.hpp>
@@ -15,6 +16,7 @@
 #include "Projectile.hpp"
 #include "Player.hpp"
 #include "Mod.hpp"
+#include "Replay.hpp"
 #include "UI/UI.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
@@ -255,6 +257,12 @@ void GameManager::update()
 	PROFILE_SCOPE("update");
 	this->_forceStep = false;
 	this->_tick++;
+	// Publish the tick that is about to run, before any of it can fault. The handler then
+	// keeps this value even if this call never returns.
+	if (crashReplayAnchor.magic == CrashReplayAnchor::MAGIC) {
+		crashReplayAnchor.tick = static_cast<uint32_t>(this->_tick);
+		std::atomic_signal_fence(std::memory_order_release);
+	}
 	this->_hitThisTick = false;
 	if (this->_shake.time) {
 		this->_shakeTimer++;

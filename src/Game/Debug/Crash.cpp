@@ -71,6 +71,7 @@ tgui::Panel::Ptr generateCrashPanel(Stacktrace st, const std::exception &e)
 	if (game && game->game) {
 		if (auto *inGame = dynamic_cast<InGame *>(game->scene.getCurrentScene().second)) {
 			try {
+				crashReplayAnchor.captureCrashTick();
 				inGame->saveReplay(path);
 			} catch (const std::exception &) {
 			}

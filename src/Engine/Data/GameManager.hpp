@@ -165,6 +165,8 @@ public:
 	//! Runs a single tick while paused
 	void requestStep();
 	[[nodiscard]] uint64_t getTick() const;
+	//! Address of the tick counter. The crash handler reads it from a signal without calling in.
+	[[nodiscard]] const uint64_t *getTickPointer() const { return &this->_tick; }
 	//! Number of selectable grid views (see DebugOptions::gridView)
 	[[nodiscard]] size_t getGridViewCount() const;
 	[[nodiscard]] std::string getGridViewLabel(unsigned char view) const;

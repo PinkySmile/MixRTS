@@ -6,6 +6,7 @@
 #define MIXRTS_INGAME_HPP
 
 
+#include <atomic>
 #include <unordered_map>
 #include "Data/Faction.hpp"
 #include "Data/Replay.hpp"
@@ -21,6 +22,12 @@ protected:
 	//! Set from the constructor. The destructor reads this directly so a subclass that throws still opts out.
 	bool _saveReplays = true;
 	bool _replaySaved = false;
+	bool _crashAnchorPublished = false;
+	std::vector<uint8_t> _crashHeader;
+	std::vector<CrashReplayStream> _crashStreams;
+
+	void _publishCrashAnchor();
+	void _retractCrashAnchor();
 	std::vector<Faction> _loadedFactions;
 	sf::Clock _clock;
 	float _timer = 0;

@@ -7,8 +7,10 @@
 #include <winternl.h>
 #include <dbghelp.h>
 #include <cpptrace/cpptrace.hpp>
+#include <vector>
 #include <TGUI/Widgets/RichTextLabel.hpp>
 #include "Crash.hpp"
+#include "Data/Replay.hpp"
 #include "Utils.hpp"
 
 
@@ -18,6 +20,7 @@ struct CrashPacket {
 	DWORD    tid;
 	void     *exceptionPointersParam;
 	void     *faultAddress;
+	const void *replayAnchor;
 	size_t   frameCount;
 	cpptrace::safe_object_frame frames[MAX_STACK_FRAMES];
 };
@@ -118,6 +121,8 @@ static size_t captureSafeTrace(cpptrace::safe_object_frame *buffer, size_t maxFr
 
 static LONG WINAPI exceptionFilter(EXCEPTION_POINTERS* ep)
 {
+	crashReplayAnchor.captureCrashTick();
+
 	HANDLE wpipe = gCrashConfig->wpipe;
 	HANDLE rpipe  = gCrashConfig->rpipe;
 
@@ -132,6 +137,7 @@ static LONG WINAPI exceptionFilter(EXCEPTION_POINTERS* ep)
 	packet.pid = GetCurrentProcessId();
 	packet.tid = GetCurrentThreadId();
 	packet.exceptionPointersParam = ep;
+	packet.replayAnchor = &crashReplayAnchor;
 
 	STARTUPINFOA si{};
 	PROCESS_INFORMATION pi{};
@@ -317,6 +323,92 @@ std::string crashPacketToString(const CrashPacket &packet)
 
 	trace.print(ss, false);
 	return ss.str();
+}
+
+static constexpr size_t MAX_CRASH_HEADER = 1u << 20;
+static constexpr size_t MAX_CRASH_STREAM = 32u << 20;
+static constexpr uint32_t MAX_CRASH_PLAYERS = 64;
+
+static bool readRemote(HANDLE process, const void *address, void *dst, size_t size)
+{
+	SIZE_T copied = 0;
+
+	if (size == 0)
+		return true;
+	if (!address)
+		return false;
+	return ReadProcessMemory(process, address, dst, size, &copied) && copied == size;
+}
+
+bool extractCrashReplay(const CrashPacket &packet, const std::filesystem::path &dir)
+{
+	if (!packet.replayAnchor)
+		return false;
+	if (!DebugActiveProcess(packet.pid))
+		return false;
+	DebugSetProcessKillOnExit(FALSE);
+
+	HANDLE process = nullptr;
+	DEBUG_EVENT event{};
+	bool pending = false;
+	DWORD pendingPid = 0;
+	DWORD pendingTid = 0;
+
+	while (WaitForDebugEvent(&event, 10000)) {
+		if (event.dwDebugEventCode == CREATE_PROCESS_DEBUG_EVENT) {
+			process = event.u.CreateProcessInfo.hProcess;
+			if (event.u.CreateProcessInfo.hFile)
+				CloseHandle(event.u.CreateProcessInfo.hFile);
+		}
+		if (event.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT && event.u.LoadDll.hFile)
+			CloseHandle(event.u.LoadDll.hFile);
+		if (event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT) {
+			pending = true;
+			pendingPid = event.dwProcessId;
+			pendingTid = event.dwThreadId;
+			break;
+		}
+		ContinueDebugEvent(event.dwProcessId, event.dwThreadId, DBG_CONTINUE);
+	}
+
+	bool saved = false;
+
+	if (process && pending) {
+		CrashReplayAnchor anchor{};
+
+		if (
+			readRemote(process, packet.replayAnchor, &anchor, sizeof(anchor)) &&
+			anchor.magic == CrashReplayAnchor::MAGIC &&
+			anchor.header && anchor.headerSize > 0 && anchor.headerSize <= MAX_CRASH_HEADER &&
+			anchor.playerCount <= MAX_CRASH_PLAYERS &&
+			(anchor.playerCount == 0 || anchor.streams)
+		) {
+			std::vector<uint8_t> header(anchor.headerSize);
+			std::vector<CrashReplayStream> streams(anchor.playerCount);
+			std::vector<std::vector<uint8_t>> encoded(anchor.playerCount);
+			bool readable = readRemote(process, anchor.header, header.data(), header.size());
+
+			if (readable && anchor.playerCount)
+				readable = readRemote(process, anchor.streams, streams.data(), streams.size() * sizeof(CrashReplayStream));
+			for (uint32_t i = 0; readable && i < anchor.playerCount; i++) {
+				if (streams[i].size > MAX_CRASH_STREAM || (streams[i].size && !streams[i].data)) {
+					readable = false;
+					break;
+				}
+				encoded[i].resize(streams[i].size);
+				if (streams[i].size)
+					readable = readRemote(process, streams[i].data, encoded[i].data(), encoded[i].size());
+			}
+			if (readable)
+				saved = ReplayData::saveRecovered(header.data(), header.size(), anchor.capturedTick(), encoded, dir / "replay.replay");
+		}
+	}
+	if (pending)
+		ContinueDebugEvent(pendingPid, pendingTid, DBG_CONTINUE);
+	DebugActiveProcessStop(packet.pid);
+	if (process)
+		CloseHandle(process);
+	return saved;
 }
 
 CrashPacket *allocCrashPacket()

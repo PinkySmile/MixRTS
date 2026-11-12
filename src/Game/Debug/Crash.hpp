@@ -32,8 +32,10 @@ tgui::Panel::Ptr crashPacketPanel(const CrashPacket &packet);
 std::string crashPacketToString(const CrashPacket &packet);
 std::string stacktraceToRichString(Stacktrace st);
 void cleanStackTrace(Stacktrace &st);
-// bool fillReplayStruct(const CrashPacket &packet, ReplayData &data);
-// bool fillStateVector(const CrashPacket &packet, std::vector<byte> &data);
+//! File descriptor the crash handler inherits and writes one byte to once the game may exit.
+static constexpr int CRASH_ACK_FD = 3;
+//! Reads the in-progress replay out of the crashed process, if one was published.
+bool extractCrashReplay(const CrashPacket &packet, const std::filesystem::path &dir);
 
 tgui::Panel::Ptr generateCrashPanel(Stacktrace st, const std::exception &e);
 void handleCrash(Stacktrace st, const std::exception &e);

@@ -6,6 +6,22 @@
 #include "Crash.hpp"
 #include "Resources/Game.hpp"
 
+#ifdef __linux__
+#include <unistd.h>
+
+static void acknowledgeCrash()
+{
+	char ack = 1;
+
+	(void)!write(CRASH_ACK_FD, &ack, 1);
+	close(CRASH_ACK_FD);
+}
+#else
+static void acknowledgeCrash()
+{
+}
+#endif
+
 void replace(std::string &str, const std::string &from, const std::string &to) {
 	while (true) {
 		size_t start_pos = str.find(from);
@@ -208,15 +224,22 @@ int crashHandlerMain()
 
 	readCrashPacket(packet);
 
-	sf::RenderWindow window{sf::VideoMode{sf::Vector2u{1000, 600}}, "Game crashed!"};
-	tgui::Gui gui{window};
-	tgui::Panel::Ptr panel = crashPacketPanel(*packet);
 	std::string folder = "crash-";
 	std::error_code err;
 	folder += timebuffer;
 	std::filesystem::path path = folder;
 
 	std::filesystem::create_directory(path, err);
+
+	try {
+		extractCrashReplay(*packet, path);
+	} catch (const std::exception &) {}
+	acknowledgeCrash();
+
+	sf::RenderWindow window{sf::VideoMode{sf::Vector2u{1000, 600}}, "Game crashed!"};
+	tgui::Gui gui{window};
+	tgui::Panel::Ptr panel = crashPacketPanel(*packet);
+
 	std::filesystem::copy("latest.log", path / "log_file.log", err);
 	std::ofstream stream{path / "stacktrace.txt"};
 

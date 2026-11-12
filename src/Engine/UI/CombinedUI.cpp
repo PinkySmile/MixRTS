@@ -55,7 +55,14 @@ void CombinedUI::_record(const ReplayAction &action)
 	// Tick 0 is before the first simulation step. File frame 0 is tick 1, so keep the tag in range.
 	if (frame == 0)
 		frame = 1;
-	this->_recorded.push_back(RecordedAction{frame, action});
+
+	RecordedAction recorded{frame, action};
+
+	this->_recorded.push_back(recorded);
+
+	std::vector<uint8_t> bytes;
+	ReplayData::encodeAction(bytes, recorded);
+	this->_journal.append(bytes.data(), bytes.size());
 }
 
 void CombinedUI::_record(const UI::Event &event)
@@ -74,6 +81,8 @@ void CombinedUI::_captureEnvironment()
 		this->_screenSize = current;
 		this->_uiScale = guiScale;
 		this->_haveEnvironment = true;
+		this->_record(ScreenSizeChanged{current});
+		this->_record(SettingsChanged{guiScale});
 		return;
 	}
 	if (current != this->_screenSize) {
@@ -202,6 +211,11 @@ std::optional<UI::Event> CombinedUI::pollEvent()
 const std::vector<RecordedAction> &CombinedUI::getRecordedActions() const
 {
 	return this->_recorded;
+}
+
+CrashJournal &CombinedUI::getCrashJournal()
+{
+	return this->_journal;
 }
 
 ReplayCombinedUI::ReplayCombinedUI(

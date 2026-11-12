@@ -3,6 +3,7 @@
 //
 
 #include <ctime>
+#include <sstream>
 #include "InGame.hpp"
 #include "Data/Player.hpp"
 #include "Data/Effect.hpp"
@@ -94,6 +95,8 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 
 InGame::~InGame()
 {
+	// Drop the anchor before any buffer it points at is freed.
+	this->_retractCrashAnchor();
 	// Read the flag directly: a virtual call here would not reach a subclass that is already destroyed.
 	if (this->_saveReplays)
 		this->saveReplay("replays");
@@ -138,11 +141,19 @@ void InGame::saveReplay(const std::filesystem::path &dir)
 			actions.push_back(players[i].getCombinedUI().getRecordedActions());
 		}
 
+		// getTick() is the step in progress when an exception left update(). Playback enters
+		// every tick up to this one, so the faulting step runs again. A captured signal
+		// stores that same tick on the anchor.
+		uint32_t tick = static_cast<uint32_t>(game->game->getTick());
+
+		if (crashReplayAnchor.crashed)
+			tick = crashReplayAnchor.crashTick;
+
 		auto data = ReplayData::fromGame(
 			this->_startParams,
 			this->_mapCrc,
 			crcs,
-			static_cast<uint32_t>(game->game->getTick()),
+			tick,
 			std::move(actions)
 		);
 		std::string stamp = replayTimestamp();
@@ -169,8 +180,61 @@ void InGame::renderAbove() const
 	game->game->renderAbove();
 }
 
+void InGame::_publishCrashAnchor()
+{
+	if (!this->_saveReplays || this->_crashAnchorPublished || !game || !game->game)
+		return;
+
+	auto &players = game->game->getPlayers();
+	std::vector<uint32_t> crcs;
+	std::vector<std::vector<RecordedAction>> actions(players.size());
+
+	assert_exp(players.size() == this->_startParams.players.size());
+	for (size_t i = 0; i < players.size(); i++)
+		crcs.push_back(this->_factionCrcs.at(this->_startParams.players[i].faction));
+
+	auto data = ReplayData::fromGame(this->_startParams, this->_mapCrc, crcs, 0, std::move(actions));
+	std::ostringstream header{std::ios::out | std::ios::binary};
+
+	data.save(header);
+
+	std::string bytes = header.str();
+
+	this->_crashHeader.assign(bytes.begin(), bytes.end());
+	this->_crashStreams.assign(players.size(), {});
+	for (size_t i = 0; i < players.size(); i++)
+		players[i].getCombinedUI().getCrashJournal().bind(&this->_crashStreams[i]);
+
+	crashReplayAnchor.header = this->_crashHeader.data();
+	crashReplayAnchor.headerSize = this->_crashHeader.size();
+	crashReplayAnchor.tick = static_cast<uint32_t>(game->game->getTick());
+	crashReplayAnchor.playerCount = static_cast<uint32_t>(players.size());
+	crashReplayAnchor.streams = this->_crashStreams.data();
+	crashReplayAnchor.liveTick = game->game->getTickPointer();
+	crashReplayAnchor.crashTick = 0;
+	crashReplayAnchor.crashed = 0;
+	std::atomic_signal_fence(std::memory_order_release);
+	crashReplayAnchor.magic = CrashReplayAnchor::MAGIC;
+	this->_crashAnchorPublished = true;
+}
+
+void InGame::_retractCrashAnchor()
+{
+	if (!this->_crashAnchorPublished)
+		return;
+	crashReplayAnchor.magic = 0;
+	std::atomic_signal_fence(std::memory_order_release);
+	crashReplayAnchor.liveTick = nullptr;
+	crashReplayAnchor.crashed = 0;
+	this->_crashAnchorPublished = false;
+}
+
 void InGame::update()
 {
+	this->_publishCrashAnchor();
+	if (this->_crashAnchorPublished && game && game->game)
+		crashReplayAnchor.tick = static_cast<uint32_t>(game->game->getTick());
+
 	float sec = this->_clock.restart().asSeconds();
 
 	if (sec >= 0.25)
@@ -178,6 +242,8 @@ void InGame::update()
 	this->_timer += 50 * sec * this->_startParams.settings.speed;
 	while (this->_timer >= 1) {
 		game->game->update();
+		if (this->_crashAnchorPublished)
+			crashReplayAnchor.tick = static_cast<uint32_t>(game->game->getTick());
 		if (game->game->finished) {
 			game->scene.switchScene("title_screen");
 			return;

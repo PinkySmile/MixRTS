@@ -24,6 +24,11 @@ bool createCoreDump(const CrashPacket *, const std::filesystem::path &)
 	return true;
 }
 
+bool extractCrashReplay(const CrashPacket &, const std::filesystem::path &)
+{
+	return false;
+}
+
 tgui::Panel::Ptr crashPacketPanel(const CrashPacket &)
 {
 	return tgui::Panel::create();

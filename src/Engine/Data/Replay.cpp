@@ -2,8 +2,10 @@
 // Created by PinkySmile on 12/11/2026.
 //
 
+#include <atomic>
 #include <cstring>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include "Replay.hpp"
 #include "Resources/SceneArgument.hpp"
@@ -13,10 +15,10 @@ namespace {
 
 class BinaryWriter {
 private:
-	std::ofstream &_out;
+	std::ostream &_out;
 
 public:
-	explicit BinaryWriter(std::ofstream &out) : _out(out) {}
+	explicit BinaryWriter(std::ostream &out) : _out(out) {}
 
 	void bytes(const void *data, size_t size)
 	{
@@ -90,10 +92,10 @@ public:
 
 class BinaryReader {
 private:
-	std::ifstream &_in;
+	std::istream &_in;
 
 public:
-	explicit BinaryReader(std::ifstream &in) : _in(in) {}
+	explicit BinaryReader(std::istream &in) : _in(in) {}
 
 	void bytes(void *data, size_t size)
 	{
@@ -356,7 +358,11 @@ ReplayData ReplayData::load(const std::filesystem::path &path)
 
 	if (!stream)
 		throw std::runtime_error("Could not open replay file \"" + path.string() + "\"");
+	return load(stream);
+}
 
+ReplayData ReplayData::load(std::istream &stream)
+{
 	BinaryReader in{stream};
 	ReplayData data;
 
@@ -405,6 +411,11 @@ void ReplayData::save(const std::filesystem::path &path) const
 
 	if (!stream)
 		throw std::runtime_error("Could not write replay file \"" + path.string() + "\"");
+	this->save(stream);
+}
+
+void ReplayData::save(std::ostream &stream) const
+{
 	assert_exp(this->actions.size() == this->players.size());
 
 	BinaryWriter out{stream};
@@ -506,4 +517,188 @@ ReplayData ReplayData::fromGame(
 		});
 	}
 	return data;
+}
+
+void ReplayData::encodeAction(std::vector<uint8_t> &out, const RecordedAction &action)
+{
+	std::ostringstream stream{std::ios::out | std::ios::binary};
+	BinaryWriter writer{stream};
+
+	writer.varint(action.frame);
+	writeAction(writer, action.action);
+
+	std::string bytes = stream.str();
+	out.insert(out.end(), bytes.begin(), bytes.end());
+}
+
+std::vector<RecordedAction> ReplayData::decodeActions(const uint8_t *data, size_t size)
+{
+	struct Buffer : std::streambuf {
+		explicit Buffer(const uint8_t *bytes, size_t length)
+		{
+			auto *start = reinterpret_cast<char *>(const_cast<uint8_t *>(bytes));
+
+			this->setg(start, start, start + length);
+		}
+	};
+
+	if (!data || size == 0)
+		return {};
+
+	Buffer buffer{data, size};
+	std::istream stream{&buffer};
+	BinaryReader in{stream};
+	std::vector<RecordedAction> actions;
+
+	while (stream.peek() != EOF) {
+		try {
+			uint64_t frame = in.varint();
+
+			if (frame == 0 || frame > UINT32_MAX)
+				break;
+			actions.push_back(RecordedAction{static_cast<uint32_t>(frame), readAction(in)});
+		} catch (const std::runtime_error &) {
+			break;
+		}
+	}
+	return actions;
+}
+
+bool ReplayData::saveRecovered(
+	const uint8_t *header,
+	size_t headerSize,
+	uint32_t tick,
+	const std::vector<std::vector<uint8_t>> &encodedPlayers,
+	const std::filesystem::path &path
+)
+{
+	struct Buffer : std::streambuf {
+		explicit Buffer(const uint8_t *bytes, size_t length)
+		{
+			auto *start = reinterpret_cast<char *>(const_cast<uint8_t *>(bytes));
+
+			this->setg(start, start, start + length);
+		}
+	};
+
+	if (!header || headerSize == 0)
+		return false;
+	try {
+		Buffer buffer{header, headerSize};
+		std::istream stream{&buffer};
+		ReplayData data = load(stream);
+
+		if (encodedPlayers.size() != data.players.size())
+			return false;
+		data.actions.clear();
+		data.actions.reserve(encodedPlayers.size());
+
+		uint32_t frameCount = tick;
+
+		for (const auto &encoded : encodedPlayers) {
+			auto actions = decodeActions(encoded.data(), encoded.size());
+
+			for (const auto &action : actions)
+				if (action.frame > frameCount)
+					frameCount = action.frame;
+			data.actions.push_back(std::move(actions));
+		}
+		// An action can be journaled a moment before tick is published. Keep the file consistent.
+		data.frameCount = frameCount;
+		data.save(path);
+		return true;
+	} catch (const std::exception &) {
+		return false;
+	}
+}
+
+CrashReplayAnchor crashReplayAnchor;
+
+void CrashReplayAnchor::captureCrashTick() noexcept
+{
+	if (this->magic != MAGIC || !this->liveTick)
+		return;
+
+	std::atomic_thread_fence(std::memory_order_acquire);
+
+	uint64_t live = *this->liveTick;
+
+	if (live > UINT32_MAX)
+		live = UINT32_MAX;
+	this->crashTick = static_cast<uint32_t>(live);
+	std::atomic_signal_fence(std::memory_order_release);
+	this->crashed = 1;
+}
+
+CrashJournal::~CrashJournal()
+{
+	delete[] this->_data;
+}
+
+void CrashJournal::append(const uint8_t *bytes, size_t count)
+{
+	if (count == 0)
+		return;
+	if (this->_size + count <= this->_capacity) {
+		std::memcpy(this->_data + this->_size, bytes, count);
+		std::atomic_signal_fence(std::memory_order_release);
+		this->_size += count;
+		if (this->_stream)
+			this->_stream->size = this->_size;
+		std::atomic_signal_fence(std::memory_order_release);
+		return;
+	}
+
+	size_t capacity = this->_capacity == 0 ? 256 : this->_capacity;
+
+	while (capacity < this->_size + count) {
+		if (capacity > SIZE_MAX / 2) {
+			capacity = this->_size + count;
+			break;
+		}
+		capacity *= 2;
+	}
+
+	auto *next = new uint8_t[capacity];
+
+	if (this->_size)
+		std::memcpy(next, this->_data, this->_size);
+	std::memcpy(next + this->_size, bytes, count);
+
+	uint8_t *previous = this->_data;
+	size_t newSize = this->_size + count;
+
+	// Pointer first, then the length. A reader in between sees the new buffer at the old length.
+	std::atomic_signal_fence(std::memory_order_release);
+	this->_data = next;
+	this->_capacity = capacity;
+	if (this->_stream)
+		this->_stream->data = next;
+	std::atomic_signal_fence(std::memory_order_release);
+	this->_size = newSize;
+	if (this->_stream)
+		this->_stream->size = newSize;
+	std::atomic_signal_fence(std::memory_order_release);
+	delete[] previous;
+}
+
+void CrashJournal::bind(CrashReplayStream *stream)
+{
+	this->_stream = stream;
+	if (!stream)
+		return;
+	stream->data = this->_data;
+	std::atomic_signal_fence(std::memory_order_release);
+	stream->size = this->_size;
+	std::atomic_signal_fence(std::memory_order_release);
+}
+
+const uint8_t *CrashJournal::data() const
+{
+	return this->_data;
+}
+
+size_t CrashJournal::size() const
+{
+	return this->_size;
 }

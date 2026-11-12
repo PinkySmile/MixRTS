@@ -2,6 +2,9 @@
 // Created by PinkySmile on 11/08/2026.
 //
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
 #include <cpptrace/cpptrace.hpp>
 #include <cstdint>
@@ -10,8 +13,15 @@
 #include <fcntl.h>
 #include <csignal>
 #include <sys/wait.h>
+#include <sys/ptrace.h>
+#include <sys/uio.h>
+#include <sys/prctl.h>
+#include <cerrno>
+#include <cstring>
+#include <vector>
 #include <TGUI/Widgets/RichTextLabel.hpp>
 #include "Crash.hpp"
+#include "Data/Replay.hpp"
 #include "Utils.hpp"
 
 
@@ -21,12 +31,15 @@
 struct CrashConfig {
 	int readFd;
 	int writeFd;
+	int ackReadFd;
+	int ackWriteFd;
 };
 
 struct CrashPacket {
 	uint32_t signal;
 	void *faultAddress;
 	pid_t pid;
+	const void *replayAnchor;
 	size_t frameCount;
 	cpptrace::safe_object_frame frames[MAX_STACK_FRAMES];
 };
@@ -63,29 +76,46 @@ static size_t captureSafeTrace(cpptrace::safe_object_frame *buffer, size_t maxFr
 
 static void signalHandler(int sig, siginfo_t *info, void *)
 {
+	// Snapshot the tick that was running before anything else can move it.
+	crashReplayAnchor.captureCrashTick();
+
 	int wfd = gCrashConfig->writeFd;
 	int rfd  = gCrashConfig->readFd;
+	int ackWrite = gCrashConfig->ackWriteFd;
+	int ackRead = gCrashConfig->ackReadFd;
 
 	pid_t pid = vfork();
 	if (pid == 0) {
 		// --- CHILD PROCESS ---
+		// Close the originals before reusing their numbers. The packet read end is usually
+		// fd 3, which is also where the ack write end has to survive exec.
 		dup2(rfd, STDIN_FILENO);
-		close(rfd);
-		close(wfd);
+		if (rfd != STDIN_FILENO)
+			close(rfd);
+		if (wfd != STDIN_FILENO)
+			close(wfd);
+		if (dup2(ackWrite, CRASH_ACK_FD) < 0)
+			_exit(127);
+		if (ackWrite != CRASH_ACK_FD)
+			close(ackWrite);
+		if (ackRead != STDIN_FILENO && ackRead != CRASH_ACK_FD)
+			close(ackRead);
 
-		execle("/proc/self/exe", "crash_handler", nullptr, environ);
+		execl("/proc/self/exe", "crash_handler", static_cast<char *>(NULL));
 		_exit(127);
 	}
 
 	// --- PARENT PROCESS ---
+	// vfork only returns here after the child has exec'd, and the child blocks until this packet arrives.
+	prctl(PR_SET_PTRACER, pid, 0, 0, 0);
 	// Close read end in parent so child owns it exclusively
 	close(rfd);
 
-	// 2. Prepare packet and write to pipe (child is now reading in parallel via execve)
 	CrashPacket packet{};
 	packet.pid          = getpid();
 	packet.signal       = static_cast<uint32_t>(sig);
 	packet.faultAddress = info ? info->si_addr : nullptr;
+	packet.replayAnchor = &crashReplayAnchor;
 	packet.frameCount   = captureSafeTrace(packet.frames, MAX_STACK_FRAMES);
 
 	size_t len = sizeof(packet);
@@ -94,11 +124,17 @@ static void signalHandler(int sig, siginfo_t *info, void *)
 	do {
 		ssize_t bytes = write(wfd, reinterpret_cast<void *>(ptr), len);
 
+		if (bytes <= 0)
+			_exit(128 + sig);
 		len -= bytes;
 		ptr += bytes;
 	} while (len != 0);
 	close(wfd);
 
+	alarm(30);
+	char ack = 0;
+	while (read(ackRead, &ack, 1) < 0 && errno == EINTR)
+		;
 	_exit(128 + sig);
 }
 
@@ -106,37 +142,36 @@ bool initCrashHandler()
 {
 	long pageSize = sysconf(_SC_PAGESIZE);
 	void *rawPage = mmap(nullptr, pageSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	CrashConfig *config;
+	stack_t ss;
+	struct sigaction sa{};
+
 	if (rawPage == MAP_FAILED) return false;
 
 	int pipeFds[2];
-	if (pipe2(pipeFds, O_CLOEXEC) == -1) {
-		munmap(rawPage, pageSize);
-		return false;
-	}
+	int ackFds[2];
+	if (pipe2(pipeFds, O_CLOEXEC) == -1)
+		goto onerror_munmap;
+	if (pipe2(ackFds, O_CLOEXEC) == -1)
+		goto onerror_pipefd;
 
-	auto config = static_cast<CrashConfig *>(rawPage);
+	config = static_cast<CrashConfig *>(rawPage);
 	config->readFd  = pipeFds[0];
 	config->writeFd = pipeFds[1];
+	config->ackReadFd = ackFds[0];
+	config->ackWriteFd = ackFds[1];
 
-	if (mprotect(rawPage, pageSize, PROT_READ) == -1) {
-		close(pipeFds[0]);
-		close(pipeFds[1]);
-		munmap(rawPage, pageSize);
-		return false;
-	}
+	if (mprotect(rawPage, pageSize, PROT_READ) == -1)
+		goto onerror_ackfd;
 
 	gCrashConfig = static_cast<const CrashConfig *>(rawPage);
 
-	stack_t ss;
 	ss.ss_sp = malloc(SIG_STACK_SIZE);
 	ss.ss_size = SIG_STACK_SIZE;
 	ss.ss_flags = 0;
-	if (sigaltstack(&ss, NULL) == -1) {
-		perror("sigaltstack");
-		exit(EXIT_FAILURE);
-	}
+	if (sigaltstack(&ss, NULL) == -1)
+		goto onerror;
 
-	struct sigaction sa{};
 	sa.sa_sigaction = signalHandler;
 	sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
 
@@ -151,6 +186,18 @@ bool initCrashHandler()
 	sigaction(SIGBUS,   &sa, nullptr);
 	sigaction(SIGILL,   &sa, nullptr);
 	return true;
+
+onerror:
+	free(ss.ss_sp);
+onerror_ackfd:
+	close(ackFds[0]);
+	close(ackFds[1]);
+onerror_pipefd:
+	close(pipeFds[0]);
+	close(pipeFds[1]);
+onerror_munmap:
+	munmap(rawPage, pageSize);
+	return false;
 }
 
 bool createCoreDump(const CrashPacket *packet, const std::filesystem::path &path)
@@ -251,6 +298,151 @@ std::string crashPacketToString(const CrashPacket &packet)
 
 	trace.print(ss, false);
 	return ss.str();
+}
+
+static constexpr size_t MAX_CRASH_HEADER = 1u << 20;
+static constexpr size_t MAX_CRASH_STREAM = 32u << 20;
+static constexpr uint32_t MAX_CRASH_PLAYERS = 64;
+
+static bool readRemote(pid_t pid, uintptr_t address, void *dst, size_t size)
+{
+	if (size == 0)
+		return true;
+
+	iovec local{dst, size};
+	iovec remote{reinterpret_cast<void *>(address), size};
+	ssize_t copied = process_vm_readv(pid, &local, 1, &remote, 1, 0);
+
+	if (copied == static_cast<ssize_t>(size))
+		return true;
+
+	auto *out = static_cast<unsigned char *>(dst);
+	size_t done = 0;
+
+	while (done < size) {
+		errno = 0;
+
+		long word = ptrace(PTRACE_PEEKDATA, pid, reinterpret_cast<void *>(address + done), nullptr);
+
+		if (word == -1 && errno != 0)
+			return false;
+
+		size_t chunk = sizeof(word);
+
+		if (chunk > size - done)
+			chunk = size - done;
+		std::memcpy(out + done, &word, chunk);
+		done += chunk;
+	}
+	return true;
+}
+
+struct FrozenThreads {
+	std::vector<pid_t> tids;
+
+	~FrozenThreads()
+	{
+		for (pid_t tid : this->tids)
+			ptrace(PTRACE_DETACH, tid, nullptr, nullptr);
+	}
+};
+
+static bool freezeThreads(pid_t pid, FrozenThreads &frozen)
+{
+	std::error_code error;
+	std::filesystem::path tasks = std::filesystem::path{"/proc"} / std::to_string(pid) / "task";
+
+	for (const auto &entry : std::filesystem::directory_iterator(tasks, error)) {
+		pid_t tid;
+
+		try {
+			tid = static_cast<pid_t>(std::stoi(entry.path().filename().string()));
+		} catch (const std::exception &) {
+			continue;
+		}
+		if (ptrace(PTRACE_SEIZE, tid, nullptr, nullptr) != 0) {
+			if (errno == ESRCH)
+				continue;
+			return false;
+		}
+		frozen.tids.push_back(tid);
+		if (ptrace(PTRACE_INTERRUPT, tid, nullptr, nullptr) != 0) {
+			if (errno == ESRCH)
+				continue;
+			return false;
+		}
+
+		int status = 0;
+
+		while (true) {
+			if (waitpid(tid, &status, __WALL) < 0) {
+				if (errno == EINTR)
+					continue;
+				if (errno == ECHILD)
+					break;
+				return false;
+			}
+			break;
+		}
+	}
+	return !error && !frozen.tids.empty();
+}
+
+bool extractCrashReplay(const CrashPacket &packet, const std::filesystem::path &dir)
+{
+	if (!packet.replayAnchor)
+		return false;
+
+	std::vector<uint8_t> header;
+	std::vector<std::vector<uint8_t>> encoded;
+	uint32_t tick = 0;
+
+	{
+		FrozenThreads frozen;
+
+		if (!freezeThreads(packet.pid, frozen))
+			return false;
+
+		CrashReplayAnchor anchor{};
+
+		if (!readRemote(packet.pid, reinterpret_cast<uintptr_t>(packet.replayAnchor), &anchor, sizeof(anchor)))
+			return false;
+		if (anchor.magic != CrashReplayAnchor::MAGIC)
+			return false;
+		if (!anchor.header || anchor.headerSize == 0 || anchor.headerSize > MAX_CRASH_HEADER)
+			return false;
+		if (anchor.playerCount > MAX_CRASH_PLAYERS || (anchor.playerCount > 0 && !anchor.streams))
+			return false;
+
+		header.resize(anchor.headerSize);
+		if (!readRemote(packet.pid, reinterpret_cast<uintptr_t>(anchor.header), header.data(), header.size()))
+			return false;
+
+		std::vector<CrashReplayStream> streams(anchor.playerCount);
+
+		if (anchor.playerCount && !readRemote(
+			packet.pid,
+			reinterpret_cast<uintptr_t>(anchor.streams),
+			streams.data(),
+			streams.size() * sizeof(CrashReplayStream)
+		))
+			return false;
+		encoded.resize(anchor.playerCount);
+		for (uint32_t i = 0; i < anchor.playerCount; i++) {
+			if (streams[i].size > MAX_CRASH_STREAM || (streams[i].size && !streams[i].data))
+				return false;
+			encoded[i].resize(streams[i].size);
+			if (streams[i].size && !readRemote(
+				packet.pid,
+				reinterpret_cast<uintptr_t>(streams[i].data),
+				encoded[i].data(),
+				encoded[i].size()
+			))
+				return false;
+		}
+		tick = anchor.capturedTick();
+	}
+	return ReplayData::saveRecovered(header.data(), header.size(), tick, encoded, dir / "replay.replay");
 }
 
 CrashPacket *allocCrashPacket()
