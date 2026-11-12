@@ -2,6 +2,8 @@
 // Created by PinkySmile on 29/03/2026.
 //
 
+#include <cctype>
+#include <ranges>
 #include <sol/sol.hpp>
 #include "Resources/Assert.hpp"
 #include "Faction.hpp"
@@ -15,6 +17,7 @@
 #include "GameObject.hpp"
 #include "UI/LuaUI.hpp"
 #include "Resources/Game.hpp"
+#include "Utils.hpp"
 
 FactionQueue::FactionQueue(const Mod &base, const nlohmann::json &data)
 {
@@ -231,6 +234,7 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 		TRY {
 			this->_queues.emplace(RESOURCE(base.getName(), n), FactionQueue{base, q});
 		} CATCH_AND_RETHROW("In faction queue \"" + n + "\"\n")
+	this->_definition = data.dump();
 }
 
 Faction::~Faction()
@@ -243,21 +247,21 @@ void Faction::load(const std::vector<std::string> &allFactions)
 {
 	TRY {
 		for (auto &a : this->_animations)
-			this->_base.loadAnimations(a, this->_loadedAnimations);
+			this->_base.loadAnimations(a, this->_loadedAnimations, &this->_checksumFiles);
 		for (auto &a : this->_sounds)
-			this->_base.loadSounds(a, this->_loadedSounds);
+			this->_base.loadSounds(a, this->_loadedSounds, &this->_checksumFiles);
 		for (auto &e : this->_effects)
-			this->_base.loadEffects(e, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects);
+			this->_base.loadEffects(e, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects, &this->_checksumFiles);
 		for (auto &w : this->_warheads)
-			this->_base.loadWarheads(w, this->_loadedWarheads);
+			this->_base.loadWarheads(w, this->_loadedWarheads, &this->_checksumFiles);
 		if (!this->_warheads.empty())
-			this->_base.loadArmors(allFactions, this->_loadedWarheads);
+			this->_base.loadArmors(allFactions, this->_loadedWarheads, &this->_checksumFiles);
 		for (auto &w : this->_weapons)
-			this->_base.loadWeapons(w, this->_loadedAnimations, this->_loadedEffects, this->_loadedSounds, this->_loadedWarheads, this->_loadedWeapons);
+			this->_base.loadWeapons(w, this->_loadedAnimations, this->_loadedEffects, this->_loadedSounds, this->_loadedWarheads, this->_loadedWeapons, &this->_checksumFiles);
 		for (auto &u : this->_objects)
-			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects, this->_loadedWeapons, this->_loadedObjects);
+			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects, this->_loadedWeapons, this->_loadedObjects, &this->_checksumFiles);
 		for (auto &u : this->_upgrades)
-			this->_base.loadUpgrades(u, *this, this->_loadedUpgrades);
+			this->_base.loadUpgrades(u, *this, this->_loadedUpgrades, &this->_checksumFiles);
 		for (auto &[n, q] : this->_queues)
 			if (q.starportParams)
 				for (auto &u : q.starportParams->units)
@@ -400,6 +404,27 @@ bool Faction::hasRadar() const
 bool Faction::isRadarPowered() const
 {
 	return this->_radarPowered;
+}
+
+static bool isTextChecksumFile(const std::filesystem::path &path)
+{
+	std::string ext = path.extension().string();
+
+	for (char &c : ext)
+		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	return ext == ".json" || ext == ".lua" || ext == ".txt";
+}
+
+uint32_t Faction::getChecksum() const
+{
+	uint32_t crc = crc32(this->_definition.data(), this->_definition.size());
+
+	for (const auto &id : this->_checksumFiles) {
+		std::filesystem::path file = game->modManager.getPath(id).second;
+
+		crc = crc32File(file, crc, isTextChecksumFile(file));
+	}
+	return crc;
 }
 
 const std::string &Faction::getName() const

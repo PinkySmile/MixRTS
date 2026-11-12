@@ -15,8 +15,10 @@ private:
 	tgui::Panel::Ptr _panel;
 
 	void _initTitle();
+	void _openReplayDialog();
+	void _loadReplay(const std::filesystem::path &path);
 public:
-	TitleScreen();
+	explicit TitleScreen(std::optional<std::string> message = {});
 	~TitleScreen() override;
 	void render() const override;
 	void renderAbove() const override;

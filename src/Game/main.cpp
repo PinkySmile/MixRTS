@@ -21,6 +21,7 @@
 #include "Utils.hpp"
 #include "Debug/Profiler.hpp"
 #include "Scenes/InGame.hpp"
+#include "Scenes/ReplayInGame.hpp"
 #include "Scenes/LoadingScene.hpp"
 #include "Scenes/TitleScreen.hpp"
 
@@ -89,6 +90,7 @@ void registerScenes()
 
 	game->scene.registerScene("title_screen", TitleScreen::create, false);
 	game->scene.registerScene("in_game", InGame::create, hasLoading);
+	game->scene.registerScene("replay_in_game", ReplayInGame::create, hasLoading);
 #ifdef LOADING_SCENE
 	game->scene.registerScene("loading", LoadingScene::create, false);
 #endif
@@ -131,6 +133,19 @@ void displayCrash(const std::exception &e)
 
 void handleStart(Args &args)
 {
+	if (!args.replay.empty()) {
+		ReplayData replay = ReplayData::load(args.replay);
+		uint32_t crc = LoadedMap::computeChecksum(replay.map);
+
+		if (crc != replay.mapCrc)
+			throw std::runtime_error("This replay's map checksum does not match the installed map");
+
+		auto sArgs = new ReplayArguments();
+
+		sArgs->replay = std::move(replay);
+		game->scene.switchScene("replay_in_game", sArgs);
+		return;
+	}
 	if (args.players.empty()) {
 		game->scene.switchScene("title_screen");
 		return;
@@ -157,9 +172,12 @@ int main(int argc, char **argv)
 	initCrashHandler();
 	if (!args.parse(argc, argv))
 		return EXIT_FAILURE;
+	libraryInit();
+
+	std::unique_ptr<Game> _;
 
 	TRY {
-		game = new Game("assets/NotoSans-Regular.ttf");
+		_ = std::make_unique<Game>("assets/NotoSans-Regular.ttf");
 		registerScenes();
 		checkCompilationEnv();
 		game->modManager.loadAll("mods");
@@ -207,7 +225,7 @@ int main(int argc, char **argv)
 		}
 		return EXIT_SUCCESS;
 	} CPPTRACE_CATCH(const std::exception &e) {
-		if (args.loadingOnly)
+		if (args.loadingOnly && game)
 			game->screen->close();
 	#ifdef NO_TRACE
 		handleCrash({}, e);
@@ -216,7 +234,6 @@ int main(int argc, char **argv)
 			handleCrash(ce->trace(), *ce);
 		else
 			handleCrash(cpptrace::from_current_exception(), e);
-		delete game;
 	#endif
 	}
 }

@@ -5,6 +5,7 @@
 #include <sol/sol.hpp>
 #include "Player.hpp"
 #include "Faction.hpp"
+#include "UI/CombinedUI.hpp"
 #include "Upgrade.hpp"
 #include "Animation.hpp"
 #include "Effect.hpp"
@@ -248,14 +249,14 @@ unsigned PlayerState::getCombinedMoney(const std::string &key)
 	return sys + other;
 }
 
-Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &mapState) :
+Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &mapState, const GameManager::UIFactory &factory, size_t playerIndex) :
 	parent(parent),
 	mapState(mapState[index]),
-	_currentUi(index),
 	_color(color),
 	_primaryFaction(factions[index]),
 	_factions(factions)
 {
+	this->state.index = playerIndex;
 	this->state.factionIndex = index;
 	for (size_t i = 0; i < factions.size(); i++) {
 		auto &f = factions[i];
@@ -283,20 +284,11 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 	for (auto &[key, params] : this->_primaryFaction.getQueues())
 		this->state.queues[key].init(*this, &key, this->_primaryFaction, &params);
 
-	for (size_t i = 0; i < factions.size(); i++) {
-		const Faction &f = factions[i];
-		UI *ui = f.createUI(&this->uiState, &parent, &this->state, &mapState[i]);
-
-		this->_uis.emplace_back(ui);
-	}
+	this->_ui = factory(factions, &this->uiState, &parent, &this->state, mapState, playerIndex);
+	assert_exp(this->_ui);
 }
 
-Player::~Player()
-{
-	for (auto &ui : this->_uis)
-		if (ui)
-			game->gui.remove(ui->getPanel());
-}
+Player::~Player() = default;
 
 bool Player::lost() const
 {
@@ -562,10 +554,9 @@ void Player::update()
 		this->state.hasRadar = false;
 	else
 		this->state.hasRadar = std::ranges::any_of(this->state.radars, [](const GameObject *o) { return !o->isDead(); });
-	for (auto &ui : this->_uis) {
+	{
 		PROFILE_SCOPE("ui_update");
-		if (ui)
-			ui->update();
+		this->_ui->update();
 	}
 	this->_clean();
 	for (auto &q : this->state.buildQueues | std::ranges::views::values) {
@@ -592,31 +583,25 @@ void Player::checkWon()
 	this->_won = players.size() > 1 && std::ranges::all_of(players, [this](const Player &p) {
 		return this->state.team == p.state.team || p.lost();
 	});
-	for (auto &ui : this->_uis)
-		if (ui) {
-			ui->won = this->_won;
-			ui->lost = this->_lost;
-		}
+	this->_ui->setResult(this->_won, this->_lost);
 }
 
 void Player::render()
 {
 	if (this->_enabled)
-		this->_uis[this->_currentUi]->render();
+		this->_ui->render();
 }
 
 void Player::renderAbove()
 {
 	if (this->_enabled)
-		this->_uis[this->_currentUi]->renderAbove();
+		this->_ui->renderAbove();
 }
 
 void Player::setEnabled(bool enabled)
 {
 	this->_enabled = enabled;
-	for (size_t i = 0; i < this->_uis.size(); i++)
-		if (this->_uis[i])
-			this->_uis[i]->setEnabled(i == this->_currentUi && enabled);
+	this->_ui->setEnabled(enabled);
 }
 
 bool Player::isEnabled() const
@@ -642,25 +627,25 @@ HSLColor Player::getColor() const
 void Player::onMouseMoved(Vector2i pos)
 {
 	if (this->_enabled)
-		this->_uis[this->_currentUi]->mouseMoved(pos);
+		this->_ui->mouseMoved(pos);
 }
 
 void Player::onLeftMouseClicked(Vector2i pos)
 {
 	if (this->_enabled)
-		this->_uis[this->_currentUi]->tileClicked(pos);
+		this->_ui->tileClicked(pos);
 }
 
 void Player::onRightMouseClicked(Vector2i pos)
 {
 	if (this->_enabled)
-		this->_uis[this->_currentUi]->onCancel(pos);
+		this->_ui->onCancel(pos);
 }
 
 void Player::onLeftMouseReleased(Vector2i pos)
 {
 	if (this->_enabled)
-		this->_uis[this->_currentUi]->mouseReleased(pos);
+		this->_ui->mouseReleased(pos);
 }
 
 void Player::onRightMouseReleased(Vector2i)
@@ -669,7 +654,7 @@ void Player::onRightMouseReleased(Vector2i)
 
 bool Player::isMouseOnUi() const
 {
-	return this->_uis[this->_currentUi]->isMouseOnUi();
+	return this->_ui->isMouseOnUi();
 }
 
 void Player::keyPressed(const Event::KeyPressed &key)
@@ -684,14 +669,12 @@ void Player::keyPressed(const Event::KeyPressed &key)
 				return;
 			}
 	}
-	this->_uis[this->_currentUi]->onKeyPressed(key.code, key.control, key.shift, key.alt, key.system);
+	this->_ui->onKeyPressed(key.code, key.control, key.shift, key.alt, key.system);
 }
 
 void Player::updateRender()
 {
-	for (auto &ui : this->_uis)
-		if (ui)
-			ui->updateRender();
+	this->_ui->updateRender();
 }
 
 void Player::_handleUiEvent(const UI::StartBuildEvent &event)
@@ -950,20 +933,16 @@ void Player::_handleUiEvent(const UI::CloseQueueEvent &event)
 
 void Player::handleUiEvents()
 {
-	for (auto &ui : this->_uis) {
-		if (!ui)
-			continue;
-		while (auto event = ui->pollEvent())
-			std::visit([this](auto &&arg) {
-				this->_handleUiEvent(arg);
-			}, *event);
-	}
+	while (auto event = this->_ui->pollEvent())
+		std::visit([this](auto &&arg) {
+			this->_handleUiEvent(arg);
+		}, *event);
 }
 
 void Player::playEVA(UI::EVASound sound, unsigned int expireIn, unsigned int priority, unsigned int cooldown, const std::string &args)
 {
 	if (this->_enabled)
-		this->_uis[this->_currentUi]->playEVA(sound, expireIn, priority, cooldown, args);
+		this->_ui->playEVA(sound, expireIn, priority, cooldown, args);
 }
 
 void Player::recomputeLocked()
@@ -1100,9 +1079,9 @@ bool Player::consume(const std::string &type, unsigned int amount)
 	return true;
 }
 
-std::vector<std::shared_ptr<UI>> &Player::getUIs()
+CombinedUI &Player::getCombinedUI()
 {
-	return this->_uis;
+	return *this->_ui;
 }
 
 GameObject *Player::getPrimaryBuilding(const std::string &queue)
@@ -1423,7 +1402,7 @@ void Player::pushUserType(sol::state &state)
 	);
 	type["enabled"] = sol::property(&Player::isEnabled, &Player::setEnabled);
 	// NOTE: keyPressed() (raw sf::Event::KeyPressed, not wrapped for Lua),
-	// unlockObject() (template, can't be bound generically) and getUIs()
-	// (vector<unique_ptr<UI>>, ownership not meant to be handed to scripts)
+	// unlockObject() (template, can't be bound generically) and getCombinedUI()
+	// (the UI objects are not meant to be handed to scripts)
 	// are intentionally not exposed.
 }

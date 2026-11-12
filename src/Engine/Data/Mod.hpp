@@ -7,6 +7,7 @@
 
 
 #include <map>
+#include <set>
 #include <string>
 #include <sol/forward.hpp>
 #include "CursorAnimation.hpp"
@@ -21,27 +22,29 @@ public:
 	Mod(std::filesystem::path base, const nlohmann::json &metadata);
 	void loadFactions(const std::string &path, std::unordered_map<std::string, Faction> &factions) const;
 	void loadCursors(const std::string &path, std::unordered_map<std::string, CursorAnimation> &cursors) const;
-	void loadSounds(const std::string &path, std::unordered_map<std::string, MultiSound> &sounds) const;
-	void loadAnimations(const std::string &path, std::unordered_map<std::string, std::vector<Animation>> &anims) const;
-	void loadUpgrades(const std::string &path, const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades) const;
+	void loadSounds(const std::string &path, std::unordered_map<std::string, MultiSound> &sounds, std::set<std::string> *checksumFiles = nullptr) const;
+	void loadAnimations(const std::string &path, std::unordered_map<std::string, std::vector<Animation>> &anims, std::set<std::string> *checksumFiles = nullptr) const;
+	void loadUpgrades(const std::string &path, const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades, std::set<std::string> *checksumFiles = nullptr) const;
 	void loadEffects(
 		const std::string &path,
 		const std::unordered_map<std::string, std::vector<Animation>> &anims,
 		const std::unordered_map<std::string, MultiSound> &sounds,
-		std::unordered_map<std::string, Effect> &effects
+		std::unordered_map<std::string, Effect> &effects,
+		std::set<std::string> *checksumFiles = nullptr
 	) const;
-	void loadWarheads(const std::string &path, std::unordered_map<std::string, Warhead> &warheads) const;
+	void loadWarheads(const std::string &path, std::unordered_map<std::string, Warhead> &warheads, std::set<std::string> *checksumFiles = nullptr) const;
 	//! @brief Loads the armor multiplier tables of every mod whose factions are being loaded (armors/<origin>.json) into warheads.
 	//! @param allFactions The full list of every faction id being loaded in this session, used to determine which armor files are needed.
 	//! @param warheads The already loaded warheads (from loadWarheads) that the armor multipliers will be merged into.
-	void loadArmors(const std::vector<std::string> &allFactions, std::unordered_map<std::string, Warhead> &warheads) const;
+	void loadArmors(const std::vector<std::string> &allFactions, std::unordered_map<std::string, Warhead> &warheads, std::set<std::string> *checksumFiles = nullptr) const;
 	void loadWeapons(
 		const std::string &path,
 		const std::unordered_map<std::string, std::vector<Animation>> &anims,
 		const std::unordered_map<std::string, Effect> &effects,
 		const std::unordered_map<std::string, MultiSound> &sounds,
 		const std::unordered_map<std::string, Warhead> &warheads,
-		std::unordered_map<std::string, Weapon> &weapons
+		std::unordered_map<std::string, Weapon> &weapons,
+		std::set<std::string> *checksumFiles = nullptr
 	) const;
 	void loadObjects(
 		const std::string &path,
@@ -50,7 +53,8 @@ public:
 		const std::unordered_map<std::string, MultiSound> &sounds,
 		const std::unordered_map<std::string, Effect> &effects,
 		const std::unordered_map<std::string, Weapon> &weapons,
-		std::unordered_map<std::string, GameObject> &objects
+		std::unordered_map<std::string, GameObject> &objects,
+		std::set<std::string> *checksumFiles = nullptr
 	) const;
 	const std::filesystem::path &getBase() const;
 	const std::string &getName() const;

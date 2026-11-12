@@ -18,6 +18,7 @@
 #include "GameObject.hpp"
 #include "Map.hpp"
 #include "Debug/DebugOptions.hpp"
+#include "UI/CombinedUI.hpp"
 
 // #define QUADRANT_SIZE_X 128
 // #define QUADRANT_SIZE_Y 128
@@ -66,13 +67,23 @@ public:
 		bool shortGame;
 	};
 
+	//! Builds the CombinedUI (or a subclass) of one player. playerIndex is that player's slot.
+	using UIFactory = std::function<std::shared_ptr<CombinedUI> (
+		const std::vector<Faction> &factions,
+		UIState *uiState,
+		GameManager *manager,
+		PlayerState *ownerState,
+		std::vector<MapState> &mapStates,
+		size_t playerIndex
+	)>;
+
 	bool finished = false;
 	//! Debug tools settings, driven by the debug panel (F3).
 	DebugOptions debugOptions;
 	//! Set by projectiles around their calls to weaponUsedAt so that the debug tools know where a hit comes from.
 	const Projectile *hitSource = nullptr;
 
-	GameManager(const std::vector<Faction> &factions, size_t nbPlayers, const GameSettings &settings);
+	GameManager(const std::vector<Faction> &factions, size_t nbPlayers, const GameSettings &settings, UIFactory uiFactory);
 	~GameManager();
 	void loadMap(const std::string &path);
 	void addPlayer(size_t factionIndex, const HSLColor &color, Vector2i startingArea, unsigned team);
@@ -169,6 +180,7 @@ public:
 private:
 	sf::Text _text;
 	GameSettings _settings;
+	UIFactory _uiFactory;
 	ShakeParams _shake;
 	unsigned _shakeTimer = 0;
 	float _cameraZoom = 1;

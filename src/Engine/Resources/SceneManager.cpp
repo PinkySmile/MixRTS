@@ -16,6 +16,8 @@ void SceneManager::update()
 
 	if (this->_scene)
 		this->_scene->update();
+	if (!this->_loading)
+		this->_oldScene.reset();
 }
 
 void SceneManager::render() const
@@ -49,12 +51,13 @@ void SceneManager::switchScene(const std::string &name, SceneArguments *args, bo
 {
 	if (!force)
 		assert_exp(name != this->_currentScene);
-	assert_exp(!this->_loading);
 	assert_msg(this->_factory.contains(name), "Scene '" + name + "' doesn't exist");
 	assert_exp(!this->_factory[name].needLoading || this->_factory.contains("loading"));
+	assert_exp(!this->_factory[name].needLoading || !this->_loading);
 	delete this->_nextScene.args;
 	this->_nextScene.args = args;
 	this->_nextScene.name = name;
+	this->_loading = false;
 	if (!this->_scene)
 		this->_applySwitchScene();
 }
@@ -73,9 +76,14 @@ SceneManager::SceneConstructor SceneManager::registerScene(
 	return old;
 }
 
-bool SceneManager::isLoading()
+bool SceneManager::isLoading() const
 {
 	return this->_loading;
+}
+
+void SceneManager::cancelLoading()
+{
+	this->_loading = false;
 }
 
 std::pair<std::string, IScene *> SceneManager::getCurrentScene()
@@ -101,6 +109,7 @@ void SceneManager::_applySwitchScene()
 			game->gui.remove(oldPan);
 		if (newPan)
 			game->gui.add(newPan);
+		this->_oldScene = this->_scene;
 		this->_scene.reset(result);
 		this->_loading = false;
 	};

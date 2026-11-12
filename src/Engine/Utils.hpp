@@ -6,11 +6,18 @@
 #define MIXRTS_UTILS_HPP
 
 
+#include <cstdint>
+#include <filesystem>
 #include <TGUI/TGUI.hpp>
 #include <nlohmann/json.hpp>
 #include "Color.hpp"
 
 MYDLL_API nlohmann::json &mergeObjects(nlohmann::json &dst, const nlohmann::json &t);
+
+//! CRC32 as implemented by https://github.com/aeldidi/crc32 (initial value 0, no final XOR).
+MYDLL_API uint32_t crc32(const void *data, size_t size, uint32_t crc = 0);
+//! CRC32 of a whole file. When normalizeNewlines is set, CR bytes are dropped so CRLF and LF match.
+MYDLL_API uint32_t crc32File(const std::filesystem::path &path, uint32_t crc = 0, bool normalizeNewlines = false);
 
 #define TOHEX_ENDIAN_LITTLE false
 #define TOHEX_ENDIAN_BIG true
@@ -154,6 +161,39 @@ typename WindowType::Ptr openWindowWithFocus(T &gui, tgui::Layout width, tgui::L
 	window->onEscapeKeyPress(closeWindow);
 	return window;
 }
+
+//! @brief Display a Windows dialog box.
+//! @details This functions opens a Windows dialog box and return the button clicked by the user.
+//! @param title The title of the window.
+//! @param content The content of the box.
+//! @param variate A bit combination of the window attributes (see Windows MessageBox function for a list of the enums).
+//! @return The button clicked by the user.
+//! @note On Non-Windows systems, it will simulate the Windows dialog box. Only MB_ICONERROR and MB_OK are simulated on those systems.
+template<typename T>
+tgui::MessageBox::Ptr dispMsg(T &gui, const std::string &title, const std::string &content)
+{
+	auto dialog = tgui::MessageBox::create(title, content, { "OK" });
+
+	openWindowWithFocus(gui, 0, 0, dialog);
+	dialog->onButtonPress([](const std::weak_ptr<tgui::MessageBox> &d){
+		d.lock()->close();
+	}, std::weak_ptr(dialog));
+	return dialog;
+}
+
+//! @brief Opens a FileDialog
+//! @param title Title of the FileDialog
+//! @param basePath The path of the FileDialog
+//! @param patterns The patterns of the FileDialog
+//! @return std::string FileDialog message
+tgui::FileDialog::Ptr openFileDialog(const std::string &title = "Open file", const std::filesystem::path &basePath = ".", bool overWriteWarning = false, bool mustExist = true);
+
+//! @brief Saves a file dialog
+//! @param title Title of the FileDialog
+//! @param basePath The path of the FileDialog
+//! @param patterns The patterns of the FileDialog
+//! @return std::string FileDialog message
+tgui::FileDialog::Ptr saveFileDialog(const std::string &title = "Save file", const std::filesystem::path &basePath = ".");
 
 //! @brief Get the last Exception Name
 //! @details Return the last type of Exception name

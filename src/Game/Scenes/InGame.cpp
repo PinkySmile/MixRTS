@@ -2,22 +2,34 @@
 // Created by PinkySmile on 10/11/2026.
 //
 
+#include <ctime>
 #include "InGame.hpp"
 #include "Data/Player.hpp"
 #include "Data/Effect.hpp"
 #include "Data/Upgrade.hpp"
 #include "Data/Weapon.hpp"
+#include "Data/Map.hpp"
 #include "Resources/Game.hpp"
 #include "UI/BaseUI.hpp"
+#include "UI/CombinedUI.hpp"
 
 InGame::InGame(GameStartParams &params, std::function<void (const std::string &)> &cb) :
-	_settings(params.settings)
+	InGame(params, cb, [](const std::vector<Faction> &factions, UIState *uiState, GameManager *manager, PlayerState *ownerState, std::vector<MapState> &mapStates, size_t playerIndex) {
+		return std::make_shared<CombinedUI>(factions, uiState, manager, ownerState, mapStates, playerIndex);
+	}, true)
+{
+}
+
+InGame::InGame(GameStartParams params, std::function<void (const std::string &)> &cb, const GameManager::UIFactory &factory, bool saveReplays) :
+	_startParams(params),
+	_saveReplays(saveReplays)
 {
 	std::vector<std::string> loadedFactions;
 
 	this->_panel = tgui::Panel::create();
 	this->_panel->getRenderer()->setBackgroundColor(tgui::Color::Transparent);
 	game->gameRandom = RandomWrapper(params.seed);
+
 	cb("Init factions");
 	for (auto &player : params.players) {
 		auto it = std::ranges::find(loadedFactions, player.faction);
@@ -31,16 +43,24 @@ InGame::InGame(GameStartParams &params, std::function<void (const std::string &)
 		cb("Init faction " + f.getName());
 		f.load(loadedFactions);
 	}
+
+	cb("Computing checksum for " + params.map);
+	this->_mapCrc = LoadedMap::computeChecksum(params.map);
+	for (auto &f : this->_loadedFactions) {
+		cb("Computing checksum for " + f.getName());
+		this->_factionCrcs[f.getName()] = f.getChecksum();
+	}
+
 	cb("Init manager");
 	game->game = std::make_unique<GameManager>(this->_loadedFactions, params.players.size(), GameManager::GameSettings{
 		.shortGame = params.settings.shortGame
-	});
+	}, factory);
 
 	size_t i = 0;
 	std::unordered_map<std::string, Faction> factions;
 	std::vector<Player> &players = game->game->getPlayers();
 
-	cb("Load map");
+	cb("Loading map " + params.map);
 	game->game->loadMap(params.map);
 
 	cb("Preload sprites");
@@ -55,24 +75,87 @@ InGame::InGame(GameStartParams &params, std::function<void (const std::string &)
 		break;
 	}
 
-	cb("Finalizing");
 	for (auto &player : params.players) {
 		auto it = std::ranges::find(loadedFactions, player.faction);
 		unsigned factionIndex = std::distance(loadedFactions.begin(), it);
 
 		assert_exp(it != loadedFactions.end());
+		cb("Adding player " + std::to_string(i));
 		game->game->addPlayer(factionIndex, player.color, player.spawnPoint, player.team);
 		players[i].setEnabled(player.control);
 		if (player.control)
 			game->game->centerCameraOn(player.spawnPoint);
-		for (auto &ui : players[i].getUIs())
+		for (auto &ui : players[i].getCombinedUI().getUIs())
 			if (ui)
 				this->_panel->add(ui->getPanel());
 		i++;
 	}
 }
 
-InGame::~InGame() = default;
+InGame::~InGame()
+{
+	// Read the flag directly: a virtual call here would not reach a subclass that is already destroyed.
+	if (this->_saveReplays)
+		this->saveReplay("replays");
+	// Faction UI libraries are closed when GameManager is destroyed. Button callbacks are code in
+	// those libraries, so every widget has to be released while the libraries are still loaded.
+	this->_panel.reset();
+	game->game.reset();
+}
+
+bool InGame::_recordsReplay() const
+{
+	return this->_saveReplays;
+}
+
+static std::string replayTimestamp()
+{
+	time_t timer;
+	char buffer[32];
+	tm *info;
+
+	time(&timer);
+	info = localtime(&timer);
+	strftime(buffer, sizeof(buffer), "%Y-%m-%d-%H-%M-%S", info);
+	return buffer;
+}
+
+void InGame::saveReplay(const std::filesystem::path &dir)
+{
+	if (!this->_recordsReplay() || this->_replaySaved || !game || !game->game)
+		return;
+	this->_replaySaved = true;
+	try {
+		std::filesystem::create_directories(dir);
+
+		std::vector<uint32_t> crcs;
+		std::vector<std::vector<RecordedAction>> actions;
+		auto &players = game->game->getPlayers();
+
+		assert_exp(players.size() == this->_startParams.players.size());
+		for (size_t i = 0; i < players.size(); i++) {
+			crcs.push_back(this->_factionCrcs.at(this->_startParams.players[i].faction));
+			actions.push_back(players[i].getCombinedUI().getRecordedActions());
+		}
+
+		auto data = ReplayData::fromGame(
+			this->_startParams,
+			this->_mapCrc,
+			crcs,
+			static_cast<uint32_t>(game->game->getTick()),
+			std::move(actions)
+		);
+		std::string stamp = replayTimestamp();
+		std::filesystem::path file = dir / (stamp + ".replay");
+		int suffix = 1;
+
+		while (std::filesystem::exists(file))
+			file = dir / (stamp + "-" + std::to_string(suffix++) + ".replay");
+		data.save(file);
+	} catch (const std::exception &e) {
+		game->logger.error(std::string("Failed to save replay: ") + e.what());
+	}
+}
 
 void InGame::render() const
 {
@@ -92,7 +175,7 @@ void InGame::update()
 
 	if (sec >= 0.25)
 		sec = 0.25;
-	this->_timer += 50 * sec * this->_settings.speed;
+	this->_timer += 50 * sec * this->_startParams.settings.speed;
 	while (this->_timer >= 1) {
 		game->game->update();
 		if (game->game->finished) {

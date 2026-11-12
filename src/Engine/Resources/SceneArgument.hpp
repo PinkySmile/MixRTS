@@ -10,6 +10,7 @@
 #include <string>
 #include "Utils.hpp"
 #include "Data/GameManager.hpp"
+#include "Data/Replay.hpp"
 
 struct SceneArguments {
 	std::function<void (const std::string &)> reportProgressA;
@@ -49,9 +50,13 @@ struct GameStartParams {
 };
 
 struct TitleScreenArguments : public SceneArguments {
+	std::optional<std::string> message;
 };
 struct InGameArguments : public SceneArguments {
 	GameStartParams startParams;
+};
+struct ReplayArguments : public SceneArguments {
+	ReplayData replay;
 };
 struct SpectatorArguments : public SceneArguments {
 	class SpectatorConnection *connection;

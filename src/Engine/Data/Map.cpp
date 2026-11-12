@@ -3,9 +3,11 @@
 //
 
 #include <fstream>
+#include <set>
 #include <nlohmann/json.hpp>
 #include <sol/sol.hpp>
 #include "Resources/Game.hpp"
+#include "Utils.hpp"
 #include "Mod.hpp"
 #include "Map.hpp"
 #include "GameManager.hpp"
@@ -499,4 +501,37 @@ void MapInfo::load(const std::string &relPath)
 		this->startAreas.emplace_back(v["x"].get<unsigned>(), v["y"].get<unsigned>());
 	}
 	assert_exp(this->preview.loadFromFile(path / json["preview"]));
+}
+
+uint32_t LoadedMap::computeChecksum(const std::string &relPath)
+{
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(relPath);
+	std::ifstream streamMap{path.second / "map.json"};
+	nlohmann::json json;
+
+	assert_msg(streamMap, (path.second / "map.json").string());
+	streamMap >> json;
+	assert_exp(json.contains("tileset") && json["tileset"].is_string());
+
+	std::filesystem::path tileset = path.second / json["tileset"].get<std::string>();
+	uint32_t crc = 0;
+
+	crc = crc32File(path.second / "map.json", crc, true);
+	crc = crc32File(path.second / "tiles.dat", crc, false);
+	crc = crc32File(tileset / "metadata.json", crc, true);
+	crc = crc32File(tileset / "tileattrs.dat", crc, false);
+
+	std::ifstream streamMeta{tileset / "metadata.json"};
+	nlohmann::json metadata;
+	std::set<std::filesystem::path> tiles;
+
+	assert_msg(streamMeta, (tileset / "metadata.json").string());
+	streamMeta >> metadata;
+	if (metadata.contains("resources") && metadata["resources"].is_array())
+		for (auto &res : metadata["resources"])
+			if (res.is_object() && res.contains("tiles") && res["tiles"].is_string())
+				tiles.insert(tileset / res["tiles"].get<std::string>());
+	for (const auto &tile : tiles)
+		crc = crc32File(tile, crc, false);
+	return crc;
 }

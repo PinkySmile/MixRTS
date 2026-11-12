@@ -40,6 +40,7 @@ private:
 	SceneInitializer _nextScene;
 	mutable std::recursive_mutex _sceneMutex;
 	std::shared_ptr<IScene> _scene;
+	std::shared_ptr<IScene> _oldScene;
 	std::map<std::string, SceneConstructor> _factory;
 
 	void _applySwitchScene();
@@ -56,7 +57,9 @@ public:
 		bool requireLoadingScene
 	);
 	std::pair<std::string, IScene *> getCurrentScene();
-	bool isLoading();
+	bool isLoading() const;
+	//! Clears the loading flag so a failed load can switch to another scene.
+	void cancelLoading();
 };
 
 

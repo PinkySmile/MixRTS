@@ -54,6 +54,7 @@ bool Args::parse(int argc, char **argv)
 		{"no-lazy-load", -2},
 		{"preload", 'P'},
 		{"players", 'p'},
+		{"replay", 'r'},
 		{"speed", 's'},
 		{"map", 'm'},
 		{"locale", 'l'}
@@ -92,6 +93,15 @@ bool Args::parse(int argc, char **argv)
 				return false;
 			}
 			this->map = argv[i];
+			return true;
+		}},
+		{'r', [&argc, &argv, this](int &i) {
+			i++;
+			if (i == argc) {
+				fprintf(stderr, "Required param to --replay\n");
+				return false;
+			}
+			this->replay = argv[i];
 			return true;
 		}},
 		{'p', [&argc, &argv, this](int &i) {

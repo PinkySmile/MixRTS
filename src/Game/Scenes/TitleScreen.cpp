@@ -5,6 +5,8 @@
 #include <TGUI/Widgets/Button.hpp>
 #include "TitleScreen.hpp"
 #include "Data/Vector.hpp"
+#include "Data/Map.hpp"
+#include "Data/Replay.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
 
@@ -200,8 +202,8 @@ void TitleScreen::_initTitle()
 	play->onClick([] {
 
 	});
-	replay->onClick([] {
-
+	replay->onClick([this] {
+		this->_openReplayDialog();
 	});
 	load->onClick([] {
 
@@ -209,18 +211,48 @@ void TitleScreen::_initTitle()
 	settings->onClick([] {
 
 	});
-	debug->onClick([this] {
-		
+	debug->onClick([] {
+
 	});
 	quit->onClick([] {
 		game->screen->close();
 	});
 }
 
-TitleScreen::TitleScreen()
+void TitleScreen::_openReplayDialog()
+{
+	auto window = openFileDialog("Open replay", "replays");
+
+	window->setFileTypeFilters({ {"Replay file (*.replay)", {"*.replay"}}, {"All files", {}} }, 0);
+	window->onFileSelect([this](const std::vector<tgui::Filesystem::Path> &arr){
+		try {
+			this->_loadReplay(arr[0]);
+		} catch (std::exception &e) {
+			dispMsg(game->gui, "Replay loading failed", "This replay is invalid, corrupted or was created for a different version of the game: " + std::string(e.what()));
+		}
+	});
+}
+
+void TitleScreen::_loadReplay(const std::filesystem::path &path)
+{
+	ReplayData replay = ReplayData::load(path);
+	uint32_t crc = LoadedMap::computeChecksum(replay.map);
+
+	if (crc != replay.mapCrc)
+		throw std::runtime_error("This replay's map checksum does not match the installed map");
+
+	auto args = new ReplayArguments();
+
+	args->replay = std::move(replay);
+	game->scene.switchScene("replay_in_game", args);
+}
+
+TitleScreen::TitleScreen(std::optional<std::string> message)
 {
 	this->_panel = tgui::Panel::create({"100%", "100%"});
 	this->_initTitle();
+	if (message)
+		dispMsg(*this->_panel, "Error", *message);
 }
 
 TitleScreen::~TitleScreen() = default;
@@ -248,7 +280,13 @@ tgui::Panel::Ptr TitleScreen::getPanel() const
 	return this->_panel;
 }
 
-TitleScreen *TitleScreen::create(SceneArguments *)
+TitleScreen *TitleScreen::create(SceneArguments *args)
 {
-	return new TitleScreen();
+	std::optional<std::string> message;
+
+	if (args) {
+		checked_cast(params, TitleScreenArguments, args);
+		message = std::move(params->message);
+	}
+	return new TitleScreen(std::move(message));
 }

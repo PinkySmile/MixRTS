@@ -6,6 +6,7 @@
 #define MIXRTS_FACTION_HPP
 
 
+#include <set>
 #include <nlohmann/json.hpp>
 #include <sol/forward.hpp>
 #include "forward.hpp"
@@ -94,6 +95,8 @@ private:
 	nlohmann::json _uiData;
 	std::string _uiPath;
 	std::string _name;
+	std::string _definition;
+	std::set<std::string> _checksumFiles;
 	mutable SharedLibrary _sl = nullptr;
 	bool _regressTech;
 	bool _canSell;
@@ -132,6 +135,8 @@ public:
 	[[nodiscard]] bool hasRadar() const;
 	[[nodiscard]] bool isRadarPowered() const;
 	[[nodiscard]] const std::string &getName() const;
+	//! Checksum of the faction definition and the gameplay files it loaded. Valid after load().
+	[[nodiscard]] uint32_t getChecksum() const;
 	[[nodiscard]] const std::optional<nlohmann::json> &getRepairAnim() const;
 	[[nodiscard]] const nlohmann::json &getUIData() const;
 	[[nodiscard]] const std::unordered_map<std::string, FactionQueue> &getQueues() const;

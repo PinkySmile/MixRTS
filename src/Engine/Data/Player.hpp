@@ -19,6 +19,7 @@
 #include "Color.hpp"
 #include "Utils.hpp"
 #include "UI/UI.hpp"
+#include "Data/GameManager.hpp"
 #include "SharedLibrary.hpp"
 
 class CustomQueue {
@@ -154,7 +155,7 @@ public:
 		CREDIT_STRICT
 	};
 
-	Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &state);
+	Player(GameManager &parent, const std::vector<Faction> &factions, size_t index, const HSLColor &color, std::vector<MapState> &state, const GameManager::UIFactory &factory, size_t playerIndex);
 	~Player();
 	bool lost() const;
 	void update();
@@ -175,7 +176,7 @@ public:
 	void lockQueue(const std::string &queueId);
 	void resetQueue(const std::string &queueId);
 	void refreshQueue(const std::string &queueId);
-	std::vector<std::shared_ptr<UI>> &getUIs();
+	CombinedUI &getCombinedUI();
 	void onMouseMoved(Vector2i pos);
 	void onLeftMouseClicked(Vector2i pos);
 	void onRightMouseClicked(Vector2i pos);
@@ -202,11 +203,10 @@ private:
 	bool _enabled = false;
 	bool _lost = false;
 	bool _won = false;
-	size_t _currentUi;
 	HSLColor _color;
 	const Faction &_primaryFaction;
 	const std::vector<Faction> &_factions;
-	std::vector<std::shared_ptr<UI>> _uis;
+	std::shared_ptr<CombinedUI> _ui;
 	std::unordered_map<std::string, const GameObject *> _loadedObjects;
 	std::unordered_map<std::string, const Upgrade *> _loadedUpgrades;
 

@@ -6,17 +6,27 @@
 #define MIXRTS_INGAME_HPP
 
 
+#include <unordered_map>
 #include "Data/Faction.hpp"
+#include "Data/Replay.hpp"
 #include "Resources/IScene.hpp"
 #include "Resources/SceneArgument.hpp"
 
 class InGame : public IScene {
-private:
+protected:
 	tgui::Panel::Ptr _panel;
-	LobbySettings _settings;
+	GameStartParams _startParams;
+	std::unordered_map<std::string, uint32_t> _factionCrcs;
+	uint32_t _mapCrc = 0;
+	//! Set from the constructor. The destructor reads this directly so a subclass that throws still opts out.
+	bool _saveReplays = true;
+	bool _replaySaved = false;
 	std::vector<Faction> _loadedFactions;
 	sf::Clock _clock;
 	float _timer = 0;
+
+	InGame(GameStartParams params, std::function<void (const std::string &)> &cb, const GameManager::UIFactory &factory, bool saveReplays);
+	virtual bool _recordsReplay() const;
 
 public:
 	InGame(GameStartParams &params, std::function<void (const std::string &)> &cb);
@@ -26,6 +36,8 @@ public:
 	void update() override;
 	void consumeEvent(const sf::Event &event) override;
 	[[nodiscard]] tgui::Panel::Ptr getPanel() const override;
+	//! Writes dir/<date-time>.replay. Does nothing when this scene does not record, or after a successful save.
+	void saveReplay(const std::filesystem::path &dir);
 
 	static InGame *create(SceneArguments *);
 };

@@ -117,6 +117,8 @@ struct MYDLL_API LoadedMap {
 	sf::RenderTexture renderCache;
 
 	void load(const std::string &path);
+	//! Checksum of the map's gameplay files (json, tiles, tileset attributes and metadata). Images are excluded.
+	[[nodiscard]] static uint32_t computeChecksum(const std::string &path);
 	void buildCache();
 	void refreshTile(unsigned x, unsigned y, bool commit = true, bool reload = true);
 	float getSpeedMul(const std::vector<std::string> &tags, unsigned terrain) const;

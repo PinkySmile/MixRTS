@@ -6,8 +6,13 @@
 #include <cxxabi.h>
 #endif
 #include <cmath>
+#include <array>
+#include <fstream>
+#include <vector>
+#include <algorithm>
 #include "Utils.hpp"
 #include "Resources/Assert.hpp"
+#include "Resources/Game.hpp"
 
 
 nlohmann::json &mergeObjects(nlohmann::json &dst, const nlohmann::json &t)
@@ -167,4 +172,54 @@ std::string getLastExceptionName()
 #else
 	return "Unknown exception";
 #endif
+}
+
+tgui::FileDialog::Ptr openFileDialog(const std::string &title, const std::filesystem::path &basePath, bool overWriteWarning, bool mustExist)
+{
+	auto dialog = tgui::FileDialog::create(title, overWriteWarning ? "Save" : "Open", overWriteWarning);
+
+	dialog->setFileMustExist(mustExist);
+	dialog->setPath(tgui::Filesystem::Path(absolute(basePath)));
+	openWindowWithFocus(game->gui, 0, 0, dialog);
+	return dialog;
+}
+
+tgui::FileDialog::Ptr saveFileDialog(const std::string &title, const std::filesystem::path &basePath)
+{
+	return openFileDialog(title, basePath, true, false);
+}
+
+static uint32_t crc32ForByte(uint32_t r)
+{
+	for (int j = 0; j < 8; ++j)
+		r = (r & 1 ? 0 : static_cast<uint32_t>(0xEDB88320L)) ^ r >> 1;
+	return r ^ static_cast<uint32_t>(0xFF000000L);
+}
+
+uint32_t crc32(const void *data, size_t size, uint32_t crc)
+{
+	static const auto table = [] {
+		std::array<uint32_t, 256> values{};
+
+		for (uint32_t i = 0; i < values.size(); i++)
+			values[i] = crc32ForByte(i);
+		return values;
+	}();
+	auto bytes = static_cast<const uint8_t *>(data);
+
+	for (size_t i = 0; i < size; i++)
+		crc = table[static_cast<uint8_t>(crc) ^ bytes[i]] ^ crc >> 8;
+	return crc;
+}
+
+uint32_t crc32File(const std::filesystem::path &path, uint32_t crc, bool normalizeNewlines)
+{
+	std::ifstream stream{path, std::ios::binary};
+	std::vector<char> data;
+
+	assert_msg(stream, "Failed to open " + path.string());
+	data.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+	if (normalizeNewlines)
+		data.erase(std::remove(data.begin(), data.end(), '\r'), data.end());
+	return crc32(data.data(), data.size(), crc);
 }

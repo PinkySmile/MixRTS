@@ -17,6 +17,7 @@ struct Args {
 	bool noLazyLoad = false;
 	float speed = 1;
 	std::string locale = "fr";
+	std::string replay;
 	std::string map = "d2k:maps/8PLAY1";
 	std::vector<PlayerArg> players = {
 		{"d2k:atreides",  {}, {}, {214, 375,  919}, 0, true},

@@ -176,3 +176,7 @@ Game::Game(const std::filesystem::path &fontPath, const std::filesystem::path &l
 	this->init();
 }
 #endif
+Game::~Game()
+{
+	this->gui.removeAllWidgets();
+}

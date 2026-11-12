@@ -28,6 +28,19 @@ Mod::Mod(std::filesystem::path base, const nlohmann::json &metadata) :
 {
 }
 
+static void rememberFile(std::set<std::string> *files, const Mod &mod, const std::filesystem::path &fullPath)
+{
+	if (!files)
+		return;
+
+	std::error_code err;
+	std::filesystem::path rel = std::filesystem::relative(fullPath, mod.getBase(), err);
+
+	if (err)
+		rel = fullPath.filename();
+	files->insert(mod.getName() + ":" + rel.generic_string());
+}
+
 void Mod::loadFactions(const std::string &relPath, std::unordered_map<std::string, Faction> &factions) const
 {
 	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
@@ -84,11 +97,12 @@ void Mod::loadCursors(const std::string &relPath, std::unordered_map<std::string
 	} CATCH_AND_RETHROW("While loading cursors file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadSounds(const std::string &relPath, std::unordered_map<std::string, MultiSound> &sounds) const
+void Mod::loadSounds(const std::string &relPath, std::unordered_map<std::string, MultiSound> &sounds, std::set<std::string> *checksumFiles) const
 {
 	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
 
 	TRY {
+		rememberFile(checksumFiles, *path.first, path.second);
 		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -119,11 +133,12 @@ void Mod::loadSounds(const std::string &relPath, std::unordered_map<std::string,
 	} CATCH_AND_RETHROW("While loading sounds file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadAnimations(const std::string &relPath, std::unordered_map<std::string, std::vector<Animation>> &anims) const
+void Mod::loadAnimations(const std::string &relPath, std::unordered_map<std::string, std::vector<Animation>> &anims, std::set<std::string> *checksumFiles) const
 {
 	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
 
 	TRY {
+		rememberFile(checksumFiles, *path.first, path.second);
 		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -188,12 +203,14 @@ void Mod::loadObjects(
 	const std::unordered_map<std::string, MultiSound> &sounds,
 	const std::unordered_map<std::string, Effect> &effects,
 	const std::unordered_map<std::string, Weapon> &weapons,
-	std::unordered_map<std::string, GameObject> &objects
+	std::unordered_map<std::string, GameObject> &objects,
+	std::set<std::string> *checksumFiles
 ) const
 {
 	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
 
 	TRY {
+		rememberFile(checksumFiles, *path.first, path.second);
 		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -218,11 +235,12 @@ void Mod::loadObjects(
 	} CATCH_AND_RETHROW("While loading objects file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadUpgrades(const std::string &relPath, const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades) const
+void Mod::loadUpgrades(const std::string &relPath, const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades, std::set<std::string> *checksumFiles) const
 {
 	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
 
 	TRY {
+		rememberFile(checksumFiles, *path.first, path.second);
 		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -247,11 +265,12 @@ void Mod::loadUpgrades(const std::string &relPath, const Faction &base, std::uno
 	} CATCH_AND_RETHROW("While loading upgrades file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadEffects(const std::string &relPath, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, MultiSound> &sounds, std::unordered_map<std::string, Effect> &effects) const
+void Mod::loadEffects(const std::string &relPath, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, MultiSound> &sounds, std::unordered_map<std::string, Effect> &effects, std::set<std::string> *checksumFiles) const
 {
 	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
 
 	TRY {
+		rememberFile(checksumFiles, *path.first, path.second);
 		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -276,11 +295,12 @@ void Mod::loadEffects(const std::string &relPath, const std::unordered_map<std::
 	} CATCH_AND_RETHROW("While loading effects file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadWeapons(const std::string &relPath, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, Effect> &effects, const std::unordered_map<std::string, MultiSound> &sounds, const std::unordered_map<std::string, Warhead> &warheads, std::unordered_map<std::string, Weapon> &weapons) const
+void Mod::loadWeapons(const std::string &relPath, const std::unordered_map<std::string, std::vector<Animation>> &anims, const std::unordered_map<std::string, Effect> &effects, const std::unordered_map<std::string, MultiSound> &sounds, const std::unordered_map<std::string, Warhead> &warheads, std::unordered_map<std::string, Weapon> &weapons, std::set<std::string> *checksumFiles) const
 {
 	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
 
 	TRY {
+		rememberFile(checksumFiles, *path.first, path.second);
 		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -305,11 +325,12 @@ void Mod::loadWeapons(const std::string &relPath, const std::unordered_map<std::
 	} CATCH_AND_RETHROW("While loading weapons file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadWarheads(const std::string &relPath, std::unordered_map<std::string, Warhead> &warheads) const
+void Mod::loadWarheads(const std::string &relPath, std::unordered_map<std::string, Warhead> &warheads, std::set<std::string> *checksumFiles) const
 {
 	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(this->_name, relPath));
 
 	TRY {
+		rememberFile(checksumFiles, *path.first, path.second);
 		std::ifstream stream{path.second};
 		nlohmann::json json;
 		nlohmann::json gen;
@@ -334,7 +355,7 @@ void Mod::loadWarheads(const std::string &relPath, std::unordered_map<std::strin
 	} CATCH_AND_RETHROW("While loading warheads file \"" + path.second.string() + "\"\n")
 }
 
-void Mod::loadArmors(const std::vector<std::string> &allFactions, std::unordered_map<std::string, Warhead> &warheads) const
+void Mod::loadArmors(const std::vector<std::string> &allFactions, std::unordered_map<std::string, Warhead> &warheads, std::set<std::string> *checksumFiles) const
 {
 	std::set<std::string> origins;
 
@@ -348,6 +369,7 @@ void Mod::loadArmors(const std::vector<std::string> &allFactions, std::unordered
 		std::filesystem::path fullPath = this->_base / relPath;
 
 		TRY {
+			rememberFile(checksumFiles, *this, fullPath);
 			std::ifstream stream{fullPath};
 			nlohmann::json json;
 

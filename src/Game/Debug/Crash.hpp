@@ -37,6 +37,8 @@ void cleanStackTrace(Stacktrace &st);
 
 tgui::Panel::Ptr generateCrashPanel(Stacktrace st, const std::exception &e);
 void handleCrash(Stacktrace st, const std::exception &e);
+//! Creates crash-YYYY-MM-DD-HH-MM-SS and returns that path.
+std::filesystem::path createCrashFolder();
 
 
 #endif //MIXRTS_CRASH_HPP

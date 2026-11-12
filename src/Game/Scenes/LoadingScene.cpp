@@ -4,8 +4,21 @@
 
 #include "LoadingScene.hpp"
 
+#include <SFML/Window/Context.hpp>
+#include "TitleScreen.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
+
+namespace {
+// The map render texture leaves its private GL context current on this thread.
+// GLX keeps that binding after the thread exits, and the next glXMakeContextCurrent
+// then fails with BadAccess. A temporary context takes over on this thread and
+// releases it again in its destructor.
+void releaseGlContextOnThisThread()
+{
+	sf::Context release;
+}
+}
 
 LoadingScene::LoadingScene(
 	const std::function<IScene *(LoadingScene *)> &fct,
@@ -15,26 +28,20 @@ LoadingScene::LoadingScene(
 	onLoadingFinished(onLoadingFinished),
 	onUpdate(onUpdate)
 {
-	auto fctCopy = new std::function<IScene *(LoadingScene *)>(fct);
-
-	this->_thread = std::thread{[this, fctCopy]{
-
-#if !defined(_DEBUG) || defined(_WIN32) || defined(__ANDROID__)
+	this->_thread = std::thread{[this, fctCopy = std::make_unique<std::function<IScene *(LoadingScene *)>>(fct)]{
 		try {
-#endif
 			auto val = (*fctCopy)(this);
 
 			this->setStatus("Cleaning up...");
-			delete fctCopy;
 			this->_nextScene = val;
-#if !defined(_DEBUG) || defined(_WIN32) || defined(__ANDROID__)
 		} catch (std::exception &e) {
+			this->_mutex.lock();
+			this->_status = e.what();
 			this->_errored = true;
-			this->setStatus(e.what());
+			this->_mutex.unlock();
 			game->logger.error(e.what());
-			//TODO: What to here ?
 		}
-#endif
+		releaseGlContextOnThisThread();
 	}};
 #ifndef __EMSCRIPTEN__
 	pthread_setname_np(this->_thread.native_handle(), "Scene loading thread");
@@ -57,7 +64,7 @@ void LoadingScene::render() const
 	game->screen->borderColor(2, Color::Black);
 	game->screen->fillColor();
 	game->screen->textSize(50);
-	game->screen->displayElement(this->_errored ? "Error." : "Loading...", {0, 440}, 1680, Screen::ALIGN_CENTER);
+	game->screen->displayElement("Loading...", {0, 440}, 1680, Screen::ALIGN_CENTER);
 	this->_mutex.lock();
 	game->screen->displayElement(this->_status, {0, 490}, 1680, Screen::ALIGN_CENTER);
 	this->_mutex.unlock();
@@ -73,6 +80,12 @@ void LoadingScene::update()
 {
 	if (this->onUpdate)
 		this->onUpdate(this);
+	if (this->_errored) {
+		auto args = new TitleScreenArguments();
+
+		args->message = this->_status;
+		game->scene.switchScene("title_screen", args);
+	}
 	if (this->_nextScene) {
 		this->onLoadingFinished(this->_nextScene);
 		this->_nextScene = nullptr;

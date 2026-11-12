@@ -233,6 +233,8 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/Data/Player.hpp
 	src/Engine/Data/Projectile.cpp
 	src/Engine/Data/Projectile.hpp
+	src/Engine/Data/Replay.cpp
+	src/Engine/Data/Replay.hpp
 	src/Engine/Data/Requirements/IReq.hpp
 	src/Engine/Data/Requirements/ReqAndCombinator.cpp
 	src/Engine/Data/Requirements/ReqAndCombinator.hpp
@@ -266,6 +268,7 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/Resources/SceneArgument.hpp
 	src/Engine/Resources/SceneManager.cpp
 	src/Engine/Resources/SceneManager.hpp
+	src/Engine/SFML/lib.cpp
 	src/Engine/SFML/Color.cpp
 	src/Engine/SFML/Color.hpp
 	src/Engine/SFML/Screen.cpp
@@ -286,6 +289,8 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/UI/UI.hpp
 	src/Engine/UI/BaseUI.cpp
 	src/Engine/UI/BaseUI.hpp
+	src/Engine/UI/CombinedUI.cpp
+	src/Engine/UI/CombinedUI.hpp
 	src/Engine/Utils.cpp
 	src/Engine/Utils.hpp
 	src/Engine/Data/SharedLibrary.hpp
@@ -321,6 +326,8 @@ add_executable(
 	src/Game/Args.hpp
 	src/Game/Scenes/InGame.cpp
 	src/Game/Scenes/InGame.hpp
+	src/Game/Scenes/ReplayInGame.cpp
+	src/Game/Scenes/ReplayInGame.hpp
 	${EXTRA_SOURCES}
 )
 target_link_libraries(MixRTS MixRTS_Core)

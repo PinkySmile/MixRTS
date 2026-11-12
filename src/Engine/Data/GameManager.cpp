@@ -68,9 +68,10 @@ ShakeParams::ShakeParams(const nlohmann::json &j)
 		this->freezeTime = j["freeze_time"];
 }
 
-GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers, const GameSettings &settings) :
+GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers, const GameSettings &settings, UIFactory uiFactory) :
 	_text{game->font},
 	_settings(settings),
+	_uiFactory(std::move(uiFactory)),
 	_factions(factions)
 {
 	this->_text.setCharacterSize(12 * guiScale);
@@ -142,7 +143,7 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, Vector2i
 		for (auto &m: this->_mapStates)
 			m.placementGrid.emplace_back(m.grid.size(), 0);
 	}
-	this->_players.emplace_back(*this, this->_factions, factionIndex, color, this->_mapStates);
+	this->_players.emplace_back(*this, this->_factions, factionIndex, color, this->_mapStates, this->_uiFactory, index);
 	this->_players[index].state.index = index;
 	this->_players[index].state.team = team;
 	this->_players[index].state.systemMoney = faction.getStartingMoney();
@@ -196,13 +197,9 @@ void GameManager::_checkScroll()
 		if (old == this->_cameraTranslate)
 			cursor += UI::CURSOR_SCROLL_DIFF;
 		for (auto &p : this->_players)
-			for (auto &u : p.getUIs())
-				if (u)
-					u->forcedCursor = static_cast<UI::Cursor>(cursor);
+			p.getCombinedUI().setForcedCursor(static_cast<UI::Cursor>(cursor));
 	} else for (auto &p : this->_players)
-		for (auto &u : p.getUIs())
-			if (u)
-				u->forcedCursor.reset();
+		p.getCombinedUI().setForcedCursor(std::nullopt);
 	game->soundMgr.setCamera(this->_cameraTranslate + visible / 2, visible);
 }
 
@@ -2016,5 +2013,5 @@ void GameManager::pushUserType(sol::state &state)
 	// members (so std::vector<T> of them isn't move/copy-assignable, which
 	// sol2's container support needs even just to register the usertype),
 	// and LoadedMap isn't copyable either, same reasoning as
-	// Upgrade::getRequirements()/Player::getUIs().
+	// Upgrade::getRequirements()/Player::getCombinedUI().
 }

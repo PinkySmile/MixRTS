@@ -4,10 +4,12 @@
 
 #include <iostream>
 #include <fstream>
+#include <ctime>
 #include "UI/BaseUI.hpp"
 #include "Resources/Game.hpp"
 #include "Crash.hpp"
 #include "Utils.hpp"
+#include "../Scenes/InGame.hpp"
 
 static tgui::Font *traceFont = nullptr;
 
@@ -61,21 +63,19 @@ tgui::Panel::Ptr generateCrashPanel(Stacktrace st, const std::exception &e)
 	panel->add(spanel, "last");
 
 
-	time_t timer;
-	char timebuffer[31];
-	tm *tm_info;
-
-	time(&timer);
-	tm_info = localtime(&timer);
-	strftime(timebuffer, sizeof(timebuffer), "%Y-%m-%d-%H-%M-%S", tm_info);
-
-	std::string folder = "crash-";
+	std::filesystem::path path = createCrashFolder();
+	std::string folder = path.string();
 	std::error_code err;
-	folder += timebuffer;
-	std::filesystem::path path = folder;
 	auto crashPlaceLabel = tgui::Label::create(L"Crash information has been stored at " + std::filesystem::absolute(folder).wstring());
 
-	std::filesystem::create_directory(path, err);
+	if (game && game->game) {
+		if (auto *inGame = dynamic_cast<InGame *>(game->scene.getCurrentScene().second)) {
+			try {
+				inGame->saveReplay(path);
+			} catch (const std::exception &) {
+			}
+		}
+	}
 	std::filesystem::copy("latest.log", path / "log_file.log", err);
 	std::ofstream stream{path / "stacktrace.txt"};
 
@@ -175,4 +175,20 @@ void handleCrash(Stacktrace st, const std::exception &e)
 	}
 	delete sprite;
 	delete background;
+}
+
+std::filesystem::path createCrashFolder()
+{
+	time_t timer;
+	char timebuffer[31];
+	tm *info;
+	std::error_code err;
+
+	time(&timer);
+	info = localtime(&timer);
+	strftime(timebuffer, sizeof(timebuffer), "%Y-%m-%d-%H-%M-%S", info);
+
+	std::filesystem::path path = std::string("crash-") + timebuffer;
+	std::filesystem::create_directory(path, err);
+	return path;
 }

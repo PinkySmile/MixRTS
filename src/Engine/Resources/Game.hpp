@@ -62,11 +62,11 @@ struct MYDLL_API Game {
 	tgui::Gui gui;
 	TextureManagerImpl textureMgr;
 	SoundManagerImpl soundMgr;
+	std::unique_ptr<GameManager> game;
 	SceneManager scene;
 	ModManager modManager;
 	Vector2u mousePos;
 	sol::state lua;
-	std::unique_ptr<GameManager> game;
 
 	static void pushUserType(sol::state &state);
 
@@ -75,6 +75,7 @@ struct MYDLL_API Game {
 #else
 	Game(const std::filesystem::path &fontPath, const std::filesystem::path &loggerPath = "./latest.log");
 #endif
+	~Game();
 	void init();
 };
 
