@@ -9,8 +9,8 @@
 #include "Resources/Game.hpp"
 #include "Screen.hpp"
 
-void reloadViews(Screen &win, tgui::Gui &gui, Vector2u size, Vector2f offset);
-void dispFPS(float frameTime);
+void MYDLL_API reloadViews(Screen &win, tgui::Gui &gui, Vector2u size, Vector2f offset);
+void MYDLL_API dispFPS(float frameTime);
 
 
 #endif //MIXRTS_BASEUI_HPP

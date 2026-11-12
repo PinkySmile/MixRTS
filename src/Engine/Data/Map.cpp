@@ -105,7 +105,7 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 
 		assert_msg(anim.is_string(), "json[\"animations\"][" + std::to_string(i) + "]");
 		TRY {
-			mod.loadAnimations(path.parent_path() / anim.get<std::string>(), this->animations);
+			mod.loadAnimations(anim, this->animations);
 		} CATCH_AND_RETHROW("In key \"animations\"[" + std::to_string(i) + "]\n")
 	}
 	for (size_t i = 0; i < json["generators"].size(); i++) {

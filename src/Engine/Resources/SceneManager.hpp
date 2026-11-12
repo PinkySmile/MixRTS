@@ -21,7 +21,7 @@ struct LoadingArguments : public SceneArguments {
 	~LoadingArguments() override = default;
 };
 
-class SceneManager {
+class MYDLL_API SceneManager {
 private:
 	struct SceneInitializer {
 		std::string name;

@@ -6,7 +6,7 @@
 #include "Debug/Profiler.hpp"
 
 
-void reloadViews(Screen &win, tgui::Gui &gui, Vector2u size, Vector2f offset)
+void MYDLL_API reloadViews(Screen &win, tgui::Gui &gui, Vector2u size, Vector2f offset)
 {
 	PROFILE_SCOPE("reload views");
 	sf::View view{sf::FloatRect{
@@ -28,7 +28,7 @@ void reloadViews(Screen &win, tgui::Gui &gui, Vector2u size, Vector2f offset)
 	gui.setAbsoluteView(viewGui);
 }
 
-void dispFPS(float frameTime)
+void MYDLL_API dispFPS(float frameTime)
 {
 	char details[96];
 	auto old = game->screen->getView();

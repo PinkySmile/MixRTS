@@ -126,7 +126,7 @@ public:
 	[[nodiscard]] sf::RenderTarget &getRenderTarget();
 };
 
-void libraryInit();
+void MYDLL_API libraryInit();
 #define libraryUnInit()
 
 #endif //MIXRTS_RESSOURCES_HPP

@@ -186,14 +186,14 @@ tgui::MessageBox::Ptr dispMsg(T &gui, const std::string &title, const std::strin
 //! @param basePath The path of the FileDialog
 //! @param patterns The patterns of the FileDialog
 //! @return std::string FileDialog message
-tgui::FileDialog::Ptr openFileDialog(const std::string &title = "Open file", const std::filesystem::path &basePath = ".", bool overWriteWarning = false, bool mustExist = true);
+MYDLL_API tgui::FileDialog::Ptr openFileDialog(const std::string &title = "Open file", const std::filesystem::path &basePath = ".", bool overWriteWarning = false, bool mustExist = true);
 
 //! @brief Saves a file dialog
 //! @param title Title of the FileDialog
 //! @param basePath The path of the FileDialog
 //! @param patterns The patterns of the FileDialog
 //! @return std::string FileDialog message
-tgui::FileDialog::Ptr saveFileDialog(const std::string &title = "Save file", const std::filesystem::path &basePath = ".");
+MYDLL_API tgui::FileDialog::Ptr saveFileDialog(const std::string &title = "Save file", const std::filesystem::path &basePath = ".");
 
 //! @brief Get the last Exception Name
 //! @details Return the last type of Exception name

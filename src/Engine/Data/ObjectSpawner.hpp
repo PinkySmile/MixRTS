@@ -8,7 +8,7 @@
 
 #include "GameObject.hpp"
 
-class ObjectSpawner : public GameObject {
+class MYDLL_API ObjectSpawner : public GameObject {
 private:
 	std::string _name;
 	std::function<void (GameObject *)> _init;

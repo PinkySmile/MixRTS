@@ -115,13 +115,13 @@ public:
 };
 
 //! One player's encoded actions, as published for a crashed process to be read from outside.
-struct CrashReplayStream {
+struct MYDLL_API CrashReplayStream {
 	const uint8_t *data = nullptr;
 	size_t size = 0;
 };
 
 //! Flat snapshot of the in-progress replay. magic is published last and cleared first.
-struct CrashReplayAnchor {
+struct MYDLL_API CrashReplayAnchor {
 	static constexpr uint32_t MAGIC = 0xC0A5E001;
 
 	uint32_t magic = 0;
