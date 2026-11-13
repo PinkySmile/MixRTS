@@ -40,7 +40,7 @@ static std::vector<PlayerArg> parsePlayers(const char *players)
 
 		assert_exp(teamId);
 		// TODO: Allow to select spawn from CLI maybe?
-		playersParams.push_back(PlayerArg{factionName, {}, {}, color, *teamId, false});
+		playersParams.push_back(PlayerArg{factionName, {}, {}, color, static_cast<char>(teamId - teamLetter), false});
 	}
 	if (!playersParams.empty())
 		playersParams[controllingIndex].control = true;

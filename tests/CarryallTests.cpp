@@ -418,7 +418,7 @@ TEST_F(GameFixture, BuildingCanBePlacedUnderAFlyingCarryall)
 
 	// Select the (now ready) wind trap cameo and click the target tile,
 	// exactly like a real player would with the mouse.
-	auto &ui = this->player->getUIs()[this->player->state.factionIndex];
+	auto &ui = this->player->getCombinedUI().getUIs()[this->player->state.factionIndex];
 
 	ui->selectBuildingForPlacement("d2k:wtra");
 	this->player->onMouseMoved(placementAbs);

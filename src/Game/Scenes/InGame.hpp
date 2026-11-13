@@ -7,6 +7,7 @@
 
 
 #include <atomic>
+#include <memory>
 #include <unordered_map>
 #include "Data/Faction.hpp"
 #include "Data/Replay.hpp"
@@ -28,11 +29,13 @@ protected:
 
 	void _publishCrashAnchor();
 	void _retractCrashAnchor();
+	void _writeState();
 	std::vector<Faction> _loadedFactions;
 	sf::Clock _clock;
 	float _timer = 0;
 
-	InGame(GameStartParams params, std::function<void (const std::string &)> &cb, const GameManager::UIFactory &factory, bool saveReplays);
+	InGame(GameStartParams params, std::function<void (const std::string &)> &cb, const GameManager::UIFactory &factory, bool saveReplays, bool spawnStartingObjects = true);
+	InGame(GameStartParams params, std::shared_ptr<const SaveStateFile> state, std::function<void (const std::string &)> &cb);
 	virtual bool _recordsReplay() const;
 
 public:

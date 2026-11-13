@@ -197,7 +197,7 @@ void DebugPanel::_buildGeneralPage()
 	std::vector<std::string> views;
 	std::vector<std::string> players;
 
-	this->_addLabel(page, "F1: unlock all   F2: switch player\nF3: this panel   F11: pause   F12: step");
+	this->_addLabel(page, "F1: unlock all   F2: switch player\nF3: this panel   F5: save state   F11: pause   F12: step");
 
 	for (auto &p : this->_manager.getPlayers())
 		players.push_back("Player " + std::to_string(p.state.index) + " - " + p.getPrimaryFaction().getName());
@@ -217,6 +217,9 @@ void DebugPanel::_buildGeneralPage()
 	});
 	this->_addButton(page, "Step one tick (F12)", [this]{
 		this->_manager.requestStep();
+	});
+	this->_addButton(page, "Save state (F5)", [this]{
+		this->_manager.requestStateSave();
 	});
 	this->_addCheck(page, "Limit camera to the map", opts.limitCamera);
 	this->_addButton(page, "Rotate selected objects", [this]{

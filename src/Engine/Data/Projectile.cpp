@@ -8,6 +8,7 @@
 #include "Animation.hpp"
 #include "Weapon.hpp"
 #include "Projectile.hpp"
+#include "StateContext.hpp"
 #include "GameManager.hpp"
 #include "GameObject.hpp"
 #include "Player.hpp"
@@ -62,6 +63,117 @@ Projectile::Projectile(const GameObject *parent, const Weapon *weapon, Vector2f 
 		this->_speed *= pos.distance(this->_targetPos);
 		this->_targetPos += (this->_targetPos - this->_position) * 100;
 	}
+}
+
+Projectile::Projectile(const Weapon *weapon, const GameObject *parent) :
+	_parent(parent),
+	_target(nullptr),
+	_weapon(weapon),
+	_position(0, 0),
+	_startPos(0, 0),
+	_targetPos(0, 0)
+{
+	assert_exp(weapon->getProjectileData());
+	const WeaponProjectile &data = *weapon->getProjectileData();
+
+	this->_anims.reserve(data.anims.size());
+	for (auto &anim : data.anims) {
+		this->_anims.emplace_back(parent, anim);
+		if (parent)
+			this->_anims.back().setColor(parent->owner->getColor());
+	}
+	if (parent) {
+		this->_ownerIndex = parent->owner->state.index;
+		this->_owner = parent->owner;
+	}
+	this->_blockedByWall = data.blockedByWall;
+	this->_homing = data.homing;
+	this->_trail = data.trail;
+	this->_trailInterval = data.trailInterval;
+	this->_speed = data.speed;
+	this->_range = data.range;
+	this->_damageRamp = data.damageRamp;
+	this->_rampDelay = data.rampDelay;
+	this->_hitTravel = data.hitTravel;
+	this->_arc = data.arc;
+	this->_shadow = data.shadow;
+	this->_velocity = data.velocity;
+	this->_gravity = data.gravity;
+	this->_height = data.startY;
+	this->_falling = data.falling;
+	this->_bounce = data.bounce.first;
+	this->_damage = weapon->getDamage();
+}
+
+void Projectile::saveState(StateSaveContext &ctx) const
+{
+	StateWriter &out = ctx.out;
+
+	ctx.obj(this->_target);
+	ctx.player(this->_owner);
+	out.u32(this->_ownerIndex);
+	out.vec2(this->_position);
+	out.vec2(this->_startPos);
+	out.vec2(this->_targetPos);
+	out.u32(this->_trailInterval);
+	out.u32(this->_trailTimer);
+	out.u32(this->_damageRamp);
+	out.u32(this->_rampDelay);
+	out.u32(this->_rampTimer);
+	out.u32(this->_damage);
+	out.u32(this->_range);
+	out.u32(this->_bounce);
+	out.f32(this->_velocity);
+	out.f32(this->_gravity);
+	out.f32(this->_height);
+	out.f32(this->_speed);
+	out.boolean(this->_hitTravel);
+	out.boolean(this->_homing);
+	out.boolean(this->_arc);
+	out.boolean(this->_shadow);
+	out.boolean(this->_falling);
+	out.boolean(this->_blockedByWall);
+	out.boolean(this->_disposable);
+	out.size(this->_anims.size());
+	for (const ConditionalAnim &anim : this->_anims)
+		anim.saveState(out);
+}
+
+void Projectile::loadState(StateLoadContext &ctx)
+{
+	StateReader &in = ctx.in;
+
+	this->_target = ctx.obj();
+	this->_owner = ctx.player();
+	this->_ownerIndex = in.u32();
+	this->_position = in.vec2<float>();
+	this->_startPos = in.vec2<float>();
+	this->_targetPos = in.vec2<float>();
+	this->_trailInterval = in.u32();
+	this->_trailTimer = in.u32();
+	this->_damageRamp = in.u32();
+	this->_rampDelay = in.u32();
+	this->_rampTimer = in.u32();
+	this->_damage = in.u32();
+	this->_range = in.u32();
+	this->_bounce = in.u32();
+	this->_velocity = in.f32();
+	this->_gravity = in.f32();
+	this->_height = in.f32();
+	this->_speed = in.f32();
+	this->_hitTravel = in.boolean();
+	this->_homing = in.boolean();
+	this->_arc = in.boolean();
+	this->_shadow = in.boolean();
+	this->_falling = in.boolean();
+	this->_blockedByWall = in.boolean();
+	this->_disposable = in.boolean();
+
+	size_t anims = in.size();
+
+	assert_exp(anims == this->_anims.size());
+	for (ConditionalAnim &anim : this->_anims)
+		anim.loadState(in);
 }
 
 void Projectile::_hit()

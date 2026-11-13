@@ -5,6 +5,7 @@
 #include <sol/sol.hpp>
 #include "nlohmann/json.hpp"
 #include "Effect.hpp"
+#include "StateStream.hpp"
 #include "Animation.hpp"
 #include "MultiSound.hpp"
 #include "Mod.hpp"
@@ -119,6 +120,51 @@ void Effect::setColor(HSLColor color)
 {
 	for (auto &anim : this->_anim)
 		anim.setColor(color);
+}
+
+void Effect::setTemplate(uint32_t templateId, uint32_t ownerIndex)
+{
+	this->_templateId = templateId;
+	this->_ownerIndex = ownerIndex;
+}
+
+uint32_t Effect::getTemplateId() const
+{
+	return this->_templateId;
+}
+
+uint32_t Effect::getOwnerIndex() const
+{
+	return this->_ownerIndex;
+}
+
+void Effect::savePlayback(StateWriter &out) const
+{
+	out.vec2(this->_position);
+	out.vec2(this->_speed);
+	out.u32(this->_delay);
+	out.u32(this->_totalDelay);
+	out.u32(this->_index);
+	out.u32(this->_repeatFor);
+	out.u32(this->_played);
+	out.boolean(this->_repeating);
+	out.f32(this->_opacity);
+	out.i32(this->_layer);
+}
+
+void Effect::loadPlayback(StateReader &in)
+{
+	this->_position = in.vec2<float>();
+	this->_speed = in.vec2<float>();
+	this->_delay = in.u32();
+	this->_totalDelay = in.u32();
+	this->_index = in.u32();
+	this->_repeatFor = in.u32();
+	this->_played = in.u32();
+	this->_repeating = in.boolean();
+	this->_opacity = in.f32();
+	this->_layer = in.i32();
+	assert_msg(this->_anim.empty() || this->_index < this->_anim.size(), "Effect frame is out of range");
 }
 
 int Effect::getLayer() const

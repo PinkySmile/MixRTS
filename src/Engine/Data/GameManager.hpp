@@ -19,6 +19,8 @@
 #include "Map.hpp"
 #include "Debug/DebugOptions.hpp"
 #include "UI/CombinedUI.hpp"
+#include "Data/StateRegistry.hpp"
+#include "Data/StateStream.hpp"
 
 // #define QUADRANT_SIZE_X 128
 // #define QUADRANT_SIZE_Y 128
@@ -86,7 +88,7 @@ public:
 	GameManager(const std::vector<Faction> &factions, size_t nbPlayers, const GameSettings &settings, UIFactory uiFactory);
 	~GameManager();
 	void loadMap(const std::string &path);
-	void addPlayer(size_t factionIndex, const HSLColor &color, Vector2i startingArea, unsigned team);
+	void addPlayer(size_t factionIndex, const HSLColor &color, Vector2i startingArea, unsigned team, bool spawnStartingObjects = true);
 	void update();
 	void updateRender();
 	void render();
@@ -94,6 +96,7 @@ public:
 	void setPaused(bool paused = true);
 	void renderMinimap(Vector2f pos, Vector2u size);
 	std::vector<Player> &getPlayers();
+	const std::vector<Player> &getPlayers() const;
 	std::vector<Faction> &getFactions();
 	const std::vector<Faction> &getFactions() const;
 	GameObject *getObjectById(unsigned index);
@@ -146,6 +149,22 @@ public:
 	void preloadSprites();
 	const GameSettings &getSettings() const;
 
+	struct GameStateSnapshot {
+		std::vector<uint8_t> data;
+		uint64_t tick = 0;
+		uint64_t checksum = 0;
+	};
+
+	//! Writes the simulation blob. Reuses out.data's capacity. Call only between ticks.
+	void saveState(GameStateSnapshot &out) const;
+	void loadState(const GameStateSnapshot &in);
+	void loadState(StateReader &reader);
+	[[nodiscard]] static uint64_t checksumState(const uint8_t *data, size_t size);
+	//! Hash of every occupancy grid. Used by tests to check that footprints rebuild.
+	[[nodiscard]] uint64_t debugGridChecksum() const;
+	void requestStateSave();
+	[[nodiscard]] bool takeStateSaveRequest();
+
 	// Debug tools
 	//! Opens/closes the debug panel
 	void toggleDebugPanel();
@@ -167,6 +186,8 @@ public:
 	[[nodiscard]] uint64_t getTick() const;
 	//! Address of the tick counter. The crash handler reads it from a signal without calling in.
 	[[nodiscard]] const uint64_t *getTickPointer() const { return &this->_tick; }
+	//! Top-left of the camera and the current zoom. Not part of the simulation blob.
+	void setCameraView(Vector2f translate, float zoom);
 	//! Number of selectable grid views (see DebugOptions::gridView)
 	[[nodiscard]] size_t getGridViewCount() const;
 	[[nodiscard]] std::string getGridViewLabel(unsigned char view) const;
@@ -206,6 +227,8 @@ private:
 	WarheadHit *_currentHit = nullptr;
 	uint64_t _tick = 0;
 	bool _hitThisTick = false;
+	bool _stateSaveRequested = false;
+	StateRegistry _registry;
 	bool _isDebugUnlocked = false;
 	bool _paused = false;
 	bool _forceStep = false;
@@ -213,6 +236,9 @@ private:
 	template<typename T>
 	void _checkObjectLocked(const std::string &name, T &object, Player &owner);
 	void _validateArmors() const;
+	//! Live objects keep template pointers into the faction they were copied from.
+	//! Those addresses are not the ones build() registered, so record them as aliases.
+	void _aliasRegistrySources();
 	void _unlockAll();
 	void _recomputeLocked();
 
@@ -242,6 +268,8 @@ private:
 
 	friend class DebugOverlay;
 	friend class DebugPanel;
+	friend struct StateSaveContext;
+	friend struct StateLoadContext;
 };
 
 #include "MapState.inl"

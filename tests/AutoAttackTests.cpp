@@ -43,7 +43,7 @@ protected:
 	{
 		GameFixture::SetUp();
 
-		this->manager->addPlayer(3, HSLColor{0, 0, 500}, 0, 1);
+		this->manager->addPlayer(3, HSLColor{0, 0, 500}, Vector2i{0, 0}, 1);
 		// GameManager::getPlayers() can reallocate when a player is added.
 		this->player = &this->manager->getPlayers()[0];
 		this->enemy = &this->manager->getPlayers()[1];

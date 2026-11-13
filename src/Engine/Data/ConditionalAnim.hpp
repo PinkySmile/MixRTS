@@ -31,6 +31,8 @@ public:
 	bool operator()() const;
 	bool update();
 	void reset();
+	void saveState(class StateWriter &out) const;
+	void loadState(class StateReader &in);
 	Animation &getAnim();
 	const Animation &getAnim() const;
 	const std::vector<Animation> &getAnims() const;

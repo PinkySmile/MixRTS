@@ -6,10 +6,12 @@
 #include <cxxabi.h>
 #endif
 #include <cmath>
+#include <cstring>
 #include <array>
 #include <fstream>
 #include <vector>
 #include <algorithm>
+#include <bit>
 #include "Utils.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
@@ -222,4 +224,106 @@ uint32_t crc32File(const std::filesystem::path &path, uint32_t crc, bool normali
 	if (normalizeNewlines)
 		data.erase(std::remove(data.begin(), data.end(), '\r'), data.end());
 	return crc32(data.data(), data.size(), crc);
+}
+
+namespace {
+	constexpr uint64_t PRIME64_1 = 0x9E3779B185EBCA87ULL;
+	constexpr uint64_t PRIME64_2 = 0xC2B2AE3D27D4EB4FULL;
+	constexpr uint64_t PRIME64_3 = 0x165667B19E3779F9ULL;
+	constexpr uint64_t PRIME64_4 = 0x85EBCA77C2B2AE63ULL;
+	constexpr uint64_t PRIME64_5 = 0x27D4EB2F165667C5ULL;
+
+	uint64_t rotl64(uint64_t value, int shift)
+	{
+		return (value << shift) | (value >> (64 - shift));
+	}
+
+	uint64_t read64(const uint8_t *data)
+	{
+		uint64_t value;
+
+		memcpy(&value, data, sizeof(value));
+		return value;
+	}
+
+	uint32_t read32(const uint8_t *data)
+	{
+		uint32_t value;
+
+		memcpy(&value, data, sizeof(value));
+		return value;
+	}
+
+	uint64_t xxhRound(uint64_t acc, uint64_t input)
+	{
+		acc += input * PRIME64_2;
+		acc = rotl64(acc, 31);
+		acc *= PRIME64_1;
+		return acc;
+	}
+
+	uint64_t xxhMerge(uint64_t acc, uint64_t value)
+	{
+		value = xxhRound(0, value);
+		acc ^= value;
+		acc = acc * PRIME64_1 + PRIME64_4;
+		return acc;
+	}
+}
+
+uint64_t hash64(const void *data, size_t size, uint64_t seed)
+{
+	auto *bytes = static_cast<const uint8_t *>(data);
+	const uint8_t *end = bytes + size;
+	uint64_t hash;
+
+	static_assert(std::endian::native == std::endian::little, "hash64 reads integers in host order");
+	if (size >= 32) {
+		const uint8_t *limit = end - 32;
+		uint64_t v1 = seed + PRIME64_1 + PRIME64_2;
+		uint64_t v2 = seed + PRIME64_2;
+		uint64_t v3 = seed;
+		uint64_t v4 = seed - PRIME64_1;
+
+		do {
+			v1 = xxhRound(v1, read64(bytes));
+			bytes += 8;
+			v2 = xxhRound(v2, read64(bytes));
+			bytes += 8;
+			v3 = xxhRound(v3, read64(bytes));
+			bytes += 8;
+			v4 = xxhRound(v4, read64(bytes));
+			bytes += 8;
+		} while (bytes <= limit);
+		hash = rotl64(v1, 1) + rotl64(v2, 7) + rotl64(v3, 12) + rotl64(v4, 18);
+		hash = xxhMerge(hash, v1);
+		hash = xxhMerge(hash, v2);
+		hash = xxhMerge(hash, v3);
+		hash = xxhMerge(hash, v4);
+	} else
+		hash = seed + PRIME64_5;
+	hash += size;
+	while (bytes + 8 <= end) {
+		uint64_t k1 = xxhRound(0, read64(bytes));
+
+		hash ^= k1;
+		hash = rotl64(hash, 27) * PRIME64_1 + PRIME64_4;
+		bytes += 8;
+	}
+	if (bytes + 4 <= end) {
+		hash ^= static_cast<uint64_t>(read32(bytes)) * PRIME64_1;
+		hash = rotl64(hash, 23) * PRIME64_2 + PRIME64_3;
+		bytes += 4;
+	}
+	while (bytes < end) {
+		hash ^= (*bytes) * PRIME64_5;
+		hash = rotl64(hash, 11) * PRIME64_1;
+		bytes++;
+	}
+	hash ^= hash >> 33;
+	hash *= PRIME64_2;
+	hash ^= hash >> 29;
+	hash *= PRIME64_3;
+	hash ^= hash >> 32;
+	return hash;
 }

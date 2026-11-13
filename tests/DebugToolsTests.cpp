@@ -39,7 +39,7 @@ protected:
 	void SetUp() override
 	{
 		GameFixture::SetUp();
-		this->manager->addPlayer(3, HSLColor{0, 0, 500}, 0, 1);
+		this->manager->addPlayer(3, HSLColor{0, 0, 500}, Vector2i{0, 0}, 1);
 		this->player = &this->manager->getPlayers()[0];
 		this->enemy = &this->manager->getPlayers()[1];
 	}

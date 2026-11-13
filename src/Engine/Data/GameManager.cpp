@@ -84,12 +84,47 @@ GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers,
 	this->_validateArmors();
 	this->_players.reserve(nbPlayers);
 	this->_debugOverlay = std::make_unique<DebugOverlay>(*this);
+	this->_registry.build(this->_factions);
+	this->_aliasRegistrySources();
 }
 
 GameManager::~GameManager()
 {
 	for (unsigned handle : this->_preloadedSprites)
 		game->textureMgr.remove(handle);
+}
+
+namespace {
+	template<typename T>
+	void aliasTemplates(StateRegistry &registry, StateRegistry::Kind kind, const std::unordered_map<std::string, T> &canonical, const std::unordered_map<std::string, T> &source)
+	{
+		for (const auto &entry : source) {
+			auto it = canonical.find(entry.first);
+
+			if (it != canonical.end())
+				registry.alias(kind, &it->second, &entry.second);
+		}
+	}
+}
+
+void GameManager::_aliasRegistrySources()
+{
+	for (const Faction &faction : this->_factions) {
+		const Faction *source = nullptr;
+
+		for (const auto &entry : faction.getObjects()) {
+			source = entry.second._base;
+			break;
+		}
+		if (!source || source == &faction)
+			continue;
+		aliasTemplates(this->_registry, StateRegistry::KIND_OBJECT, faction.getObjects(), source->getObjects());
+		aliasTemplates(this->_registry, StateRegistry::KIND_WEAPON, faction.getWeapons(), source->getWeapons());
+		aliasTemplates(this->_registry, StateRegistry::KIND_EFFECT, faction.getEffects(), source->getEffects());
+		aliasTemplates(this->_registry, StateRegistry::KIND_SOUND, faction.getSounds(), source->getSounds());
+		aliasTemplates(this->_registry, StateRegistry::KIND_UPGRADE, faction.getUpgrades(), source->getUpgrades());
+		aliasTemplates(this->_registry, StateRegistry::KIND_QUEUE, faction.getQueues(), source->getQueues());
+	}
 }
 
 void GameManager::_validateArmors() const
@@ -130,7 +165,7 @@ void GameManager::loadMap(const std::string &path)
 	//this->_map.quadrants.resize(x * y);
 }
 
-void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, Vector2i startingArea, unsigned team)
+void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, Vector2i startingArea, unsigned team, bool spawnStartingObjects)
 {
 	size_t index = this->_players.size();
 	auto &faction = this->_factions[factionIndex];
@@ -149,6 +184,8 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, Vector2i
 	this->_players[index].state.index = index;
 	this->_players[index].state.team = team;
 	this->_players[index].state.systemMoney = faction.getStartingMoney();
+	if (!spawnStartingObjects)
+		return;
 	for (auto &b : faction.getStartingObjects()) {
 		Vector2i start = startingArea;
 
@@ -869,6 +906,11 @@ std::vector<Player> &GameManager::getPlayers()
 	return this->_players;
 }
 
+const std::vector<Player> &GameManager::getPlayers() const
+{
+	return this->_players;
+}
+
 void GameManager::_unlockAll()
 {
 	for (auto &player : this->_players) {
@@ -973,11 +1015,13 @@ void GameManager::consumeGeneralEvent(const sf::Event &event)
 			this->toggleDebugUnlock();
 		else if (keyPressed->code == sf::Keyboard::Key::F2)
 			this->debugNextPlayer();
+	#endif
+		else if (keyPressed->code == sf::Keyboard::Key::F5)
+			this->_stateSaveRequested = true;
 		else if (keyPressed->code == sf::Keyboard::Key::F11)
 			this->_paused = !this->_paused;
 		else if (keyPressed->code == sf::Keyboard::Key::F12)
 			this->_forceStep = true;
-	#endif
 	}
 }
 
@@ -1711,6 +1755,7 @@ Effect &GameManager::spawnEffect(const Effect &effect, Vector2f pos, const Playe
 	Effect &result = arr.back();
 
 	result.setPosition(pos);
+	result.setTemplate(this->_registry.effectId(&effect), owner ? static_cast<uint32_t>(owner->state.index) : UINT32_MAX);
 	if (owner)
 		result.setColor(owner->getColor());
 	result.playSound();
@@ -1897,6 +1942,34 @@ void GameManager::centerCameraOn(Vector2f target)
 	this->_cameraTranslate.x = std::max<float>(this->_cameraTranslate.x, 0);
 	this->_cameraTranslate.y = std::max<float>(this->_cameraTranslate.y, -UI_TOP_BAR_HEIGHT * guiScale / this->_cameraZoom);
 	game->soundMgr.setCamera(this->_cameraTranslate + size / 2, size);
+}
+
+void GameManager::setCameraView(Vector2f translate, float zoom)
+{
+	Vector2f screenSize = getScreenSize();
+	Vector2f size;
+
+	assert_exp(zoom > 0);
+	this->_cameraZoom = zoom;
+	this->_cameraTranslate = translate;
+	size = {
+		(screenSize.x - UI_SIDEBAR_WIDTH * guiScale) / this->_cameraZoom,
+		(screenSize.y - UI_TOP_BAR_HEIGHT * guiScale) / this->_cameraZoom
+	};
+	game->soundMgr.setCamera(this->_cameraTranslate + size / 2, size);
+}
+
+void GameManager::requestStateSave()
+{
+	this->_stateSaveRequested = true;
+}
+
+bool GameManager::takeStateSaveRequest()
+{
+	bool requested = this->_stateSaveRequested;
+
+	this->_stateSaveRequested = false;
+	return requested;
 }
 
 void GameManager::setCameraZoom(float zoom)

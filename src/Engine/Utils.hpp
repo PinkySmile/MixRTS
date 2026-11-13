@@ -18,6 +18,8 @@ MYDLL_API nlohmann::json &mergeObjects(nlohmann::json &dst, const nlohmann::json
 MYDLL_API uint32_t crc32(const void *data, size_t size, uint32_t crc = 0);
 //! CRC32 of a whole file. When normalizeNewlines is set, CR bytes are dropped so CRLF and LF match.
 MYDLL_API uint32_t crc32File(const std::filesystem::path &path, uint32_t crc = 0, bool normalizeNewlines = false);
+//! Fast non-cryptographic 64-bit hash (XXH64). Used for simulation checksums.
+MYDLL_API uint64_t hash64(const void *data, size_t size, uint64_t seed = 0);
 
 #define TOHEX_ENDIAN_LITTLE false
 #define TOHEX_ENDIAN_BIG true

@@ -183,6 +183,13 @@ void CombinedUI::setResult(bool won, bool lost)
 		}
 }
 
+void CombinedUI::onStateRestored()
+{
+	for (auto &ui : this->_uis)
+		if (ui)
+			ui->onStateRestored();
+}
+
 void CombinedUI::setForcedCursor(std::optional<UI::Cursor> cursor)
 {
 	for (auto &ui : this->_uis)

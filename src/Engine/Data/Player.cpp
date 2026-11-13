@@ -472,10 +472,7 @@ void Player::_spawnDelivery(const std::string &queue, Vector2f target, const Ext
 	assert_exp(extra.carry.empty());
 	eobj->setPosition(extra.pos.getPosition(target, this->mapState, this->mapState.tileSize + eobj->getSize()));
 	eobj->deliverTo(objects, queue, *extra.dest, this->mapState);
-	eobj->execCb([queue, this] {
-		this->state.queues[queue].busy = false;
-		return true;
-	});
+	eobj->pushOrder(FreeQueueOrder{queue});
 	if (extra.out)
 		eobj->moveOut(extra.out->getPosition(target, this->mapState, this->mapState.tileSize + eobj->getSize()));
 }

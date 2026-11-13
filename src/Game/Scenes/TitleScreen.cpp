@@ -7,8 +7,10 @@
 #include "Data/Vector.hpp"
 #include "Data/Map.hpp"
 #include "Data/Replay.hpp"
+#include "Data/SaveState.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
+#include "UI/BaseUI.hpp"
 
 void genSpawns(const std::vector<PlayerArg> &arg, GameStartParams &params)
 {
@@ -205,8 +207,8 @@ void TitleScreen::_initTitle()
 	replay->onClick([this] {
 		this->_openReplayDialog();
 	});
-	load->onClick([] {
-
+	load->onClick([this] {
+		this->_openLoadDialog();
 	});
 	settings->onClick([] {
 
@@ -231,6 +233,35 @@ void TitleScreen::_openReplayDialog()
 			dispMsg(game->gui, "Replay loading failed", "This replay is invalid, corrupted or was created for a different version of the game: " + std::string(e.what()));
 		}
 	});
+}
+
+void TitleScreen::_openLoadDialog()
+{
+	auto window = openFileDialog("Open state", "saves");
+
+	window->setFileTypeFilters({ {"State file (*.state)", {"*.state"}}, {"All files", {}} }, 0);
+	window->onFileSelect([this](const std::vector<tgui::Filesystem::Path> &arr){
+		try {
+			this->_loadState(arr[0]);
+		} catch (std::exception &e) {
+			dispMsg(game->gui, "State loading failed", "This state is invalid, corrupted or was created for a different version of the game: " + std::string(e.what()));
+		}
+	});
+}
+
+void TitleScreen::_loadState(const std::filesystem::path &path)
+{
+	auto file = std::make_shared<SaveStateFile>(SaveStateFile::load(path));
+	uint32_t crc = LoadedMap::computeChecksum(file->start.map);
+
+	if (crc != file->mapCrc)
+		throw std::runtime_error("This state's map checksum does not match the installed map");
+
+	auto args = new InGameArguments();
+
+	args->startParams = file->start;
+	args->state = std::move(file);
+	game->scene.switchScene("in_game", args);
 }
 
 void TitleScreen::_loadReplay(const std::filesystem::path &path)

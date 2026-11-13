@@ -50,8 +50,8 @@ TEST_F(GameFixture, DeployingMcvBuildsConstructionYardAndUnlocksBuildings)
 	// Replace the player's own UI with a MockedUI wrapping it, so we can inject
 	// a fake deploy event exactly like a real UI would generate when the
 	// player clicks the MCV to deploy it.
-	auto &uis = this->player->getUIs();
-	auto *mockedUi = new MockedUI(uis[this->player->state.factionIndex].release());
+	auto &uis = this->player->getCombinedUI().getUIs();
+	auto *mockedUi = new MockedUI(std::move(uis[this->player->state.factionIndex]));
 
 	uis[this->player->state.factionIndex].reset(mockedUi);
 	mockedUi->orderQueue.emplace_back(UI::DeployUnitEvent{mcv->index});
@@ -81,7 +81,7 @@ TEST_F(GameFixture, DevastatorSelfDestructDamagesAndCannotBeStopped)
 {
 	// "test:dummy" (faction index 3) owns the bystander: it starts with nothing,
 	// so this doesn't drop an MCV on top of the explosion.
-	this->manager->addPlayer(3, HSLColor{0, 0, 500}, 0, 1);
+	this->manager->addPlayer(3, HSLColor{0, 0, 500}, Vector2i{0, 0}, 1);
 	this->player = &this->manager->getPlayers()[0];
 
 	Player *enemy = &this->manager->getPlayers()[1];

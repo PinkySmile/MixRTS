@@ -212,6 +212,13 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/Data/FindPath.hpp
 	src/Engine/Data/GameManager.cpp
 	src/Engine/Data/GameManager.hpp
+	src/Engine/Data/GameManagerState.cpp
+	src/Engine/Data/GameObjectState.cpp
+	src/Engine/Data/PlayerStateSave.cpp
+	src/Engine/Data/StateRegistry.cpp
+	src/Engine/Data/StateRegistry.hpp
+	src/Engine/Data/StateStream.hpp
+	src/Engine/Data/StateContext.hpp
 	src/Engine/Data/GameObject.cpp
 	src/Engine/Data/GameObject.hpp
 	src/Engine/Data/GameObjectDebug.cpp
@@ -235,6 +242,8 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/Data/Projectile.hpp
 	src/Engine/Data/Replay.cpp
 	src/Engine/Data/Replay.hpp
+	src/Engine/Data/SaveState.cpp
+	src/Engine/Data/SaveState.hpp
 	src/Engine/Data/Requirements/IReq.hpp
 	src/Engine/Data/Requirements/ReqAndCombinator.cpp
 	src/Engine/Data/Requirements/ReqAndCombinator.hpp
@@ -372,6 +381,7 @@ if (NOT NO_TEST)
 
 		tests/GameFixture.hpp
 		tests/GameFixture.cpp
+		tests/SaveStateTests.cpp
 		tests/DeployTests.cpp
 		tests/CarryallTests.cpp
 		tests/DebugToolsTests.cpp

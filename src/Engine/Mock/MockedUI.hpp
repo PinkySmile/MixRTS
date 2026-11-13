@@ -23,17 +23,17 @@ class MYDLL_API MockedUI : public UI {
 public:
 	//! Takes ownership of wrapped: every call (other than pollEvent()) made on
 	//! this MockedUI is forwarded to it.
-	explicit MockedUI(UI *wrapped);
+	explicit MockedUI(std::shared_ptr<UI> wrapped);
 	~MockedUI() override;
 
 	void setEnabled(bool enabled) override;
 	void playEVA(EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "") override;
 	void renderAbove() override;
 	void updateRender() override;
-	void mouseOnUi() override;
 	void onCancel(Vector2i absPos) override;
 	void tileClicked(Vector2i absPos) override;
 	void mouseMoved(Vector2i absPos) override;
+	void mouseReleased(Vector2i absPos) override;
 	void onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta) override;
 	void update() override;
 	void render() override;
@@ -50,7 +50,7 @@ protected:
 	void _displaySelectedObjectUI(const GameObject &object) override;
 
 private:
-	std::unique_ptr<UI> _wrapped;
+	std::shared_ptr<UI> _wrapped;
 };
 
 

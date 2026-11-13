@@ -17,6 +17,8 @@ private:
 	void _initTitle();
 	void _openReplayDialog();
 	void _loadReplay(const std::filesystem::path &path);
+	void _openLoadDialog();
+	void _loadState(const std::filesystem::path &path);
 public:
 	explicit TitleScreen(std::optional<std::string> message = {});
 	~TitleScreen() override;

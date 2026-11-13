@@ -106,6 +106,10 @@ struct MYDLL_API KeepMovingOrder {
 	unsigned duration;
 };
 struct MYDLL_API KeepMovingAndDieOrder {};
+//! Clears PlayerQueue::busy. Replaces the delivery lambda that used to be an ExecCbOrder.
+struct MYDLL_API FreeQueueOrder {
+	std::string queue;
+};
 typedef std::variant<
 	SpinOrder,
 	TurnOrder,
@@ -125,7 +129,8 @@ typedef std::variant<
 	DeliveryOrder,
 	ExecCbOrder,
 	KeepMovingOrder,
-	KeepMovingAndDieOrder
+	KeepMovingAndDieOrder,
+	FreeQueueOrder
 > Order;
 
 struct MYDLL_API WaitPickupOrder {
@@ -447,7 +452,7 @@ protected:
 	std::deque<ResourceLot> _lots;
 	std::optional<Vector2i> _spawnOffset;
 	std::optional<Vector2i> _exitOffset;
-	Player *_originalOwner;
+	Player *_originalOwner = nullptr;
 	unsigned _takeControlTime = 0;
 	unsigned _timeDecOnAtk;
 	unsigned _resourceStorage = 0;
@@ -648,6 +653,11 @@ public:
 	void disposeOf();
 	void keepMoving(unsigned duration);
 	void keepMovingAndDie();
+	void pushOrder(const Order &order);
+	//! 0: object copied from a faction template. Subclasses use other values.
+	[[nodiscard]] virtual uint8_t getStateKind() const { return 0; }
+	virtual void saveState(StateSaveContext &ctx) const;
+	virtual void loadState(StateLoadContext &ctx);
 
 	[[nodiscard]] bool boundToGrid() const;
 	[[nodiscard]] bool countsForGame() const;
@@ -783,7 +793,16 @@ protected:
 	[[nodiscard]] bool _isInWeaponRange(const GameObject *target) const;
 	//! Called while idle: starts shooting at the closest enemy that is in range and triggers automatic attacks.
 	void _autoAcquireTarget();
-	void _recomputeConnectedMask();
+
+	inline void _recomputeConnectedMask()
+	{
+		this->_connectedMask = 0;
+		for (const std::vector<const GameObject *> &a : this->_connections | std::ranges::views::reverse) {
+			this->_connectedMask <<= 1;
+			this->_connectedMask |= !a.empty();
+		}
+	}
+
 	unsigned char _getConnectionSide(const GameObject *);
 	void _computeMovePath(Vector2i destination, bool ignoreSolid, const GameObject *ignoreObject);
 	//! \param extraClaims Number of (stackable) units that are about to go to \a tile and are not on it yet.
@@ -827,7 +846,16 @@ protected:
 	bool _updateOrder(const DieOrder &order);
 	bool _updateOrder(const KeepMovingOrder &order);
 	bool _updateOrder(const KeepMovingAndDieOrder &order);
+	bool _updateOrder(const FreeQueueOrder &order);
 	bool _updateOrder(Order &order);
+
+	//! Registers or removes this object's pathfinding footprint. dir is +1 or -1.
+	//! Terrain words and wall connections are left alone: those are stored on their own.
+	void _applyGridFootprint(int dir);
+	void _saveOrder(StateSaveContext &ctx, const Order &order) const;
+	void _loadOrder(StateLoadContext &ctx, Order &order);
+	[[nodiscard]] uint8_t _moveFailId(void (GameObject::*fail)()) const;
+	[[nodiscard]] void (GameObject::*_moveFail(uint8_t id))();
 
 	void _reduceTimeControlTimer(unsigned dec);
 	//! Plays \a weapon's sound and hit effect at \a pos, then applies it.
@@ -864,6 +892,7 @@ protected:
 	void _activateStealth();
 
 	friend ObjectTurret;
+	friend class GameManager;
 };
 
 

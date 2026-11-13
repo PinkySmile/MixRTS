@@ -39,6 +39,10 @@ struct PlayerQueueEntry;
 struct Game;
 struct WeaponProjectile;
 struct ShakeParams;
+struct GameStartParams;
+struct SaveStateFile;
+struct StateLoadContext;
+struct StateSaveContext;
 
 extern MYDLL_API Game *game;
 

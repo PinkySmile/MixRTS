@@ -30,6 +30,10 @@ private:
 	bool _repeating = false;
 	float _opacity = 1;
 	int _layer = 0;
+	//! Registry id of the faction template this effect was copied from. 0 on the template itself.
+	uint32_t _templateId = 0;
+	//! Player whose color was applied, or UINT32_MAX when the effect is untinted.
+	uint32_t _ownerIndex = UINT32_MAX;
 
 public:
 	Effect(
@@ -45,6 +49,11 @@ public:
 	void playSound() const;
 	void setPosition(Vector2f pos);
 	void setColor(HSLColor color);
+	void setTemplate(uint32_t templateId, uint32_t ownerIndex);
+	[[nodiscard]] uint32_t getTemplateId() const;
+	[[nodiscard]] uint32_t getOwnerIndex() const;
+	void savePlayback(class StateWriter &out) const;
+	void loadPlayback(class StateReader &in);
 	[[nodiscard]] Vector2f getPosition() const;
 	[[nodiscard]] int getLayer() const;
 

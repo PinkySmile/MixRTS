@@ -424,7 +424,7 @@ protected:
 	{
 		GameFixture::SetUp();
 		// Harkonnen, on the second starting area, in another team.
-		this->manager->addPlayer(1, HSLColor{0, 800, 750}, 1, 1);
+		this->manager->addPlayer(1, HSLColor{0, 800, 750}, this->manager->getLoadedMap().startAreas.at(1).to<int>(), 1);
 		// GameManager::getPlayers() can reallocate when a player is added.
 		this->player = &this->manager->getPlayers()[0];
 		this->enemy = &this->manager->getPlayers()[1];

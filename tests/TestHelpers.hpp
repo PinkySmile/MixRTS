@@ -103,8 +103,8 @@ inline Vector2i findFreeBuildableTile(GameManager &manager, const MapState &map,
 
 inline MockedUI *installMockedUI(Player &player)
 {
-	auto &uis = player.getUIs();
-	auto *mockedUi = new MockedUI(uis[player.state.factionIndex].release());
+	auto &uis = player.getCombinedUI().getUIs();
+	auto *mockedUi = new MockedUI(std::move(uis[player.state.factionIndex]));
 
 	uis[player.state.factionIndex].reset(mockedUi);
 	return mockedUi;

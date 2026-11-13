@@ -8,6 +8,7 @@
 #include "Animation.hpp"
 #include "Mod.hpp"
 #include "ConditionalAnim.hpp"
+#include "StateStream.hpp"
 #include "Player.hpp"
 #include "Resources/Assert.hpp"
 #include "Utils.hpp"
@@ -116,6 +117,19 @@ void ConditionalAnim::reset()
 {
 	this->_index = 0;
 	this->_totalDelay = 0;
+}
+
+void ConditionalAnim::saveState(StateWriter &out) const
+{
+	out.u32(this->_index);
+	out.u32(this->_totalDelay);
+}
+
+void ConditionalAnim::loadState(StateReader &in)
+{
+	this->_index = in.u32();
+	this->_totalDelay = in.u32();
+	assert_msg(this->_anim.empty() || this->_index < this->_anim.size(), "Animation frame is out of range");
 }
 
 Animation &ConditionalAnim::getAnim()

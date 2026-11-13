@@ -45,7 +45,7 @@ protected:
 	{
 		GameFixture::SetUp();
 
-		this->manager->addPlayer(3, HSLColor{0, 0, 500}, 0, 1);
+		this->manager->addPlayer(3, HSLColor{0, 0, 500}, Vector2i{0, 0}, 1);
 		// GameManager::getPlayers() can reallocate when a player is added.
 		this->player = &this->manager->getPlayers()[0];
 		this->enemy = &this->manager->getPlayers()[1];
@@ -648,10 +648,12 @@ TEST_F(StealthTests, Dune2000StealthData)
 				infantry++;
 				EXPECT_GT(object.getRevealStealthRange(), 0.f) << id << " is infantry: it should reveal stealthed units";
 			}
-			if (id == "d2k:gunt" || id == "d2k:roct")
+			if (id == "d2k:gunt" || id == "d2k:roct") {
 				EXPECT_GT(object.getRevealStealthRange(), 0.f) << id << " is a turret: it should reveal stealthed units";
-			if (id == "d2k:roct")
+			}
+			if (id == "d2k:roct") {
 				EXPECT_GT(object.getDetectorRange(), 0.f) << id << " is a missile turret: it should be a detector";
+			}
 		}
 	EXPECT_EQ(found, stealthed);
 	EXPECT_GT(infantry, 0u);

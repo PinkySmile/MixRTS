@@ -14,8 +14,7 @@
 #include <filesystem>
 #include "UI/UI.hpp"
 #include "Utils.hpp"
-
-struct GameStartParams;
+#include "forward.hpp"
 
 //! Screen resolution change recorded in a replay (action id 200).
 struct ScreenSizeChanged {

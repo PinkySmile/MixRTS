@@ -199,6 +199,7 @@ int main(int argc, char **argv)
 		music.setLooping(true);
 		if (args.loadingOnly)
 			game->screen->close();
+		reloadViews(*game->screen, game->gui, game->screen->getSize(), {0, 0});
 		while (game->screen->isOpen()) {
 			Profiler::get().beginFrame();
 			TRY {

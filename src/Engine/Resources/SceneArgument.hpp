@@ -7,6 +7,7 @@
 
 
 #include <functional>
+#include <memory>
 #include <string>
 #include "Utils.hpp"
 #include "Data/GameManager.hpp"
@@ -52,8 +53,13 @@ struct GameStartParams {
 struct TitleScreenArguments : public SceneArguments {
 	std::optional<std::string> message;
 };
+
 struct InGameArguments : public SceneArguments {
 	GameStartParams startParams;
+	//! When set, the match is rebuilt from this file and paused on the saved tick.
+	std::shared_ptr<const SaveStateFile> state;
+
+	~InGameArguments() override;
 };
 struct ReplayArguments : public SceneArguments {
 	ReplayData replay;

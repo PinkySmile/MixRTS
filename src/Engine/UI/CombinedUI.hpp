@@ -40,6 +40,7 @@ public:
 	void onKeyPressed(sf::Keyboard::Key key, bool ctrl, bool shift, bool alt, bool meta);
 	void playEVA(UI::EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
 	void setResult(bool won, bool lost);
+	void onStateRestored();
 	void setForcedCursor(std::optional<UI::Cursor> cursor);
 	std::vector<std::shared_ptr<UI>> &getUIs();
 

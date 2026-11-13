@@ -193,6 +193,8 @@ public:
 	const std::unordered_map<std::string, const Upgrade *> &getLoadedUpgrades() const;
 
 	[[nodiscard]] bool isEnabled() const;
+	void saveState(StateSaveContext &ctx) const;
+	void loadState(StateLoadContext &ctx);
 
 	template<typename T>
 	void unlockObject(const std::string &name, const T &object, bool debugTime = false);

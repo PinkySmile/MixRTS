@@ -246,6 +246,9 @@ bool GameObject::_shortenOrder(Order &o)
 	} else if (std::holds_alternative<DumpOrder>(o)) {
 		this->cancel = true;
 		return false;
+	} else if (const auto *freeQueue = std::get_if<FreeQueueOrder>(&o)) {
+		this->owner->state.queues[freeQueue->queue].busy = false;
+		return true;
 	}
 	return true;
 }
@@ -2831,6 +2834,12 @@ bool GameObject::_updateOrder(const ExecCbOrder &order)
 	return order.cb();
 }
 
+bool GameObject::_updateOrder(const FreeQueueOrder &order)
+{
+	this->owner->state.queues[order.queue].busy = false;
+	return true;
+}
+
 bool GameObject::_updateOrder(const DieOrder &)
 {
 	this->_disposable = true;
@@ -4331,6 +4340,65 @@ void GameObject::clearPrimaryDump()
 	this->_lastResourceDump = nullptr;
 }
 
+void GameObject::_applyGridFootprint(int dir)
+{
+	assert_exp(dir == 1 || dir == -1);
+	if (this->_behavior == BEHAVIOR_MISSILE || this->_behavior == BEHAVIOR_NONE || this->_altitude)
+		return;
+	if (this->_tiles) {
+		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
+			auto &line = (*this->_tiles)[gy];
+
+			for (size_t gx = 0; gx < line.size(); gx++) {
+				if (!line[gx].placementRequired && !line[gx].placementConcrete)
+					continue;
+				this->manager->modUnitInArea(
+					this->map->tileCoordToAbs({
+						static_cast<int>(this->_gridPos.x + gx),
+						static_cast<int>(this->_gridPos.y + gy)
+					}),
+					this->owner->state.index,
+					dir * static_cast<int>(line[gx].placementSpread),
+					this->_currentTilePosition,
+					static_cast<char>(line[gx].solid ? dir : 0),
+					!this->canMove(),
+					this->isCrushable()
+				);
+			}
+		}
+		return;
+	}
+
+	char solidMod = static_cast<char>(this->_solid ? dir : 0);
+
+	if (this->_boundToGrid)
+		this->manager->modUnitInArea(
+			this->map->topLeftCoordToAbs(this->_occupiedTile),
+			this->map->tileSize,
+			this->owner->state.index,
+			0,
+			this->_currentTilePosition,
+			solidMod,
+			!this->canMove(),
+			this->isCrushable()
+		);
+	else
+		this->manager->modUnitInArea(
+			MapState::Quad{
+				this->_position,
+				{this->_position.x + this->_size.x, this->_position.y},
+				{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
+				{this->_position.x, this->_position.y + this->_size.y},
+			},
+			this->owner->state.index,
+			0,
+			this->_currentTilePosition,
+			solidMod,
+			!this->canMove(),
+			this->isCrushable()
+		);
+}
+
 void GameObject::initGlobalGrid()
 {
 	if (this->_behavior == BEHAVIOR_MISSILE || this->_behavior == BEHAVIOR_NONE)
@@ -4351,55 +4419,9 @@ void GameObject::initGlobalGrid()
 			obj->connectTo(this);
 		}
 	}
-	if (this->_tiles) {
+	if (this->_tiles)
 		this->_decayTarget = this->_maxHp * (this->manager->initUnitTiles(*this->_tiles, this->_gridPos, *this->map) + 1) / 2;
-		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
-			auto &line = (*this->_tiles)[gy];
-
-			for (size_t gx = 0; gx < line.size(); gx++) {
-				if (!line[gx].placementRequired && !line[gx].placementConcrete)
-					continue;
-				this->manager->modUnitInArea(
-					this->map->tileCoordToAbs({
-						static_cast<int>(this->_gridPos.x + gx),
-						static_cast<int>(this->_gridPos.y + gy)
-					}),
-					this->owner->state.index, line[gx].placementSpread,
-					this->_currentTilePosition,
-					line[gx].solid ? 1 : 0,
-					!this->canMove(),
-					this->isCrushable()
-				);
-			}
-		}
-	} else {
-		MapState::Quad abs = {
-			this->_position,
-			{this->_position.x + this->_size.x, this->_position.y},
-			{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
-			{this->_position.x, this->_position.y + this->_size.y},
-		};
-
-		if (this->_boundToGrid)
-			this->manager->modUnitInArea(
-				this->map->topLeftCoordToAbs(this->_occupiedTile),
-				this->map->tileSize,
-				this->owner->state.index, 0,
-				this->_currentTilePosition,
-				this->_solid,
-				!this->canMove(),
-				this->isCrushable()
-			);
-		else
-			this->manager->modUnitInArea(
-				abs,
-				this->owner->state.index, 0,
-			        this->_currentTilePosition,
-				this->_solid,
-				!this->canMove(),
-				this->isCrushable()
-			);
-	}
+	this->_applyGridFootprint(1);
 	this->_initGrid = true;
 }
 
@@ -4418,55 +4440,9 @@ void GameObject::deinitGlobalGrid()
 		this->_connections.fill({});
 		this->_connectedMask = 0;
 	}
-	if (this->_tiles) {
+	if (this->_tiles)
 		this->manager->deinitUnitTiles(*this->_tiles, this->_gridPos, *this->map);
-		for (size_t gy = 0; gy < this->_tiles->size(); gy++) {
-			auto &line = (*this->_tiles)[gy];
-
-			for (size_t gx = 0; gx < line.size(); gx++) {
-				if (!line[gx].placementRequired && !line[gx].placementConcrete)
-					continue;
-				this->manager->modUnitInArea(
-					this->map->tileCoordToAbs({
-						static_cast<int>(this->_gridPos.x + gx),
-						static_cast<int>(this->_gridPos.y + gy)
-					}),
-					this->owner->state.index, -line[gx].placementSpread,
-					0, // TODO: Handle mask
-					line[gx].solid ? -1 : 0,
-					!this->canMove(),
-					this->isCrushable()
-				);
-			}
-		}
-	} else {
-		MapState::Quad abs = {
-			this->_position,
-			{this->_position.x + this->_size.x, this->_position.y},
-			{this->_position.x + this->_size.x, this->_position.y + this->_size.y},
-			{this->_position.x, this->_position.y + this->_size.y},
-		};
-
-		if (this->_boundToGrid)
-			this->manager->modUnitInArea(
-				this->map->topLeftCoordToAbs(this->_occupiedTile),
-				this->map->tileSize,
-				this->owner->state.index, 0,
-				this->_stackable ? static_cast<pfGridType>(this->_currentTilePosition) : 0,
-				-1,
-				!this->canMove(),
-				this->isCrushable()
-			);
-		else
-			this->manager->modUnitInArea(
-				abs,
-				this->owner->state.index, 0,
-				0, // TODO: Handle mask
-				-1,
-				!this->canMove(),
-				this->isCrushable()
-			);
-	}
+	this->_applyGridFootprint(-1);
 	this->_initGrid = false;
 }
 
@@ -4787,15 +4763,6 @@ void GameObject::spawn(const Vector2f &spawnPoint)
 		this->moveTo(spawnPoint, MOVEREASON_MOVE_SPAWN);
 }
 
-inline void GameObject::_recomputeConnectedMask()
-{
-	this->_connectedMask = 0;
-	for (const std::vector<const GameObject *> &a : this->_connections | std::ranges::views::reverse) {
-		this->_connectedMask <<= 1;
-		this->_connectedMask |= !a.empty();
-	}
-}
-
 unsigned char GameObject::_getConnectionSide(const GameObject *obj)
 {
 	double angle = this->getMiddle().angle(obj->getMiddle());
@@ -4861,6 +4828,11 @@ void GameObject::disconnectFrom(const GameObject *object)
 void GameObject::disposeOf()
 {
 	this->deinitGlobalGrid();
+}
+
+void GameObject::pushOrder(const Order &order)
+{
+	this->_orderQueue.push_back(order);
 }
 
 void GameObject::keepMoving(unsigned duration)

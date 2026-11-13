@@ -190,6 +190,11 @@ namespace
 		{
 			return "KeepMovingAndDie";
 		}
+
+		std::string operator()(const FreeQueueOrder &o) const
+		{
+			return "FreeQueue(queue=" + o.queue + ")";
+		}
 	};
 
 	template<typename T, size_t N>

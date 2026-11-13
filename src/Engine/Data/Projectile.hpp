@@ -59,7 +59,11 @@ public:
 	GameManager *manager = nullptr;
 
 	Projectile(const GameObject *parent, const Weapon *weapon, Vector2f pos, const GameObject *target, Vector2f targetPos);
+	//! Builds the template animations and weapon fields without consuming RNG. save/load fills the rest.
+	Projectile(const Weapon *weapon, const GameObject *parent);
 	void update();
+	void saveState(StateSaveContext &ctx) const;
+	void loadState(StateLoadContext &ctx);
 	void render(int layer);
 	[[nodiscard]] bool isDisposable() const;
 

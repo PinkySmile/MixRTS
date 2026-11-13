@@ -483,6 +483,11 @@ UI::UI(const Faction &faction, UIState *state, GameManager *manager, PlayerState
 
 UI::~UI() = default;
 
+void UI::onStateRestored()
+{
+	this->_objectBuffer.clear();
+}
+
 void UI::setEnabled(bool enabled)
 {
 	this->_panel->setVisible(enabled);
@@ -723,7 +728,8 @@ void UI::renderAbove()
 void UI::updateRender()
 {
 	this->_updateCursor();
-	this->_settings->setVisible(game->paused);
+	if (this->_settings)
+		this->_settings->setVisible(game->paused);
 	for (auto &c : this->_cursors)
 		c.second.update();
 }

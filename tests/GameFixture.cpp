@@ -6,6 +6,7 @@
 #include <optional>
 #include "GameFixture.hpp"
 #include "Resources/Assert.hpp"
+#include "UI/CombinedUI.hpp"
 
 Game *GameFixture::_game = nullptr;
 Mod *GameFixture::_mod = nullptr;
@@ -41,6 +42,14 @@ void GameFixture::SetUpTestSuite()
 	_mod = &game->modManager.get("d2k");
 	_mod->loadFactions("factions.json", _factions);
 	game->modManager.get("test").loadFactions("factions.json", _factions);
+
+	std::vector<std::string> names;
+
+	names.reserve(_factions.size());
+	for (const auto &faction : _factions)
+		names.push_back(faction.first);
+	for (auto &faction : _factions)
+		faction.second.load(names);
 }
 
 void GameFixture::SetUp()
@@ -54,9 +63,15 @@ void GameFixture::SetUp()
 		_factions.at("test:dummy"),
 	};
 
-	this->manager = std::make_unique<GameManager>(allFactions, 2, LobbySettings{false});
-	this->manager->loadMap(*_mod, "mods/dune2000/maps/8PLAY1");
-	this->manager->addPlayer(0, HSLColor{214, 375, 919}, 0, 0);
+	this->manager = std::make_unique<GameManager>(allFactions, 2, GameManager::GameSettings{.shortGame = false}, [](const std::vector<Faction> &factions, UIState *uiState, GameManager *manager, PlayerState *ownerState, std::vector<MapState> &mapStates, size_t playerIndex) {
+		return std::make_shared<CombinedUI>(factions, uiState, manager, ownerState, mapStates, playerIndex);
+	});
+	this->manager->loadMap("d2k:maps/8PLAY1");
+
+	const auto &areas = this->manager->getLoadedMap().startAreas;
+
+	assert_exp(!areas.empty());
+	this->manager->addPlayer(0, HSLColor{214, 375, 919}, areas[0].to<int>(), 0);
 	this->player = &this->manager->getPlayers()[0];
 	this->player->setEnabled(true);
 	// Tests that are about something else than the player's base move the camera themselves.

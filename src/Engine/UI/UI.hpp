@@ -227,6 +227,8 @@ public:
 	bool isMouseOnUi() const;
 
 	virtual void playEVA(EVASound sound, unsigned expireIn, unsigned priority, unsigned cooldown, const std::string &args = "");
+	//! Drops cached live-object pointers after a state restore.
+	void onStateRestored();
 	virtual std::optional<Event> pollEvent();
 	virtual void renderAbove();
 	virtual void updateRender();

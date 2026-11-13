@@ -35,7 +35,7 @@ protected:
 		// Faction index 3 is "test:dummy" (see GameFixture::SetUpTestSuite():
 		// allFactions == {d2k:atreides, d2k:harkonnen, d2k:ordos, test:dummy}).
 		// "test:dummy" has no starting objects, so this doesn't spawn anything.
-		this->manager->addPlayer(3, HSLColor{0, 0, 500}, 0, 1);
+		this->manager->addPlayer(3, HSLColor{0, 0, 500}, Vector2i{0, 0}, 1);
 		// GameManager::getPlayers() can reallocate when a player is added:
 		// refresh GameFixture's own cached pointer, then grab ours.
 		this->player = &this->manager->getPlayers()[0];

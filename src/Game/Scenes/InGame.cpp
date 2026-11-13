@@ -13,6 +13,9 @@
 #include "Resources/Game.hpp"
 #include "UI/BaseUI.hpp"
 #include "UI/CombinedUI.hpp"
+#include "Data/SaveState.hpp"
+
+InGameArguments::~InGameArguments() = default;
 
 InGame::InGame(GameStartParams &params, std::function<void (const std::string &)> &cb) :
 	InGame(params, cb, [](const std::vector<Faction> &factions, UIState *uiState, GameManager *manager, PlayerState *ownerState, std::vector<MapState> &mapStates, size_t playerIndex) {
@@ -21,7 +24,7 @@ InGame::InGame(GameStartParams &params, std::function<void (const std::string &)
 {
 }
 
-InGame::InGame(GameStartParams params, std::function<void (const std::string &)> &cb, const GameManager::UIFactory &factory, bool saveReplays) :
+InGame::InGame(GameStartParams params, std::function<void (const std::string &)> &cb, const GameManager::UIFactory &factory, bool saveReplays, bool spawnStartingObjects) :
 	_startParams(params),
 	_saveReplays(saveReplays)
 {
@@ -82,15 +85,35 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 
 		assert_exp(it != loadedFactions.end());
 		cb("Adding player " + std::to_string(i));
-		game->game->addPlayer(factionIndex, player.color, player.spawnPoint, player.team);
+		game->game->addPlayer(factionIndex, player.color, player.spawnPoint, player.team, spawnStartingObjects);
 		players[i].setEnabled(player.control);
-		if (player.control)
+		if (spawnStartingObjects && player.control)
 			game->game->centerCameraOn(player.spawnPoint);
 		for (auto &ui : players[i].getCombinedUI().getUIs())
 			if (ui)
 				this->_panel->add(ui->getPanel());
 		i++;
 	}
+}
+
+InGame::InGame(GameStartParams params, std::shared_ptr<const SaveStateFile> state, std::function<void (const std::string &)> &cb) :
+	InGame(std::move(params), cb, [](const std::vector<Faction> &factions, UIState *uiState, GameManager *manager, PlayerState *ownerState, std::vector<MapState> &mapStates, size_t playerIndex) {
+		return std::make_shared<CombinedUI>(factions, uiState, manager, ownerState, mapStates, playerIndex);
+	}, false, false)
+{
+	if (this->_mapCrc != state->mapCrc)
+		throw std::runtime_error("Map checksum does not match this state");
+	if (state->factionCrcs.size() != state->start.players.size())
+		throw std::runtime_error("This state file is missing a faction checksum");
+	for (size_t i = 0; i < state->start.players.size(); i++) {
+		auto it = this->_factionCrcs.find(state->start.players[i].faction);
+
+		if (it == this->_factionCrcs.end() || it->second != state->factionCrcs[i])
+			throw std::runtime_error("Faction \"" + state->start.players[i].faction + "\" checksum does not match this state's");
+	}
+	game->game->loadState(state->snapshot);
+	game->game->setPaused(true);
+	game->game->setCameraView(state->camera, state->zoom);
 }
 
 InGame::~InGame()
@@ -229,10 +252,44 @@ void InGame::_retractCrashAnchor()
 	this->_crashAnchorPublished = false;
 }
 
+void InGame::_writeState()
+{
+	try {
+		std::filesystem::path dir = "saves";
+
+		std::filesystem::create_directories(dir);
+
+		SaveStateFile file;
+		auto &players = game->game->getPlayers();
+
+		assert_exp(players.size() == this->_startParams.players.size());
+		file.start = this->_startParams;
+		file.mapCrc = this->_mapCrc;
+		file.camera = game->game->getCameraTranslate();
+		file.zoom = game->game->getCameraZoom();
+		for (const auto &player : this->_startParams.players)
+			file.factionCrcs.push_back(this->_factionCrcs.at(player.faction));
+		game->game->saveState(file.snapshot);
+
+		std::string stamp = replayTimestamp();
+		std::filesystem::path path = dir / (stamp.substr(0, 10) + "_" + stamp.substr(11) + ".state");
+		int suffix = 1;
+
+		while (std::filesystem::exists(path))
+			path = dir / (stamp.substr(0, 10) + "_" + stamp.substr(11) + "-" + std::to_string(suffix++) + ".state");
+		file.save(path);
+		game->logger.info("Saved state to " + path.string());
+	} catch (const std::exception &e) {
+		game->logger.error(std::string("Failed to save state: ") + e.what());
+	}
+}
+
 void InGame::update()
 {
 	this->_publishCrashAnchor();
-	if (this->_crashAnchorPublished && game && game->game)
+	if (game->game->takeStateSaveRequest())
+		this->_writeState();
+	if (this->_crashAnchorPublished)
 		crashReplayAnchor.tick = static_cast<uint32_t>(game->game->getTick());
 
 	float sec = this->_clock.restart().asSeconds();
@@ -268,5 +325,7 @@ tgui::Panel::Ptr InGame::getPanel() const
 InGame *InGame::create(SceneArguments *args)
 {
 	checked_cast(params, InGameArguments, args);
+	if (params->state)
+		return new InGame(params->state->start, params->state, params->reportProgressA);
 	return new InGame(params->startParams, params->reportProgressA);
 }
