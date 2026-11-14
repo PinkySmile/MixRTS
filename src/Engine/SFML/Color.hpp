@@ -6,6 +6,7 @@
 #define MIXRTS_COLOR_HPP
 
 
+#include <TGUI/Color.hpp>
 #include <SFML/Graphics/Color.hpp>
 #include "Resources/MSVCMacros.hpp"
 
@@ -42,6 +43,11 @@ union MYDLL_API Color {
 	}
 
 	operator sf::Color() const
+	{
+		return {this->r, this->g, this->b, this->a};
+	}
+
+	operator tgui::Color() const
 	{
 		return {this->r, this->g, this->b, this->a};
 	}

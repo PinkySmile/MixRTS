@@ -359,3 +359,128 @@ std::string getLocale()
 	return locale;
 #endif
 }
+
+void replace(std::string &str, const std::string &from, const std::string &to)
+{
+	while (true) {
+		size_t start_pos = str.find(from);
+
+		if (start_pos == std::string::npos)
+			return;
+		str.replace(start_pos, from.length(), to);
+	}
+}
+
+void simplifySym(std::string &sym)
+{
+	replace(sym, "_AssertionFailedException", "AssertionFailedException");
+	replace(sym, "nlohmann::json_abi_v3_12_0::basic_json<std::map, std::vector, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool, long, unsigned long, double, std::allocator, nlohmann::json_abi_v3_12_0::adl_serializer, std::vector<unsigned char, std::allocator<unsigned char> >, void>", "nlohmann::json");
+	replace(sym, "nlohmann::json_abi_v3_12_0::basic_json<std::map, std::vector, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool, long long, unsigned long long, double, std::allocator, nlohmann::json_abi_v3_12_0::adl_serializer, std::vector<unsigned char, std::allocator<unsigned char> >, void>", "nlohmann::json");
+	replace(sym, "nlohmann::json_abi_v3_12_0", "nlohmann");
+	replace(sym, "std::filesystem::__cxx11::path", "std::filesystem::path");
+	replace(sym, "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >", "std::string");
+	replace(sym, "std::__cxx11::basic_string<char>", "std::string");
+
+	size_t pos = 0;
+	while (true) {
+		pos = sym.find("std::vector<", pos);
+		if (pos == std::string::npos)
+			break;
+		pos += 12;
+		auto startPos = pos;
+
+		while (pos < sym.size() && sym[pos] != ',')
+			pos++;
+		if (pos >= sym.size())
+			break;
+
+		auto type = sym.substr(startPos, pos - startPos);
+		auto sPos = pos;
+
+		unsigned nb = 0;
+		while (pos < sym.size() && (nb != 0 || sym[pos] != '>')) {
+			nb -= sym[pos] == '>';
+			nb += sym[pos] == '<';
+			pos++;
+		}
+		if (pos >= sym.size())
+			break;
+
+		auto target = sym.substr(sPos, pos - sPos);
+		if (target == ", std::allocator<" + type + "> ")
+			sym.replace(startPos, pos - startPos - 1, type);
+	}
+
+	pos = 0;
+	while (true) {
+		pos = sym.find("std::unordered_map<", pos);
+		if (pos == std::string::npos)
+			break;
+		pos += 19;
+		auto startPos = pos;
+
+		while (pos < sym.size() && sym[pos] != ',')
+			pos++;
+		if (pos >= sym.size())
+			break;
+		auto type1 = sym.substr(startPos, pos - startPos);
+		pos += 2;
+		auto sPos = pos;
+		while (pos < sym.size() && sym[pos] != ',')
+			pos++;
+		if (pos >= sym.size())
+			break;
+		auto type2 = sym.substr(sPos, pos - sPos);
+
+		sPos = pos;
+		unsigned nb = 0;
+		while (pos < sym.size() && (nb != 0 || sym[pos] != '>')) {
+			nb -= sym[pos] == '>';
+			nb += sym[pos] == '<';
+			pos++;
+		}
+		if (pos >= sym.size())
+			break;
+
+		auto target = sym.substr(sPos, pos - sPos);
+		auto t = ", std::hash<" + type1 + " >, std::equal_to<" + type1 + " >, std::allocator<std::pair<" + type1 + " const, " + type2 + "> > ";
+		if (target == t)
+			sym.replace(startPos, pos - startPos - 1, type1 + ", " + type2);
+	}
+}
+
+std::string shortenFctName(std::string name)
+{
+	simplifySym(name);
+
+	std::vector<std::string> args;
+	size_t pos1 = name.find('(') + 1;
+	size_t pos2 = name.find(')');
+	std::string argsList = name.substr(pos1, pos2 - pos1);
+	std::string result = name.substr(0, pos1);
+	size_t start = 0;
+	size_t f = 0;
+
+	for (size_t i = 0; i < argsList.size(); i++) {
+		if (start == i && argsList[i] == ' ')
+			start++;
+		if (f == 0 && argsList[i] == ',') {
+			args.push_back(argsList.substr(start, i - start + 1));
+			start = i + 1;
+		} else if (argsList[i] == '>')
+			f--;
+		else if (argsList[i] == '<')
+			f++;
+	}
+	args.push_back(argsList.substr(start));
+	if (args.size() <= 1)
+		return name;
+
+	for (auto &a : args) {
+		result += "\n\t\t";
+		result += a;
+	}
+	result += "\n\t";
+	result += name.substr(pos2);
+	return result;
+}

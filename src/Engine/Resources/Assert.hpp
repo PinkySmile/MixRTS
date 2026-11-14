@@ -7,7 +7,7 @@
 
 
 #include <string>
-
+#include "Utils.hpp"
 #include "MSVCMacros.hpp"
 
 #ifdef __GNUC__
@@ -55,13 +55,13 @@
 	"Debug Assertion " + std::string(expr) +                  \
 	" failed in " + __FILE__ +                                \
 	" at line " + std::to_string(__LINE__) +                  \
-	"\n\tin " + FCT_NAME                                      \
+	"\n\tin " + shortenFctName(FCT_NAME)                      \
 )
 #define AssertionFailedExceptionMsg(expr, msg) _AssertionFailedException( \
 	"Debug Assertion " + std::string(expr) +                          \
 	" failed in " + __FILE__ +                                        \
 	" at line " + std::to_string(__LINE__) +                          \
-	"\n\tin " + FCT_NAME + ":\n\t" + msg                              \
+	"\n\tin " + shortenFctName(FCT_NAME) + ":\n\t" + msg              \
 )
 
 #ifndef NO_TRACE

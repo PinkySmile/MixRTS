@@ -22,7 +22,6 @@ typedef cpptrace::stacktrace Stacktrace;
 
 struct CrashPacket;
 
-void simplifySym(std::string &sym);
 CrashPacket *allocCrashPacket();
 int crashHandlerMain();
 bool initCrashHandler();

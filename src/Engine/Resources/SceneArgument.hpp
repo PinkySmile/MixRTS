@@ -43,6 +43,12 @@ struct PlayerParams {
 	bool control;
 };
 
+struct GameStartArgs {
+	std::string map;
+	std::vector<PlayerArg> players;
+	LobbySettings settings;
+};
+
 struct GameStartParams {
 	unsigned seed;
 	std::string map;
@@ -52,6 +58,7 @@ struct GameStartParams {
 
 struct TitleScreenArguments : public SceneArguments {
 	std::optional<std::string> message;
+	std::optional<GameStartArgs> gameParams;
 };
 
 struct InGameArguments : public SceneArguments {

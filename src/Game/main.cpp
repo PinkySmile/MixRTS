@@ -137,6 +137,12 @@ void displayCrash(const std::exception &e)
 
 void handleStart(Args &args)
 {
+	game->lobbySettings.map = args.map;
+	game->lobbySettings.players = args.players;
+	game->lobbySettings.settings.speed = args.speed;
+	game->lobbySettings.settings.shortGame = true;
+	game->lobbySettings.settings.randomSpawn = false;
+
 	if (!args.replay.empty()) {
 		ReplayData replay = ReplayData::load(args.replay);
 		uint32_t crc = LoadedMap::computeChecksum(replay.map);
@@ -150,21 +156,8 @@ void handleStart(Args &args)
 		game->scene.switchScene("replay_in_game", sArgs);
 		return;
 	}
-	if (args.players.empty()) {
-		game->scene.switchScene("title_screen");
-		return;
-	}
-
-	auto params = new InGameArguments();
-
-	params->reportProgressA = [](const std::string &){};
-	params->startParams.map = args.map;
-	params->startParams.seed = game->random();
-	params->startParams.settings.speed = args.speed;
-	params->startParams.settings.shortGame = true;
-	params->startParams.settings.randomSpawn = false;
-	genSpawns(args.players, params->startParams);
-	game->scene.switchScene("in_game", params);
+	game->lobbySettingsValid = !args.players.empty() || !args.map.empty();
+	game->scene.switchScene("title_screen");
 }
 
 int main(int argc, char **argv)
@@ -181,22 +174,28 @@ int main(int argc, char **argv)
 	std::unique_ptr<Game> _;
 
 	TRY {
+		std::filesystem::path config;
+		std::filesystem::path data;
+		std::filesystem::path state;
+
 	#ifdef __linux__
 		std::filesystem::path home = getenv("HOME") ?: getpwuid(getuid())->pw_dir;
 		const char *tmp = getenv("XDG_CONFIG_HOME");
-		std::filesystem::path config = tmp ? std::filesystem::path(tmp) : home / ".config" / "mixrts";
+		config = tmp ? std::filesystem::path(tmp) : home / ".config" / "mixrts";
 		tmp = getenv("XDG_DATA_HOME");
-		std::filesystem::path data = tmp ? std::filesystem::path(tmp) : home / ".local" / "share" / "mixrts";
+		data = tmp ? std::filesystem::path(tmp) : home / ".local" / "share" / "mixrts";
 		tmp = getenv("XDG_STATE_HOME");
-		std::filesystem::path state = tmp ? std::filesystem::path(tmp) : home / ".local" / "state" / "mixrts";
+		state = tmp ? std::filesystem::path(tmp) : home / ".local" / "state" / "mixrts";
+	#else
+		config = ".";
+		data = ".";
+		state = ".";
+	#endif
 
 		std::filesystem::create_directories(config);
 		std::filesystem::create_directories(data);
 		std::filesystem::create_directories(state);
-		_ = std::make_unique<Game>(config, data, state, config / "settings.json", state / "editor.log", "assets/NotoSans-Regular.ttf");
-	#else
-		_ = std::make_unique<Game>(".", ".", ".", "settings.json", "./editor.log", "assets/NotoSans-Regular.ttf");
-	#endif
+		_ = std::make_unique<Game>(config, data, state, config / "settings.json", state / "latest.log", "assets/NotoSans-Regular.ttf");
 		registerScenes();
 		checkCompilationEnv();
 		game->modManager.loadAll("mods");

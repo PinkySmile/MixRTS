@@ -213,12 +213,208 @@ void TitleScreen::_initTitle()
 	settings->onClick([] {
 
 	});
-	debug->onClick([] {
-
+	debug->onClick([this] {
+		game->lobbySettings.players.clear();
+		game->lobbySettingsValid = true;
+		this->_initLobby();
 	});
 	quit->onClick([] {
 		game->screen->close();
 	});
+}
+
+void TitleScreen::_updateMapLobby(
+	tgui::Picture::Ptr map,
+	tgui::Label::Ptr size,
+	tgui::Label::Ptr name,
+	tgui::Label::Ptr origin,
+	tgui::Label::Ptr author,
+	tgui::Label::Ptr objects
+)
+{
+	tgui::Texture tt;
+
+	tt.loadFromPixelData(this->_map.preview.getSize(), this->_map.preview.getPixelsPtr());
+	map->getRenderer()->setTexture(tt);
+	size->setText(
+		std::to_string(this->_map.gridSize.x) + "x" + std::to_string(this->_map.gridSize.y) +
+		" (" + std::to_string(this->_map.tileSize.x * this->_map.gridSize.x) +
+		"x" + std::to_string(this->_map.tileSize.y * this->_map.gridSize.y) + ")"
+	);
+	name->setText(this->_map.name);
+	origin->setText("From " + this->_map.origin);
+	author->setText("Made by " + this->_map.author);
+	objects->setText(""); // TODO:
+}
+
+void TitleScreen::_addPlayerPanels(tgui::Panel::Ptr players, tgui::Button::Ptr start)
+{
+	const std::vector<tgui::Widget::Ptr> &w = players->getWidgets();
+
+	while (w.size() > game->lobbySettings.players.size() + 1) {
+		players->remove(w[w.size() - 1]);
+		this->_playerPanels.pop_back();
+	}
+	while (w.size() < game->lobbySettings.players.size() + 1) {
+		char characters[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@&$~'^¨*";
+		static_assert(sizeof(characters) - 1 >= MAX_TEAM_COUNT);
+		size_t index = this->_playerPanels.size();
+		this->_playerPanels.emplace_back();
+		PlayerUI &p = this->_playerPanels.back();
+		p.panel = tgui::Panel::create({"100%", 30});
+		p.panel->loadWidgetsFromFile("assets/gui/player_entry.gui");
+
+		p.player = p.panel->get<tgui::Button>("Player");
+		p.faction = p.panel->get<tgui::ComboBox>("Faction");
+		p.color = p.panel->get<tgui::Button>("Color");
+		p.team = p.panel->get<tgui::ComboBox>("Team");
+		p.spawn = p.panel->get<tgui::ComboBox>("Spawn");
+
+		for (auto &key : game->modManager.getFactionList())
+			p.faction->addItem(key, key);
+		for (size_t i = 0; i < MAX_TEAM_COUNT; i++)
+			p.team->addItem(characters[i]);
+		p.spawn->addItem("-");
+		for (size_t i = 0; i < this->_map.startAreas.size(); i++)
+			p.spawn->addItem(characters[i]);
+		p.spawn->addItem("Custom");
+
+		p.player->onClick([this, players, start, index] {
+			game->lobbySettings.players.erase(game->lobbySettings.players.begin() + index);
+			game->lobbySettings.players[0].control = true,
+			this->_addPlayerPanels(players, start);
+			this->_updatePlayerList(start);
+		});
+		p.color->onClick([index] {
+
+		});
+		p.faction->onItemSelect([index](const tgui::String &, const tgui::String &id) {
+			game->lobbySettings.players[index].faction = id.toStdString();
+		});
+		p.team->onItemSelect([index](int i) {
+			game->lobbySettings.players[index].team = i;
+		});
+		p.spawn->onItemSelect([this, index](int i) {
+			if (i == 0) {
+				game->lobbySettings.players[index].spawnPoint.reset();
+				game->lobbySettings.players[index].spawnPointIndex.reset();
+			} else if (i == this->_map.startAreas.size() + 1) {
+				game->lobbySettings.players[index].spawnPoint = this->_map.startAreas[0];
+				game->lobbySettings.players[index].spawnPointIndex.reset();
+			} else {
+				game->lobbySettings.players[index].spawnPoint.reset();
+				game->lobbySettings.players[index].spawnPointIndex = i - 1;
+			}
+		});
+
+		if (index == 0)
+			p.panel->setPosition(0, 10);
+		else
+			p.panel->setPosition(0, tgui::Layout{"Player" + std::to_string(index) + ".y + Player" + std::to_string(index) + ".h"});
+		players->add(p.panel, "Player" + std::to_string(index + 1));
+	}
+
+	if (game->lobbySettings.players.empty())
+		players->get<tgui::Panel>("AddPlayer")->setPosition(0, 10);
+	else
+		players->get<tgui::Panel>("AddPlayer")->setPosition(
+			0, tgui::Layout{
+				"Player" + std::to_string(game->lobbySettings.players.size()) + ".y + "
+				"Player" + std::to_string(game->lobbySettings.players.size()) + ".h"
+			}
+		);
+}
+
+void TitleScreen::_updatePlayerList(tgui::Button::Ptr start)
+{
+	start->setEnabled(!game->lobbySettings.players.empty());
+	for (size_t i = 0; i < this->_playerPanels.size(); i++) {
+		auto &p = this->_playerPanels[i];
+		auto &pl = game->lobbySettings.players[i];
+		Color color = pl.color.toRGB();
+
+		p.color->getRenderer()->setBackgroundColor(color);
+		p.color->getRenderer()->setBackgroundColorDisabled(color);
+		p.color->getRenderer()->setBackgroundColorDown(color);
+		p.color->getRenderer()->setBackgroundColorDownDisabled(color);
+		p.color->getRenderer()->setBackgroundColorDownFocused(color);
+		p.color->getRenderer()->setBackgroundColorDownHover(color);
+		p.color->getRenderer()->setBackgroundColorFocused(color);
+		p.color->getRenderer()->setBackgroundColorHover(color);
+		p.player->setText("Player " + std::to_string(i + 1));
+		p.faction->setSelectedItemById(pl.faction);
+		p.team->setSelectedItemByIndex(pl.team);
+		if (pl.spawnPoint)
+			p.spawn->setSelectedItemByIndex(this->_map.startAreas.size() + 1);
+		else if (pl.spawnPointIndex)
+			p.spawn->setSelectedItemByIndex(*pl.spawnPointIndex + 1);
+		else
+			p.spawn->setSelectedItemByIndex(0);
+	}
+}
+
+void TitleScreen::_initLobby()
+{
+	if (game->lobbySettings.map.empty())
+		game->lobbySettings.map = "d2k:maps/0PLAY0";
+	this->_panel->loadWidgetsFromFile("assets/gui/lobby.gui");
+
+	auto leave = this->_panel->get<tgui::Button>("Leave");
+	auto start = this->_panel->get<tgui::Button>("Start");
+	auto change = this->_panel->get<tgui::Button>("MapChange");
+	auto zoom = this->_panel->get<tgui::Button>("MapZoom");
+	auto chat = this->_panel->get<tgui::ChatBox>("ChatBox");
+	auto players = this->_panel->get<tgui::Panel>("Players");
+	auto settings = this->_panel->get<tgui::Panel>("Settings");
+	auto map = this->_panel->get<tgui::Picture>("Map");
+	auto size = this->_panel->get<tgui::Label>("MapSize");
+	auto name = this->_panel->get<tgui::Label>("MapName");
+	auto origin = this->_panel->get<tgui::Label>("MapOrigin");
+	auto author = this->_panel->get<tgui::Label>("MapAuthor");
+	auto objects = this->_panel->get<tgui::Label>("MapObjects");
+	auto panel = tgui::Panel::create({"100%", 30});
+	auto addPlayer = tgui::Button::create("+");
+
+	addPlayer->setPosition(10, 0);
+	addPlayer->setSize("&.w - 362", 20);
+	panel->add(addPlayer);
+	panel->setPosition(0, 10);
+	players->add(panel, "AddPlayer");
+	this->_addPlayerPanels(players, start);
+	addPlayer->onClick([this, players, start] {
+		game->lobbySettings.players.push_back(PlayerArg{
+			game->modManager.getFactionList()[0],
+			{},
+			{},
+			HSLColor(
+				random_distrib(game->random, 0, 360),
+				random_distrib(game->random, 0, 1000),
+				random_distrib(game->random, 0, 1000)
+			),
+			static_cast<char>(game->lobbySettings.players.size()),
+			game->lobbySettings.players.empty()
+		});
+		this->_addPlayerPanels(players, start);
+		this->_updatePlayerList(start);
+	});
+	start->onClick([] {
+		auto params = new InGameArguments();
+
+		params->reportProgressA = [](const std::string &){};
+		params->startParams.map = game->lobbySettings.map;
+		params->startParams.seed = game->random();
+		params->startParams.settings = game->lobbySettings.settings;
+		genSpawns(game->lobbySettings.players, params->startParams);
+		game->scene.switchScene("in_game", params);
+	});
+	leave->onClick([this] {
+		game->lobbySettingsValid = false;
+		this->_initTitle();
+	});
+
+	this->_map.load(game->lobbySettings.map);
+	this->_updatePlayerList(start);
+	this->_updateMapLobby(map, size, name, origin, author, objects);
 }
 
 void TitleScreen::_openReplayDialog()
@@ -281,7 +477,11 @@ void TitleScreen::_loadReplay(const std::filesystem::path &path)
 TitleScreen::TitleScreen(std::optional<std::string> message)
 {
 	this->_panel = tgui::Panel::create({"100%", "100%"});
-	this->_initTitle();
+	this->_panel->getRenderer()->setBackgroundColor(tgui::Color::Black);
+	if (game->lobbySettingsValid)
+		this->_initLobby();
+	else
+		this->_initTitle();
 	if (message)
 		dispMsg(*this->_panel, "Error", *message);
 }
@@ -290,6 +490,7 @@ TitleScreen::~TitleScreen() = default;
 
 void TitleScreen::render() const
 {
+	reloadViews(*game->screen, game->gui, game->screen->getSize(), {0, 0});
 }
 
 void TitleScreen::renderAbove() const

@@ -211,7 +211,10 @@ MYDLL_API double normalizeAngle(double angle);
 //! Snaps to the target and returns true once it is within one step.
 MYDLL_API bool rotateTowards(float &angle, float target, float maxStep);
 
-std::string getLocale();
+MYDLL_API std::string getLocale();
+MYDLL_API void simplifySym(std::string &sym);
+MYDLL_API void replace(std::string &str, const std::string &from, const std::string &to);
+MYDLL_API std::string shortenFctName(std::string name);
 
 
 #endif //MIXRTS_UTILS_HPP

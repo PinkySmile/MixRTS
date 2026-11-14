@@ -10,7 +10,7 @@ static std::vector<PlayerArg> parsePlayers(const char *players)
 	std::vector<PlayerArg> playersParams;
 	std::vector<std::string> p = split(players, ";");
 	unsigned controllingIndex = 0;
-	char teamLetter[] = "0123456789ABCDEFGHIJKLMNOPQRSTUV";
+	char teamLetter[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@&$~'^¨*";
 
 	for (size_t i = 0; i < p.size(); i++) {
 		auto &pl = p[i];

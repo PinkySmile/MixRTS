@@ -48,10 +48,20 @@ const Faction &ModManager::getFaction(const std::string &name)
 std::pair<Mod *, std::filesystem::path> ModManager::getPath(const std::string &name)
 {
 	size_t pos = name.find(':');
-	assert_exp(pos != std::string::npos);
+	assert_msg(pos != std::string::npos, name);
 	std::string relPath = name.substr(pos + 1);
 	std::string modName = name.substr(0, pos);
 	Mod &mod = this->get(modName);
 
 	return { &mod, mod.getBase() / relPath };
+}
+
+std::vector<std::string> ModManager::getFactionList() const
+{
+	std::vector<std::string> f;
+
+	for (auto &key : this->_factions | std::ranges::views::keys)
+		f.push_back(key);
+	std::ranges::sort(f);
+	return f;
 }

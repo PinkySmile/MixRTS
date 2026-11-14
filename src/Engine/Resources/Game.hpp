@@ -59,6 +59,8 @@ public:
 struct MYDLL_API Game {
 	bool hosting = false;
 	bool paused = false;
+	bool lobbySettingsValid = false;
+	GameStartArgs lobbySettings;
 	std::filesystem::path config;
 	std::filesystem::path data;
 	std::filesystem::path state;

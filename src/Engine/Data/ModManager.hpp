@@ -19,6 +19,7 @@ public:
 	Mod &get(const std::string &name);
 	const Faction &getFaction(const std::string &name);
 	std::pair<Mod *, std::filesystem::path> getPath(const std::string &name);
+	std::vector<std::string> getFactionList() const;
 };
 
 

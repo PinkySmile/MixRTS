@@ -12,13 +12,37 @@
 
 class TitleScreen : public IScene {
 private:
+	struct PlayerUI {
+		tgui::Panel::Ptr panel;
+		tgui::Button::Ptr color;
+		tgui::Button::Ptr player;
+		tgui::ComboBox::Ptr team;
+		tgui::ComboBox::Ptr spawn;
+		tgui::ComboBox::Ptr faction;
+	};
+
+	MapInfo _map;
 	tgui::Panel::Ptr _panel;
+	tgui::Panel::Ptr _addButton;
+	std::vector<PlayerUI> _playerPanels;
 
 	void _initTitle();
+	void _initLobby();
 	void _openReplayDialog();
 	void _loadReplay(const std::filesystem::path &path);
 	void _openLoadDialog();
 	void _loadState(const std::filesystem::path &path);
+	void _updateMapLobby(
+		tgui::Picture::Ptr map,
+		tgui::Label::Ptr size,
+		tgui::Label::Ptr name,
+		tgui::Label::Ptr origin,
+		tgui::Label::Ptr author,
+		tgui::Label::Ptr objects
+	);
+	void _addPlayerPanels(tgui::Panel::Ptr players, tgui::Button::Ptr start);
+	void _updatePlayerList(tgui::Button::Ptr start);
+
 public:
 	explicit TitleScreen(std::optional<std::string> message = {});
 	~TitleScreen() override;

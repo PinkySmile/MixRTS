@@ -475,12 +475,12 @@ void MapState::pushUserType(sol::state &state)
 
 void MapInfo::load(const std::string &relPath)
 {
-	std::filesystem::path path = game->modManager.getPath(relPath).second;
-	std::ifstream streamMap{path / "map.json"};
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(relPath);
+	std::ifstream streamMap{path.second / "map.json"};
 	nlohmann::json json;
 
 	this->path = relPath;
-	assert_msg(streamMap, (path / "map.json").string());
+	assert_msg(streamMap, (path.second / "map.json").string());
 	streamMap >> json;
 
 	assert_exp(json.contains("name") && json["name"].is_string());
@@ -491,6 +491,9 @@ void MapInfo::load(const std::string &relPath)
 	assert_exp(json["size"].contains("x") && json["size"]["x"].is_number_unsigned());
 	assert_exp(json["size"].contains("y") && json["size"]["y"].is_number_unsigned());
 
+	this->name = json["name"];
+	this->origin = json["origin"];
+	this->author = json["author"];
 	this->gridSize.x = json["size"]["x"];
 	this->gridSize.y = json["size"]["y"];
 	for (size_t i = 0; i < json["starts"].size(); i++) {
@@ -500,7 +503,21 @@ void MapInfo::load(const std::string &relPath)
 		assert_msg(v.contains("y") && v["y"].is_number_unsigned(), "json[\"starts\"][" + std::to_string(i) + "]");
 		this->startAreas.emplace_back(v["x"].get<unsigned>(), v["y"].get<unsigned>());
 	}
-	assert_exp(this->preview.loadFromFile(path / json["preview"]));
+	assert_exp(this->preview.loadFromFile(path.second / json["preview"]));
+
+	std::string tileset = json["tileset"].get<std::string>();
+	std::filesystem::path p1 = path.second / tileset / "metadata.json";
+	std::ifstream streamMeta{p1};
+	nlohmann::json json1;
+
+	assert_msg(streamMeta, p1.string());
+	streamMeta >> json1;
+	assert_exp(json1.contains("size") && json1["size"].is_object());
+	assert_exp(json1["size"].contains("x") && json1["size"]["x"].is_number_unsigned());
+	assert_exp(json1["size"].contains("y") && json1["size"]["y"].is_number_unsigned());
+
+	this->tileSize.x = json1["size"]["x"];
+	this->tileSize.y = json1["size"]["y"];
 }
 
 uint32_t LoadedMap::computeChecksum(const std::string &relPath)
