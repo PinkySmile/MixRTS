@@ -28,6 +28,10 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#ifdef __linux__
+#include <pwd.h>
+#include <unistd.h>
+#endif
 
 
 #ifdef __EMSCRIPTEN__
@@ -177,7 +181,22 @@ int main(int argc, char **argv)
 	std::unique_ptr<Game> _;
 
 	TRY {
-		_ = std::make_unique<Game>("assets/NotoSans-Regular.ttf");
+	#ifdef __linux__
+		std::filesystem::path home = getenv("HOME") ?: getpwuid(getuid())->pw_dir;
+		const char *tmp = getenv("XDG_CONFIG_HOME");
+		std::filesystem::path config = tmp ? std::filesystem::path(tmp) : home / ".config" / "mixrts";
+		tmp = getenv("XDG_DATA_HOME");
+		std::filesystem::path data = tmp ? std::filesystem::path(tmp) : home / ".local" / "share" / "mixrts";
+		tmp = getenv("XDG_STATE_HOME");
+		std::filesystem::path state = tmp ? std::filesystem::path(tmp) : home / ".local" / "state" / "mixrts";
+
+		std::filesystem::create_directories(config);
+		std::filesystem::create_directories(data);
+		std::filesystem::create_directories(state);
+		_ = std::make_unique<Game>(config, data, state, config / "settings.json", state / "editor.log", "assets/NotoSans-Regular.ttf");
+	#else
+		_ = std::make_unique<Game>(".", ".", ".", "settings.json", "./editor.log", "assets/NotoSans-Regular.ttf");
+	#endif
 		registerScenes();
 		checkCompilationEnv();
 		game->modManager.loadAll("mods");

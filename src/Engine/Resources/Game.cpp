@@ -36,6 +36,47 @@ MYDLL_API float guiScale = 1.5f;
 MYDLL_API bool DEBUG_MODE = false;
 #endif
 
+
+Settings::Settings(const std::filesystem::path &path) :
+	_path(path)
+{
+	std::ifstream stream{path};
+	nlohmann::json json;
+
+	if (!stream.fail()) {
+		stream >> json;
+		try {
+			this->locale = json["locale"];
+			this->loading = json["loading"];
+			return;
+		} catch (...) {}
+	} else if (errno != ENOENT)
+		throw std::runtime_error("Cannot open settings file: " + this->_path.string() + ": " + std::string(strerror(errno)));
+
+	this->locale = "en";
+	this->loading = LOADING_LAZY;
+}
+
+Settings::~Settings()
+{
+	this->save();
+}
+
+void Settings::save()
+{
+	nlohmann::json json = {
+		{ "locale", this->locale },
+		{ "loading", this->loading },
+	};
+
+	std::ofstream stream{this->_path};
+
+	if (!stream)
+		throw std::runtime_error("Cannot open settings file: " + this->_path.string() + ": " + std::string(strerror(errno)));
+	stream << json.dump(4);
+}
+
+
 void Game::pushUserType(sol::state &state)
 {
 	sol::usertype<Game> type = state.new_usertype<Game>("Game");
@@ -154,7 +195,17 @@ void Game::init()
 }
 
 #ifdef MOCK
-Game::Game(const std::filesystem::path &fontPath, MockMode mode, const std::filesystem::path &video, Vector2u size, const std::filesystem::path &loggerPath) :
+Game::Game(
+	const std::filesystem::path &fontPath,
+	MockMode mode,
+	const std::filesystem::path &video,
+	Vector2u size,
+	const std::filesystem::path &loggerPath
+) :
+	config("."),
+	data("."),
+	state("."),
+	settings("."),
 	gameRandom(random()),
 	logger(loggerPath),
 	font(fontPath),
@@ -166,7 +217,18 @@ Game::Game(const std::filesystem::path &fontPath, MockMode mode, const std::file
 	this->init();
 }
 #else
-Game::Game(const std::filesystem::path &fontPath, const std::filesystem::path &loggerPath) :
+Game::Game(
+	const std::filesystem::path &config,
+	const std::filesystem::path &data,
+	const std::filesystem::path &state,
+	const std::filesystem::path &settingsPath,
+	const std::filesystem::path &loggerPath,
+	const std::filesystem::path &fontPath
+) :
+	config(config),
+	data(data),
+	state(state),
+	settings(settingsPath),
 	gameRandom(random()),
 	logger(loggerPath),
 	font(fontPath),

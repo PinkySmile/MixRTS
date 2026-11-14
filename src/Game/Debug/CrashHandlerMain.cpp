@@ -8,6 +8,8 @@
 
 #ifdef __linux__
 #include <unistd.h>
+#include <pwd.h>
+#include <unistd.h>
 
 static void acknowledgeCrash()
 {
@@ -215,19 +217,24 @@ int crashHandlerMain()
 {
 	CrashPacket *packet = allocCrashPacket();
 	time_t timer;
-	char timebuffer[31];
+	char timebuffer[38];
 	tm *tm_info;
 
 	time(&timer);
 	tm_info = localtime(&timer);
-	strftime(timebuffer, sizeof(timebuffer), "%Y-%m-%d-%H-%M-%S", tm_info);
+	strftime(timebuffer, sizeof(timebuffer), "crash-%Y-%m-%d-%H-%M-%S", tm_info);
 
 	readCrashPacket(packet);
+#ifdef __linux__
+	std::filesystem::path home = getenv("HOME") ?: getpwuid(getuid())->pw_dir;
+	const char *tmp = getenv("XDG_DATA_HOME");
+	std::filesystem::path data = tmp ? std::filesystem::path(tmp) : home / ".local" / "share" / "mixrts";
+#else
+	std::filesystem::path data = ".";
+#endif
 
-	std::string folder = "crash-";
 	std::error_code err;
-	folder += timebuffer;
-	std::filesystem::path path = folder;
+	std::filesystem::path path = data / timebuffer;
 
 	std::filesystem::create_directory(path, err);
 
@@ -250,7 +257,7 @@ int crashHandlerMain()
 	stream.close();
 	panel->getRenderer()->setBackgroundColor(tgui::Color::Transparent);
 
-	auto crashPlaceLabel = tgui::Label::create(L"Crash information has been stored at " + std::filesystem::absolute(folder).wstring());
+	auto crashPlaceLabel = tgui::Label::create(L"Crash information has been stored at " + std::filesystem::absolute(path).wstring());
 	crashPlaceLabel->setPosition({10, "100% - h - 10"});
 	crashPlaceLabel->getRenderer()->setTextStyle(tgui::TextStyle::Bold | tgui::TextStyle::Underlined);
 	panel->setSize({"100%", "bottom.y - 10"});

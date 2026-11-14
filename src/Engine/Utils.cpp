@@ -327,3 +327,35 @@ uint64_t hash64(const void *data, size_t size, uint64_t seed)
 	hash ^= hash >> 32;
 	return hash;
 }
+
+std::string getLocale()
+{
+#ifdef _WIN32
+	char locale[LOCALE_NAME_MAX_LENGTH] = {0};
+	wchar_t localw[LOCALE_NAME_MAX_LENGTH] = {0};
+
+	GetUserDefaultLocaleName(localw, sizeof(localw));
+	for (int i = 0; localw[i]; i++)
+		locale[i] = localw[i];
+
+	auto end = strchr(locale, '-');
+
+	if (end)
+		*end = 0;
+	return locale;
+#else
+	char locale[1024] = {0};
+	char *lang = getenv("LANG");
+
+	if (!lang)
+		strcpy(locale, "en_EN");
+	else
+		strncpy(locale, lang, sizeof(locale) - 1);
+
+	auto end = strchr(locale, '_');
+
+	if (end)
+		*end = 0;
+	return locale;
+#endif
+}

@@ -223,7 +223,7 @@ void TitleScreen::_initTitle()
 
 void TitleScreen::_openReplayDialog()
 {
-	auto window = openFileDialog("Open replay", "replays");
+	auto window = openFileDialog("Open replay", game->data/ "replays");
 
 	window->setFileTypeFilters({ {"Replay file (*.replay)", {"*.replay"}}, {"All files", {}} }, 0);
 	window->onFileSelect([this](const std::vector<tgui::Filesystem::Path> &arr){
@@ -237,7 +237,7 @@ void TitleScreen::_openReplayDialog()
 
 void TitleScreen::_openLoadDialog()
 {
-	auto window = openFileDialog("Open state", "saves");
+	auto window = openFileDialog("Open state", game->data / "saves");
 
 	window->setFileTypeFilters({ {"State file (*.state)", {"*.state"}}, {"All files", {}} }, 0);
 	window->onFileSelect([this](const std::vector<tgui::Filesystem::Path> &arr){

@@ -44,18 +44,29 @@ enum LoadingStrategy {
 };
 
 struct Settings {
-	std::string locale = "en";
-	LoadingStrategy loading = LOADING_LAZY;
+private:
+	std::filesystem::path _path;
+
+public:
+	std::string locale;
+	LoadingStrategy loading;
+
+	Settings(const std::filesystem::path &path);
+	~Settings();
+	void save();
 };
 
 struct MYDLL_API Game {
 	bool hosting = false;
 	bool paused = false;
+	std::filesystem::path config;
+	std::filesystem::path data;
+	std::filesystem::path state;
+	Settings settings;
 	std::random_device random;
 	RandomWrapper gameRandom;
 	Logger logger;
 	sf::Font font;
-	Settings settings;
 	std::string lastIp = "127.0.0.1";
 	unsigned short lastPort = 0;
 	std::unique_ptr<ScreenImpl> screen;
@@ -71,9 +82,21 @@ struct MYDLL_API Game {
 	static void pushUserType(sol::state &state);
 
 #ifdef MOCK
-	Game(const std::filesystem::path &fontPath, MockMode mode, const std::filesystem::path &video, Vector2u size = {1280, 1024}, const std::filesystem::path &loggerPath = "./latest.log");
+	Game(
+		const std::filesystem::path &fontPath,
+		MockMode mode, const std::filesystem::path &video,
+		Vector2u size = {1280, 1024},
+		const std::filesystem::path &loggerPath = "./latest.log"
+	);
 #else
-	Game(const std::filesystem::path &fontPath, const std::filesystem::path &loggerPath = "./latest.log");
+	Game(
+		const std::filesystem::path &config,
+		const std::filesystem::path &data,
+		const std::filesystem::path &state,
+		const std::filesystem::path &settingsPath,
+		const std::filesystem::path &loggerPath,
+		const std::filesystem::path &fontPath
+	);
 #endif
 	~Game();
 	void init();

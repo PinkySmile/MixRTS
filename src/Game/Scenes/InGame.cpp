@@ -126,7 +126,7 @@ InGame::~InGame()
 	this->_retractCrashAnchor();
 	// Read the flag directly: a virtual call here would not reach a subclass that is already destroyed.
 	if (this->_saveReplays)
-		this->saveReplay("replays");
+		this->saveReplay(game->data / "replays");
 	// Faction UI libraries are closed when GameManager is destroyed. Button callbacks are code in
 	// those libraries, so every widget has to be released while the libraries are still loaded.
 	this->_panel.reset();

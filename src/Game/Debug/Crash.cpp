@@ -10,6 +10,10 @@
 #include "Crash.hpp"
 #include "Utils.hpp"
 #include "../Scenes/InGame.hpp"
+#ifdef __linux__
+#include <pwd.h>
+#include <unistd.h>
+#endif
 
 static tgui::Font *traceFont = nullptr;
 
@@ -185,15 +189,15 @@ void handleCrash(Stacktrace st, const std::exception &e)
 std::filesystem::path createCrashFolder()
 {
 	time_t timer;
-	char timebuffer[31];
+	char timebuffer[38];
 	tm *info;
 	std::error_code err;
 
 	time(&timer);
 	info = localtime(&timer);
-	strftime(timebuffer, sizeof(timebuffer), "%Y-%m-%d-%H-%M-%S", info);
+	strftime(timebuffer, sizeof(timebuffer), "crash-%Y-%m-%d-%H-%M-%S", info);
 
-	std::filesystem::path path = std::string("crash-") + timebuffer;
+	std::filesystem::path path = game->data / timebuffer;
 	std::filesystem::create_directory(path, err);
 	return path;
 }

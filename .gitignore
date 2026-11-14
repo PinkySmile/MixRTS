@@ -389,3 +389,4 @@ build*
 *.ui
 *.dl
 local
+*.AppImage
