@@ -36,6 +36,8 @@ void cleanStackTrace(Stacktrace &st);
 static constexpr int CRASH_ACK_FD = 3;
 //! Reads the in-progress replay out of the crashed process, if one was published.
 bool extractCrashReplay(const CrashPacket &packet, const std::filesystem::path &dir);
+//! Reads the published simulation state out of the crashed process, if one was published.
+bool extractCrashState(const CrashPacket &packet, const std::filesystem::path &dir);
 
 tgui::Panel::Ptr generateCrashPanel(Stacktrace st, const std::exception &e);
 void handleCrash(Stacktrace st, const std::exception &e);

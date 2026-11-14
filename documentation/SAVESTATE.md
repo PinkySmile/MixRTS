@@ -12,6 +12,8 @@ A state file consists of:
 
 The camera is not part of the simulation. It is restored only when a file is loaded.
 
+A crash writes the same file as `state.state` in `crash-YYYY-MM-DD-HH-MM-SS`, next to the replay and the stack trace. The image is the last completed tick. A signal handler cannot build it, so the match publishes that image as each tick finishes, and the crash handler copies the bytes out of the process. An exception writes that published image directly. Orders queued while the simulation is not stepping are published on the next frame.
+
 ### 1.1. Serialization Conventions
 
 The following conventions apply to the entire file, including the blob:
@@ -21,7 +23,6 @@ The following conventions apply to the entire file, including the blob:
 | Endianness | Little-endian |
 | Integer representation | Unsigned integers, unless a field is explicitly signed |
 | Floating-point representation | IEEE-754 |
-| Variable-length integers | Unsigned LEB128 |
 | String encoding | UTF-8 |
 | String length | Number of bytes, not characters |
 | Array length | Number of elements |
@@ -40,15 +41,14 @@ All fields are serialized sequentially. There is no padding or alignment between
 | `Float32` | 4 bytes | 32-bit floating-point number |
 | `Float64` | 8 bytes | 64-bit floating-point number |
 | `Bool` | 1 byte | `0` or `1` |
-| `Varint` | Variable | Unsigned LEB128 integer |
 
 ### 1.3. Notation
 
 | Notation | Description |
 | --- | --- |
 | `[N] T` | N consecutive elements of type T |
-| `Array<T>` | A `Varint` count followed by that many elements of type T |
-| `String` | A `Varint` byte count followed by that many bytes |
+| `Array<T>` | A `Uint32` count followed by that many elements of type T |
+| `String` | A `Uint32` byte count followed by that many bytes |
 
 ---
 
@@ -132,7 +132,7 @@ The RNG is restored after every object has been created, so copies made during t
 | Type | Description |
 | --- | --- |
 | `Array<Uint32>` | Words of the loaded map grid |
-| `Varint` | Number of per-faction map states |
+| `Uint32` | Number of per-faction map states |
 | `Array<Uint32>` | Words of each map state, in order |
 
 Only words that differ from the current map are copied. A changed tile is redrawn. Unchanged tiles keep the frame they already show, because the random variant of a tile is chosen outside the simulation RNG.
@@ -143,7 +143,7 @@ Objects are stored in live-object order.
 
 | Type | Description |
 | --- | --- |
-| `Varint` | Object count |
+| `Uint32` | Object count |
 | `ObjectHeader` | One header per object |
 | `ObjectBody` | One body per object, in the same order |
 
@@ -164,7 +164,7 @@ An order is a `Uint8` id followed by its payload. Ids `0` to `19` follow the ord
 
 | Type | Description |
 | --- | --- |
-| `Varint` | Player count. Must match the match |
+| `Uint32` | Player count. Must match the match |
 | `PlayerBody` | One body per player, in slot order |
 
 A player body stores the lost and won flags, the debug unlock flag, radar, power, money, storage, owned elements, object lists, build queues and every production queue. Queue and entry keys must already exist. Values are overwritten in place so the iteration order of those maps does not change. The player's enabled flag and interface state are not stored. The local selection is kept across an in-place restore and dropped when the object no longer exists.
@@ -173,7 +173,7 @@ A player body stores the lost and won flags, the debug unlock flag, radar, power
 
 | Type | Description |
 | --- | --- |
-| `Varint` | Projectile count |
+| `Uint32` | Projectile count |
 | `Projectile` | One record per projectile |
 
 Each record is the weapon template id, the parent object, then the projectile's mutable fields: target, owner, position, timers, movement and one playback record per animation. The projectile is rebuilt from its weapon without drawing a random number, and the saved fields replace the defaults.

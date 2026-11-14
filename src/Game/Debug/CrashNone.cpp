@@ -29,6 +29,11 @@ bool extractCrashReplay(const CrashPacket &, const std::filesystem::path &)
 	return false;
 }
 
+bool extractCrashState(const CrashPacket &, const std::filesystem::path &)
+{
+	return false;
+}
+
 tgui::Panel::Ptr crashPacketPanel(const CrashPacket &)
 {
 	return tgui::Panel::create();

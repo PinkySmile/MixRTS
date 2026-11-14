@@ -18,6 +18,7 @@
 #include <sys/prctl.h>
 #include <cerrno>
 #include <cstring>
+#include <fstream>
 #include <vector>
 #include <TGUI/Widgets/RichTextLabel.hpp>
 #include "Crash.hpp"
@@ -40,6 +41,7 @@ struct CrashPacket {
 	void *faultAddress;
 	pid_t pid;
 	const void *replayAnchor;
+	const void *stateAnchor;
 	size_t frameCount;
 	cpptrace::safe_object_frame frames[MAX_STACK_FRAMES];
 };
@@ -116,6 +118,7 @@ static void signalHandler(int sig, siginfo_t *info, void *)
 	packet.signal       = static_cast<uint32_t>(sig);
 	packet.faultAddress = info ? info->si_addr : nullptr;
 	packet.replayAnchor = &crashReplayAnchor;
+	packet.stateAnchor  = &crashStateAnchor;
 	packet.frameCount   = captureSafeTrace(packet.frames, MAX_STACK_FRAMES);
 
 	size_t len = sizeof(packet);
@@ -302,6 +305,7 @@ std::string crashPacketToString(const CrashPacket &packet)
 
 static constexpr size_t MAX_CRASH_HEADER = 1u << 20;
 static constexpr size_t MAX_CRASH_STREAM = 32u << 20;
+static constexpr size_t MAX_CRASH_STATE = 64u << 20;
 static constexpr uint32_t MAX_CRASH_PLAYERS = 64;
 
 static bool readRemote(pid_t pid, uintptr_t address, void *dst, size_t size)
@@ -443,6 +447,38 @@ bool extractCrashReplay(const CrashPacket &packet, const std::filesystem::path &
 		tick = anchor.capturedTick();
 	}
 	return ReplayData::saveRecovered(header.data(), header.size(), tick, encoded, dir / "replay.replay");
+}
+
+bool extractCrashState(const CrashPacket &packet, const std::filesystem::path &dir)
+{
+	if (!packet.stateAnchor)
+		return false;
+
+	std::vector<uint8_t> bytes;
+
+	{
+		FrozenThreads frozen;
+
+		if (!freezeThreads(packet.pid, frozen))
+			return false;
+
+		CrashStateAnchor anchor{};
+
+		if (!readRemote(packet.pid, reinterpret_cast<uintptr_t>(packet.stateAnchor), &anchor, sizeof(anchor)))
+			return false;
+		if (anchor.magic != CrashStateAnchor::MAGIC || !anchor.data || anchor.size == 0 || anchor.size > MAX_CRASH_STATE)
+			return false;
+		bytes.resize(anchor.size);
+		if (!readRemote(packet.pid, reinterpret_cast<uintptr_t>(anchor.data), bytes.data(), bytes.size()))
+			return false;
+	}
+
+	std::ofstream stream(dir / "state.state", std::ios::binary);
+
+	if (!stream)
+		return false;
+	stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	return static_cast<bool>(stream);
 }
 
 CrashPacket *allocCrashPacket()

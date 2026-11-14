@@ -7,6 +7,7 @@
 #include <winternl.h>
 #include <dbghelp.h>
 #include <cpptrace/cpptrace.hpp>
+#include <fstream>
 #include <vector>
 #include <TGUI/Widgets/RichTextLabel.hpp>
 #include "Crash.hpp"
@@ -21,6 +22,7 @@ struct CrashPacket {
 	void     *exceptionPointersParam;
 	void     *faultAddress;
 	const void *replayAnchor;
+	const void *stateAnchor;
 	size_t   frameCount;
 	cpptrace::safe_object_frame frames[MAX_STACK_FRAMES];
 };
@@ -138,6 +140,7 @@ static LONG WINAPI exceptionFilter(EXCEPTION_POINTERS* ep)
 	packet.tid = GetCurrentThreadId();
 	packet.exceptionPointersParam = ep;
 	packet.replayAnchor = &crashReplayAnchor;
+	packet.stateAnchor = &crashStateAnchor;
 
 	STARTUPINFOA si{};
 	PROCESS_INFORMATION pi{};
@@ -327,6 +330,7 @@ std::string crashPacketToString(const CrashPacket &packet)
 
 static constexpr size_t MAX_CRASH_HEADER = 1u << 20;
 static constexpr size_t MAX_CRASH_STREAM = 32u << 20;
+static constexpr size_t MAX_CRASH_STATE = 64u << 20;
 static constexpr uint32_t MAX_CRASH_PLAYERS = 64;
 
 static bool readRemote(HANDLE process, const void *address, void *dst, size_t size)
@@ -409,6 +413,68 @@ bool extractCrashReplay(const CrashPacket &packet, const std::filesystem::path &
 	if (process)
 		CloseHandle(process);
 	return saved;
+}
+
+bool extractCrashState(const CrashPacket &packet, const std::filesystem::path &dir)
+{
+	if (!packet.stateAnchor)
+		return false;
+	if (!DebugActiveProcess(packet.pid))
+		return false;
+	DebugSetProcessKillOnExit(FALSE);
+
+	HANDLE process = nullptr;
+	DEBUG_EVENT event{};
+	bool pending = false;
+	DWORD pendingPid = 0;
+	DWORD pendingTid = 0;
+
+	while (WaitForDebugEvent(&event, 10000)) {
+		if (event.dwDebugEventCode == CREATE_PROCESS_DEBUG_EVENT) {
+			process = event.u.CreateProcessInfo.hProcess;
+			if (event.u.CreateProcessInfo.hFile)
+				CloseHandle(event.u.CreateProcessInfo.hFile);
+		}
+		if (event.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT && event.u.LoadDll.hFile)
+			CloseHandle(event.u.LoadDll.hFile);
+		if (event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT) {
+			pending = true;
+			pendingPid = event.dwProcessId;
+			pendingTid = event.dwThreadId;
+			break;
+		}
+		ContinueDebugEvent(event.dwProcessId, event.dwThreadId, DBG_CONTINUE);
+	}
+
+	std::vector<uint8_t> bytes;
+
+	if (process && pending) {
+		CrashStateAnchor anchor{};
+
+		if (
+			readRemote(process, packet.stateAnchor, &anchor, sizeof(anchor)) &&
+			anchor.magic == CrashStateAnchor::MAGIC &&
+			anchor.data && anchor.size > 0 && anchor.size <= MAX_CRASH_STATE
+		) {
+			bytes.resize(anchor.size);
+			if (!readRemote(process, anchor.data, bytes.data(), bytes.size()))
+				bytes.clear();
+		}
+	}
+	if (pending)
+		ContinueDebugEvent(pendingPid, pendingTid, DBG_CONTINUE);
+	DebugActiveProcessStop(packet.pid);
+	if (process)
+		CloseHandle(process);
+	if (bytes.empty())
+		return false;
+
+	std::ofstream stream(dir / "state.state", std::ios::binary);
+
+	if (!stream)
+		return false;
+	stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	return static_cast<bool>(stream);
 }
 
 CrashPacket *allocCrashPacket()

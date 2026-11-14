@@ -75,6 +75,10 @@ tgui::Panel::Ptr generateCrashPanel(Stacktrace st, const std::exception &e)
 				inGame->saveReplay(path);
 			} catch (const std::exception &) {
 			}
+			try {
+				inGame->saveCrashState(path);
+			} catch (const std::exception &) {
+			}
 		}
 	}
 	std::filesystem::copy("latest.log", path / "log_file.log", err);

@@ -26,6 +26,7 @@ struct MYDLL_API SaveStateFile {
 	GameManager::GameStateSnapshot snapshot;
 
 	static SaveStateFile load(const std::filesystem::path &path);
+	[[nodiscard]] std::vector<uint8_t> encode() const;
 	void save(const std::filesystem::path &path) const;
 };
 

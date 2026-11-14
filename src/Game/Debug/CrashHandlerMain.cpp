@@ -234,6 +234,9 @@ int crashHandlerMain()
 	try {
 		extractCrashReplay(*packet, path);
 	} catch (const std::exception &) {}
+	try {
+		extractCrashState(*packet, path);
+	} catch (const std::exception &) {}
 	acknowledgeCrash();
 
 	sf::RenderWindow window{sf::VideoMode{sf::Vector2u{1000, 600}}, "Game crashed!"};

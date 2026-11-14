@@ -613,6 +613,7 @@ bool ReplayData::saveRecovered(
 }
 
 CrashReplayAnchor crashReplayAnchor;
+CrashStateAnchor crashStateAnchor;
 
 void CrashReplayAnchor::captureCrashTick() noexcept
 {

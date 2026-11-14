@@ -143,6 +143,17 @@ struct MYDLL_API CrashReplayAnchor {
 
 MYDLL_API extern CrashReplayAnchor crashReplayAnchor;
 
+//! Last completed simulation state, encoded as a .state file. magic is cleared before the pointer moves.
+struct MYDLL_API CrashStateAnchor {
+	static constexpr uint32_t MAGIC = 0xC0A5E002;
+
+	uint32_t magic = 0;
+	const uint8_t *data = nullptr;
+	size_t size = 0;
+};
+
+MYDLL_API extern CrashStateAnchor crashStateAnchor;
+
 //! Append-only byte buffer. The published stream always refers to a complete prefix.
 class MYDLL_API CrashJournal {
 public:

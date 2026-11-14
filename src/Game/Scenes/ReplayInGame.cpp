@@ -25,6 +25,7 @@ ReplayInGame::ReplayInGame(ReplayData replay, std::function<void (const std::str
 			throw std::runtime_error("Faction \"" + player.faction + "\" checksum does not match this replay's");
 	}
 	game->game->setControlledPlayer(0);
+	this->_captureCrashState();
 }
 
 void ReplayInGame::update()
@@ -34,13 +35,26 @@ void ReplayInGame::update()
 	if (sec >= 0.25)
 		sec = 0.25;
 	this->_timer += 50 * sec * this->_startParams.settings.speed;
+	bool captured = false;
+
 	while (this->_timer >= 1) {
 		if (game->game->getTick() >= this->_replay.frameCount || game->game->finished) {
 			game->scene.switchScene("title_screen");
 			return;
 		}
+		uint64_t tick = game->game->getTick();
+
 		game->game->update();
+		if (game->game->getTick() != tick) {
+			this->_captureCrashState();
+			this->_crashStateDirty = false;
+			captured = true;
+		}
 		this->_timer -= 1;
+	}
+	if (!captured && this->_crashStateDirty) {
+		this->_captureCrashState();
+		this->_crashStateDirty = false;
 	}
 	game->screen->setMouseCursorVisible(false);
 	game->screen->setMouseCursorGrabbed(!game->paused);

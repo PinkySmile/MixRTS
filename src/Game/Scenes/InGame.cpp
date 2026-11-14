@@ -3,6 +3,7 @@
 //
 
 #include <ctime>
+#include <fstream>
 #include <sstream>
 #include "InGame.hpp"
 #include "Data/Player.hpp"
@@ -94,6 +95,7 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 				this->_panel->add(ui->getPanel());
 		i++;
 	}
+	this->_captureCrashState();
 }
 
 InGame::InGame(GameStartParams params, std::shared_ptr<const SaveStateFile> state, std::function<void (const std::string &)> &cb) :
@@ -114,11 +116,13 @@ InGame::InGame(GameStartParams params, std::shared_ptr<const SaveStateFile> stat
 	game->game->loadState(state->snapshot);
 	game->game->setPaused(true);
 	game->game->setCameraView(state->camera, state->zoom);
+	this->_captureCrashState();
 }
 
 InGame::~InGame()
 {
-	// Drop the anchor before any buffer it points at is freed.
+	// Drop the anchors before any buffer they point at is freed.
+	this->_retractCrashState();
 	this->_retractCrashAnchor();
 	// Read the flag directly: a virtual call here would not reach a subclass that is already destroyed.
 	if (this->_saveReplays)
@@ -252,6 +256,74 @@ void InGame::_retractCrashAnchor()
 	this->_crashAnchorPublished = false;
 }
 
+SaveStateFile InGame::_makeStateFile() const
+{
+	SaveStateFile file;
+	auto &players = game->game->getPlayers();
+
+	assert_exp(players.size() == this->_startParams.players.size());
+	file.start = this->_startParams;
+	file.mapCrc = this->_mapCrc;
+	file.camera = game->game->getCameraTranslate();
+	file.zoom = game->game->getCameraZoom();
+	for (const auto &player : this->_startParams.players)
+		file.factionCrcs.push_back(this->_factionCrcs.at(player.faction));
+	game->game->saveState(file.snapshot);
+	return file;
+}
+
+void InGame::_captureCrashState()
+{
+	if (!game || !game->game)
+		return;
+	try {
+		std::vector<uint8_t> bytes = this->_makeStateFile().encode();
+
+		if (bytes.empty())
+			return;
+
+		unsigned next = this->_crashStateSlot ^ 1u;
+
+		this->_crashState[next] = std::move(bytes);
+		crashStateAnchor.magic = 0;
+		std::atomic_signal_fence(std::memory_order_release);
+		crashStateAnchor.data = this->_crashState[next].data();
+		crashStateAnchor.size = this->_crashState[next].size();
+		std::atomic_signal_fence(std::memory_order_release);
+		crashStateAnchor.magic = CrashStateAnchor::MAGIC;
+		this->_crashStateSlot = next;
+	} catch (const std::exception &) {
+	}
+}
+
+void InGame::_retractCrashState()
+{
+	crashStateAnchor.magic = 0;
+	std::atomic_signal_fence(std::memory_order_release);
+	crashStateAnchor.data = nullptr;
+	crashStateAnchor.size = 0;
+}
+
+void InGame::saveCrashState(const std::filesystem::path &dir)
+{
+	try {
+		std::filesystem::create_directories(dir);
+
+		std::filesystem::path file = dir / "state.state";
+
+		if (crashStateAnchor.magic == CrashStateAnchor::MAGIC && crashStateAnchor.data && crashStateAnchor.size) {
+			std::ofstream stream(file, std::ios::binary);
+
+			if (!stream)
+				return;
+			stream.write(reinterpret_cast<const char *>(crashStateAnchor.data), static_cast<std::streamsize>(crashStateAnchor.size));
+			return;
+		}
+		this->_makeStateFile().save(file);
+	} catch (const std::exception &) {
+	}
+}
+
 void InGame::_writeState()
 {
 	try {
@@ -259,18 +331,7 @@ void InGame::_writeState()
 
 		std::filesystem::create_directories(dir);
 
-		SaveStateFile file;
-		auto &players = game->game->getPlayers();
-
-		assert_exp(players.size() == this->_startParams.players.size());
-		file.start = this->_startParams;
-		file.mapCrc = this->_mapCrc;
-		file.camera = game->game->getCameraTranslate();
-		file.zoom = game->game->getCameraZoom();
-		for (const auto &player : this->_startParams.players)
-			file.factionCrcs.push_back(this->_factionCrcs.at(player.faction));
-		game->game->saveState(file.snapshot);
-
+		SaveStateFile file = this->_makeStateFile();
 		std::string stamp = replayTimestamp();
 		std::filesystem::path path = dir / (stamp.substr(0, 10) + "_" + stamp.substr(11) + ".state");
 		int suffix = 1;
@@ -297,8 +358,17 @@ void InGame::update()
 	if (sec >= 0.25)
 		sec = 0.25;
 	this->_timer += 50 * sec * this->_startParams.settings.speed;
+	bool captured = false;
+
 	while (this->_timer >= 1) {
+		uint64_t tick = game->game->getTick();
+
 		game->game->update();
+		if (game->game->getTick() != tick) {
+			this->_captureCrashState();
+			this->_crashStateDirty = false;
+			captured = true;
+		}
 		if (this->_crashAnchorPublished)
 			crashReplayAnchor.tick = static_cast<uint32_t>(game->game->getTick());
 		if (game->game->finished) {
@@ -306,6 +376,11 @@ void InGame::update()
 			return;
 		}
 		this->_timer -= 1;
+	}
+	// Orders queued while no tick ran (paused, or this frame did not step) still belong in the dump.
+	if (!captured && this->_crashStateDirty) {
+		this->_captureCrashState();
+		this->_crashStateDirty = false;
 	}
 	game->screen->setMouseCursorVisible(false);
 	game->screen->setMouseCursorGrabbed(!game->paused);
@@ -315,6 +390,7 @@ void InGame::consumeEvent(const sf::Event &event)
 {
 	game->game->consumeEvent(event);
 	game->game->consumeGeneralEvent(event);
+	this->_crashStateDirty = true;
 }
 
 tgui::Panel::Ptr InGame::getPanel() const

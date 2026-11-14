@@ -96,7 +96,7 @@ SaveStateFile SaveStateFile::load(const std::filesystem::path &path)
 	return file;
 }
 
-void SaveStateFile::save(const std::filesystem::path &path) const
+std::vector<uint8_t> SaveStateFile::encode() const
 {
 	std::vector<uint8_t> bytes;
 	StateWriter out(bytes);
@@ -130,5 +130,10 @@ void SaveStateFile::save(const std::filesystem::path &path) const
 	out.u64(this->snapshot.checksum);
 	out.u64(this->snapshot.data.size());
 	out.bytes(this->snapshot.data.data(), this->snapshot.data.size());
-	writeFile(path, bytes);
+	return bytes;
+}
+
+void SaveStateFile::save(const std::filesystem::path &path) const
+{
+	writeFile(path, this->encode());
 }
