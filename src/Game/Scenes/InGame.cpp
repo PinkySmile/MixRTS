@@ -19,8 +19,8 @@
 InGameArguments::~InGameArguments() = default;
 
 InGame::InGame(GameStartParams &params, std::function<void (const std::string &)> &cb) :
-	InGame(params, cb, [](const std::vector<Faction> &factions, UIState *uiState, GameManager *manager, PlayerState *ownerState, std::vector<MapState> &mapStates, size_t playerIndex) {
-		return std::make_shared<CombinedUI>(factions, uiState, manager, ownerState, mapStates, playerIndex);
+	InGame(params, cb, [](const std::vector<Faction> &factions, UIState *uiState, GameManager *manager, Player *owner, std::vector<MapState> &mapStates, size_t playerIndex) {
+		return std::make_shared<CombinedUI>(factions, uiState, manager, owner, mapStates, playerIndex);
 	}, true)
 {
 }
@@ -99,8 +99,8 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 }
 
 InGame::InGame(GameStartParams params, std::shared_ptr<const SaveStateFile> state, std::function<void (const std::string &)> &cb) :
-	InGame(std::move(params), cb, [](const std::vector<Faction> &factions, UIState *uiState, GameManager *manager, PlayerState *ownerState, std::vector<MapState> &mapStates, size_t playerIndex) {
-		return std::make_shared<CombinedUI>(factions, uiState, manager, ownerState, mapStates, playerIndex);
+	InGame(std::move(params), cb, [](const std::vector<Faction> &factions, UIState *uiState, GameManager *manager, Player *owner, std::vector<MapState> &mapStates, size_t playerIndex) {
+		return std::make_shared<CombinedUI>(factions, uiState, manager, owner, mapStates, playerIndex);
 	}, false, false)
 {
 	if (this->_mapCrc != state->mapCrc)

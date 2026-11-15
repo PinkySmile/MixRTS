@@ -74,7 +74,7 @@ public:
 		const std::vector<Faction> &factions,
 		UIState *uiState,
 		GameManager *manager,
-		PlayerState *ownerState,
+		Player *owner,
 		std::vector<MapState> &mapStates,
 		size_t playerIndex
 	)>;

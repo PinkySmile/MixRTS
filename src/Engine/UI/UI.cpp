@@ -470,10 +470,11 @@ void UI::pushUserType(sol::state &state)
 	});
 }
 
-UI::UI(const Faction &faction, UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map) :
+UI::UI(const Faction &faction, UIState *state, GameManager *manager, Player *owner, MapState *map) :
 	state(state),
+	owner(owner),
 	manager(manager),
-	ownerState(ownerState),
+	ownerState(&owner->state),
 	map(map),
 	_faction(faction)
 {
@@ -701,7 +702,7 @@ void UI::_openEndGameDialog(const std::filesystem::path &path)
 	});
 	title->onClick([this, panel = std::weak_ptr(panel)] {
 		this->_panel->remove(panel.lock());
-		this->manager->finished = true;
+		this->_eventQueue.emplace_front(SurrenderEvent{true});
 	});
 	this->_panel->add(panel);
 }

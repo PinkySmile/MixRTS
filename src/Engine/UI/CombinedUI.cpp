@@ -12,16 +12,16 @@ CombinedUI::CombinedUI(
 	const std::vector<Faction> &factions,
 	UIState *uiState,
 	GameManager *manager,
-	PlayerState *ownerState,
+	Player *owner,
 	std::vector<MapState> &mapStates,
 	size_t
 ) :
 	_manager(manager),
-	_currentUi(ownerState->factionIndex)
+	_currentUi(owner->state.factionIndex)
 {
 	assert_exp(this->_currentUi < factions.size());
 	for (size_t i = 0; i < factions.size(); i++)
-		this->_uis.emplace_back(factions[i].createUI(uiState, manager, ownerState, &mapStates[i]));
+		this->_uis.emplace_back(factions[i].createUI(uiState, manager, owner, &mapStates[i]));
 }
 
 CombinedUI::~CombinedUI()
@@ -229,12 +229,12 @@ ReplayCombinedUI::ReplayCombinedUI(
 	const std::vector<Faction> &factions,
 	UIState *uiState,
 	GameManager *manager,
-	PlayerState *ownerState,
+	Player *owner,
 	std::vector<MapState> &mapStates,
 	size_t playerIndex,
 	std::vector<RecordedAction> actions
 ) :
-	CombinedUI(factions, uiState, manager, ownerState, mapStates, playerIndex),
+	CombinedUI(factions, uiState, manager, owner, mapStates, playerIndex),
 	_playback(std::move(actions))
 {
 }

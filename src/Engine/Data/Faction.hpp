@@ -111,7 +111,7 @@ public:
 		CURSORINDEX_BAD,
 	};
 
-	typedef UI *(*UICreationCB)(const Faction &faction, UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map, const std::filesystem::path &base, const nlohmann::json &params);
+	typedef UI *(*UICreationCB)(const Faction &faction, UIState *state, GameManager *manager, Player *owner, MapState *map, const std::filesystem::path &base, const nlohmann::json &params);
 
 	Faction(const Mod &base, const std::string &name, const nlohmann::json &data);
 	~Faction();
@@ -126,7 +126,7 @@ public:
 	[[nodiscard]] const std::unordered_map<std::string, std::vector<Animation>> &getAnimations() const;
 	[[nodiscard]] const std::unordered_map<std::string, unsigned> &getStartingMoney() const;
 	[[nodiscard]] const std::vector<StartObject> &getStartingObjects() const;
-	[[nodiscard]] UI *createUI(UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map) const;
+	[[nodiscard]] UI *createUI(UIState *state, GameManager *manager, Player *owner, MapState *map) const;
 	[[nodiscard]] const Mod &getBase() const;
 	[[nodiscard]] std::array<std::vector<Sprite>, 3> &getPlacementCursors() const;
 	[[nodiscard]] bool canSell() const;

@@ -9,9 +9,9 @@
 #include "Resources/Game.hpp"
 
 ReplayInGame::ReplayInGame(ReplayData replay, std::function<void (const std::string &)> &cb) :
-	InGame(replay.toGameStartParams(), cb, [actions = replay.actions](const std::vector<Faction> &factions, UIState *uiState, GameManager *manager, PlayerState *ownerState, std::vector<MapState> &mapStates, size_t playerIndex) {
+	InGame(replay.toGameStartParams(), cb, [actions = replay.actions](const std::vector<Faction> &factions, UIState *uiState, GameManager *manager, Player *owner, std::vector<MapState> &mapStates, size_t playerIndex) {
 		assert_msg(playerIndex < actions.size(), std::to_string(playerIndex));
-		return std::make_shared<ReplayCombinedUI>(factions, uiState, manager, ownerState, mapStates, playerIndex, actions[playerIndex]);
+		return std::make_shared<ReplayCombinedUI>(factions, uiState, manager, owner, mapStates, playerIndex, actions[playerIndex]);
 	}, false),
 	_replay(std::move(replay))
 {

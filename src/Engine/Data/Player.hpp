@@ -193,6 +193,7 @@ public:
 	const std::unordered_map<std::string, const Upgrade *> &getLoadedUpgrades() const;
 
 	[[nodiscard]] bool isEnabled() const;
+	[[nodiscard]] bool hasSurrendered() const;
 	void saveState(StateSaveContext &ctx) const;
 	void loadState(StateLoadContext &ctx);
 
@@ -205,6 +206,7 @@ private:
 	bool _enabled = false;
 	bool _lost = false;
 	bool _won = false;
+	bool _surrendered = false;
 	HSLColor _color;
 	const Faction &_primaryFaction;
 	const std::vector<Faction> &_factions;
@@ -226,6 +228,7 @@ private:
 	void _handleUiEvent(const UI::StopEvent &event);
 	void _handleUiEvent(const UI::OpenQueueEvent &event);
 	void _handleUiEvent(const UI::CloseQueueEvent &event);
+	void _handleUiEvent(const UI::SurrenderEvent &event);
 
 	void _clean();
 

@@ -191,6 +191,10 @@ public:
 		std::string queue;
 	};
 
+	struct SurrenderEvent {
+		bool left;
+	};
+
 	typedef std::variant<
 		StartBuildEvent,
 		PlaceBuildEvent,
@@ -205,10 +209,12 @@ public:
 		AttackUnitEvent,
 		StopEvent,
 		OpenQueueEvent,
-		CloseQueueEvent
+		CloseQueueEvent,
+		SurrenderEvent
 	> Event;
 
 	UIState *state;
+	Player *owner;
 	GameManager *manager;
 	PlayerState *ownerState;
 	MapState *map;
@@ -217,7 +223,7 @@ public:
 	bool won = false;
 	bool onUi = false;
 
-	UI(const Faction &faction, UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map);
+	UI(const Faction &faction, UIState *state, GameManager *manager, Player *owner, MapState *map);
 	virtual ~UI();
 	virtual void setEnabled(bool enabled);
 	bool isEnabled() const;

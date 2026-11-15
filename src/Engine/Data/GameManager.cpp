@@ -326,16 +326,8 @@ void GameManager::update()
 	}
 	{
 		PROFILE_SCOPE("players");
-		for (auto &player : this->_players) {
+		for (auto &player : this->_players)
 			player.update();
-			if (
-				this->_settings.shortGame && !player.lost() &&
-				!std::ranges::any_of(player.state.myObjects, [](const GameObject *obj) { return obj->countsForShortGame(); })
-			)
-				for (GameObject *obj : player.state.myObjects)
-					if (!obj->isDead() && obj->countsForGame())
-						obj->damage(obj->getHealth(), DMGTYPE_GENERIC);
-		}
 		for (auto &player : this->_players)
 			player.checkWon();
 		for (auto &player : this->_players)

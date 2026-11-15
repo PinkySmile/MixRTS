@@ -351,10 +351,10 @@ const std::vector<StartObject> &Faction::getStartingObjects() const
 	return this->_startingObjects;
 }
 
-UI *Faction::createUI(UIState *state, GameManager *manager, PlayerState *ownerState, MapState *map) const
+UI *Faction::createUI(UIState *state, GameManager *manager, Player *owner, MapState *map) const
 {
 	if (this->_uiPath.ends_with(".lua"))
-		return new LuaUI(*this, state, manager, ownerState, map, game->lua, (this->_base.getBase() / this->_uiPath).string());
+		return new LuaUI(*this, state, manager, owner, map, game->lua, (this->_base.getBase() / this->_uiPath).string());
 	if (this->_sl == nullptr) {
 		std::filesystem::path p = this->_base.getBase() / this->_uiPath;
 
@@ -368,7 +368,7 @@ UI *Faction::createUI(UIState *state, GameManager *manager, PlayerState *ownerSt
 	auto fct = reinterpret_cast<UICreationCB>(dlsym(this->_sl, "createUiFor"));
 
 	assert_msg(fct, dlerror());
-	return fct(*this, state, manager, ownerState, map, this->_base.getBase(), this->_uiData);
+	return fct(*this, state, manager, owner, map, this->_base.getBase(), this->_uiData);
 }
 
 const Mod &Faction::getBase() const

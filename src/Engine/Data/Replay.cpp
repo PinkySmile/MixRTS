@@ -218,6 +218,7 @@ enum ActionId : uint8_t {
 	ACT_STOP = 11,
 	ACT_OPEN_QUEUE = 12,
 	ACT_CLOSE_QUEUE = 13,
+	ACT_SURRENDERED = 14,
 	ACT_SCREEN = 200,
 	ACT_SETTINGS = 201,
 	ACT_UI = 202,
@@ -277,6 +278,9 @@ void writeAction(BinaryWriter &out, const ReplayAction &action)
 		} else if constexpr (std::is_same_v<T, UI::CloseQueueEvent>) {
 			out.u8(ACT_CLOSE_QUEUE);
 			out.str(arg.queue);
+		} else if constexpr (std::is_same_v<T, UI::SurrenderEvent>) {
+			out.u8(ACT_SURRENDERED);
+			out.u8(arg.left);
 		} else if constexpr (std::is_same_v<T, ScreenSizeChanged>) {
 			out.u8(ACT_SCREEN);
 			out.vec2s(arg.size);
@@ -287,7 +291,7 @@ void writeAction(BinaryWriter &out, const ReplayAction &action)
 			out.u8(ACT_UI);
 			out.u32(arg.index);
 		} else
-			static_assert(sizeof(T) == 0, "Unhandled replay action");
+			static_assert(false, "Unhandled replay action");
 	}, action);
 }
 
@@ -339,6 +343,8 @@ ReplayAction readAction(BinaryReader &in)
 		return UI::OpenQueueEvent{in.str()};
 	case ACT_CLOSE_QUEUE:
 		return UI::CloseQueueEvent{in.str()};
+	case ACT_SURRENDERED:
+		return UI::SurrenderEvent{static_cast<bool>(in.u8())};
 	case ACT_SCREEN:
 		return ScreenSizeChanged{in.vec2s()};
 	case ACT_SETTINGS:

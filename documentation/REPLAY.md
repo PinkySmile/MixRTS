@@ -366,6 +366,14 @@ Indicates that the player switched to another interface.
 | --- | --- |
 | `Uint32` | Identifier of the newly displayed UI |
 
+### SurrenderEvent
+
+Indicates that the player surrendered.
+
+| Type | Description |
+| --- | --- |
+| `Uint8` | 0 if the player stayed in game |
+
 ---
 
 # 6. PlayerAction
@@ -399,6 +407,7 @@ The action identifier determines how the remaining data must be interpreted.
 | 11 | `StopEvent` | The player commanded units to cancel their current orders. |
 | 12 | `OpenQueueEvent` | The player opened a queue menu. |
 | 13 | `CloseQueueEvent` | The player closed a queue menu. |
+| 14 | `SurrenderEvent` | The player surrendered. |
 | 200 | `ScreenSizeChanged` | The player's screen resolution changed. |
 | 201 | `SettingsChanged` | The player modified their settings. |
 | 202 | `UIChanged` | The player changed the currently displayed interface. |

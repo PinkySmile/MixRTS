@@ -284,7 +284,7 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 	for (auto &[key, params] : this->_primaryFaction.getQueues())
 		this->state.queues[key].init(*this, &key, this->_primaryFaction, &params);
 
-	this->_ui = factory(factions, &this->uiState, &parent, &this->state, mapState, playerIndex);
+	this->_ui = factory(factions, &this->uiState, &parent, this, mapState, playerIndex);
 	assert_exp(this->_ui);
 }
 
@@ -571,6 +571,16 @@ void Player::update()
 	this->_lost = !std::ranges::any_of(this->state.myObjects, [](const GameObject *object) {
 		return object->countsForGame();
 	});
+
+	if (
+		this->parent.getSettings().shortGame && !this->_lost && (
+			!std::ranges::any_of(this->state.myObjects, [](const GameObject *obj) { return obj->countsForShortGame(); }) ||
+			this->_surrendered
+		)
+	)
+		for (GameObject *obj : this->state.myObjects)
+			if (!obj->isDead() && obj->countsForGame())
+				obj->damage(obj->getHealth(), DMGTYPE_GENERIC);
 }
 
 void Player::checkWon()
@@ -604,6 +614,11 @@ void Player::setEnabled(bool enabled)
 bool Player::isEnabled() const
 {
 	return this->_enabled;
+}
+
+bool Player::hasSurrendered() const
+{
+	return this->_surrendered;
 }
 
 const std::unordered_map<std::string, const GameObject *> &Player::getObjects() const
@@ -926,6 +941,13 @@ void Player::_handleUiEvent(const UI::CloseQueueEvent &event)
 		}
 	q.checkingMenu = false;
 	q.nb = 0;
+}
+
+void Player::_handleUiEvent(const UI::SurrenderEvent &event)
+{
+	this->_surrendered = true;
+	if (event.left && this->_enabled)
+		this->parent.finished = true;
 }
 
 void Player::handleUiEvents()

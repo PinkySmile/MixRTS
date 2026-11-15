@@ -46,6 +46,7 @@ using ReplayAction = std::variant<
 	UI::StopEvent,
 	UI::OpenQueueEvent,
 	UI::CloseQueueEvent,
+	UI::SurrenderEvent,
 	ScreenSizeChanged,
 	SettingsChanged,
 	UIChanged
