@@ -15,7 +15,7 @@ friction of entry as possible.
    - ▶️ Ordos
 - StarCraft BroodWar
    - ❌ Maps
-   - ❌ Terran
+   - ▶️ Terran
    - ❌ Zerg
    - ❌ Protoss
 - Command & Conquer Red Alert
