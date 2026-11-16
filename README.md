@@ -98,6 +98,8 @@ friction of entry as possible.
 
 # Design philosophy and game balance
 
+Note that everything under is subject to change.
+
 The goal of MixRTS is to provide a faithful experience for players coming from X game.
 It is made as a way to get friends together on a game even if they have very different RTS game tastes.
 Now, because of they all are in the same engine, some compromises has to be made:
@@ -112,6 +114,9 @@ Because of that, I won't change intra-game balance (as in, balancing between fac
 to keep inter-game balance manageable:
 - Multiplier on HP and damage
 - Armor multipliers
+
+That being said, because of the sheer amount of factions, it may also be the case that some matchups won't be playable.
+I will fix that through the format (as in, pick and bans of maps and in general a draft system) to help with it.
 
 # Game picking
 
