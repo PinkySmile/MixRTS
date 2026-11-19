@@ -14,6 +14,7 @@ private:
 	std::unordered_map<std::string, Faction> _factions;
 
 public:
+	void reloadAll(const std::filesystem::path &path);
 	void loadAll(const std::filesystem::path &path);
 	void loadMod(const std::filesystem::path &path);
 	Mod &get(const std::string &name);

@@ -213,15 +213,6 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/Data/GameManager.cpp
 	src/Engine/Data/GameManager.hpp
 	src/Engine/Data/GameManagerState.cpp
-	src/Engine/Data/GameObjectState.cpp
-	src/Engine/Data/PlayerStateSave.cpp
-	src/Engine/Data/StateRegistry.cpp
-	src/Engine/Data/StateRegistry.hpp
-	src/Engine/Data/StateStream.hpp
-	src/Engine/Data/StateContext.hpp
-	src/Engine/Data/GameObject.cpp
-	src/Engine/Data/GameObject.hpp
-	src/Engine/Data/GameObjectDebug.cpp
 	src/Engine/Data/GridMask.hpp
 	src/Engine/Data/JsonLua.cpp
 	src/Engine/Data/JsonLua.hpp
@@ -236,14 +227,23 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/Data/ModManager.hpp
 	src/Engine/Data/MultiSound.cpp
 	src/Engine/Data/MultiSound.hpp
+	src/Engine/Data/Objects/GameObject.cpp
+	src/Engine/Data/Objects/GameObjectDebug.cpp
+	src/Engine/Data/Objects/GameObject.hpp
+	src/Engine/Data/Objects/GameObjectState.cpp
+	src/Engine/Data/Objects/Missile.cpp
+	src/Engine/Data/Objects/Missile.hpp
+	src/Engine/Data/Objects/ObjectFactory.cpp
+	src/Engine/Data/Objects/ObjectFactory.hpp
+	src/Engine/Data/Objects/ObjectSpawner.cpp
+	src/Engine/Data/Objects/ObjectSpawner.hpp
 	src/Engine/Data/Player.cpp
 	src/Engine/Data/Player.hpp
+	src/Engine/Data/PlayerStateSave.cpp
 	src/Engine/Data/Projectile.cpp
 	src/Engine/Data/Projectile.hpp
 	src/Engine/Data/Replay.cpp
 	src/Engine/Data/Replay.hpp
-	src/Engine/Data/SaveState.cpp
-	src/Engine/Data/SaveState.hpp
 	src/Engine/Data/Requirements/IReq.hpp
 	src/Engine/Data/Requirements/ReqAndCombinator.cpp
 	src/Engine/Data/Requirements/ReqAndCombinator.hpp
@@ -253,6 +253,13 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/Data/Requirements/Req.hpp
 	src/Engine/Data/Requirements/ReqOrCombinator.cpp
 	src/Engine/Data/Requirements/ReqOrCombinator.hpp
+	src/Engine/Data/SaveState.cpp
+	src/Engine/Data/SaveState.hpp
+	src/Engine/Data/SharedLibrary.hpp
+	src/Engine/Data/StateContext.hpp
+	src/Engine/Data/StateRegistry.cpp
+	src/Engine/Data/StateRegistry.hpp
+	src/Engine/Data/StateStream.hpp
 	src/Engine/Data/Upgrade.cpp
 	src/Engine/Data/Upgrade.hpp
 	src/Engine/Data/Warhead.cpp
@@ -277,9 +284,9 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/Resources/SceneArgument.hpp
 	src/Engine/Resources/SceneManager.cpp
 	src/Engine/Resources/SceneManager.hpp
-	src/Engine/SFML/lib.cpp
 	src/Engine/SFML/Color.cpp
 	src/Engine/SFML/Color.hpp
+	src/Engine/SFML/lib.cpp
 	src/Engine/SFML/Screen.cpp
 	src/Engine/SFML/Screen.hpp
 	src/Engine/SFML/Sound.cpp
@@ -290,21 +297,18 @@ set(MIXRTS_CORE_SOURCES
 	src/Engine/SFML/Sprite.hpp
 	src/Engine/SFML/TextureManager.cpp
 	src/Engine/SFML/TextureManager.hpp
+	src/Engine/UI/BaseUI.cpp
+	src/Engine/UI/BaseUI.hpp
+	src/Engine/UI/CombinedUI.cpp
+	src/Engine/UI/CombinedUI.hpp
 	src/Engine/UI/LuaUI.cpp
 	src/Engine/UI/LuaUI.hpp
 	src/Engine/UI/TGUILua.cpp
 	src/Engine/UI/TGUILua.hpp
 	src/Engine/UI/UI.cpp
 	src/Engine/UI/UI.hpp
-	src/Engine/UI/BaseUI.cpp
-	src/Engine/UI/BaseUI.hpp
-	src/Engine/UI/CombinedUI.cpp
-	src/Engine/UI/CombinedUI.hpp
 	src/Engine/Utils.cpp
 	src/Engine/Utils.hpp
-	src/Engine/Data/SharedLibrary.hpp
-	src/Engine/Data/ObjectSpawner.cpp
-	src/Engine/Data/ObjectSpawner.hpp
 )
 add_library(MixRTS_Core SHARED ${MIXRTS_CORE_SOURCES})
 target_link_libraries(

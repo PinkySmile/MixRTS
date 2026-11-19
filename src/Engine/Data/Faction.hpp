@@ -14,6 +14,7 @@
 #include "Sprite.hpp"
 #include "MultiSound.hpp"
 #include "SharedLibrary.hpp"
+#include "Objects/ObjectFactory.hpp"
 #include "UI/UI.hpp"
 
 
@@ -69,9 +70,28 @@ struct MYDLL_API FactionQueue {
 	static void pushUserType(sol::state &state);
 };
 
+class IFactionObjectFactory {
+public:
+	virtual ~IFactionObjectFactory() = default;
+	virtual void registerFactory(ObjectFactory &factory) = 0;
+};
+
+class SLFactionObjectFactory : public IFactionObjectFactory {
+private:
+	SharedLibrary _library;
+	void (*_registerFactory)(ObjectFactory &factory);
+
+public:
+	SLFactionObjectFactory(const std::filesystem::path &path);
+	~SLFactionObjectFactory() override;
+	void registerFactory(ObjectFactory &factory) override;
+};
+
 class MYDLL_API Faction {
 private:
 	const Mod &_base;
+	ObjectFactory _factory;
+	std::shared_ptr<IFactionObjectFactory> _factionFactory;
 	mutable std::array<std::vector<Sprite>, 3> _placementCursors;
 	std::vector<std::string> _sounds;
 	std::vector<std::string> _objects;
@@ -83,7 +103,7 @@ private:
 	std::unordered_map<std::string, FactionQueue> _queues;
 	std::unordered_map<std::string, MultiSound> _loadedSounds;
 	std::unordered_map<std::string, Upgrade> _loadedUpgrades;
-	std::unordered_map<std::string, GameObject> _loadedObjects;
+	std::unordered_map<std::string, std::shared_ptr<GameObject>> _loadedObjects;
 	std::unordered_map<std::string, std::vector<Animation>> _loadedAnimations;
 	std::unordered_map<std::string, Effect> _loadedEffects;
 	std::unordered_map<std::string, Weapon> _loadedWeapons;
@@ -119,7 +139,7 @@ public:
 	[[nodiscard]] const std::optional<std::string> &getPrimaryQueue() const;
 	[[nodiscard]] const std::unordered_map<std::string, MultiSound> &getSounds() const;
 	[[nodiscard]] const std::unordered_map<std::string, Upgrade> &getUpgrades() const;
-	[[nodiscard]] const std::unordered_map<std::string, GameObject> &getObjects() const;
+	[[nodiscard]] const std::unordered_map<std::string, std::shared_ptr<GameObject>> &getObjects() const;
 	[[nodiscard]] const std::unordered_map<std::string, Effect> &getEffects() const;
 	[[nodiscard]] const std::unordered_map<std::string, Weapon> &getWeapons() const;
 	[[nodiscard]] const std::unordered_map<std::string, Warhead> &getWarheads() const;
@@ -143,7 +163,7 @@ public:
 
 	[[nodiscard]] std::unordered_map<std::string, MultiSound> &getSounds();
 	[[nodiscard]] std::unordered_map<std::string, Upgrade> &getUpgrades();
-	[[nodiscard]] std::unordered_map<std::string, GameObject> &getObjects();
+	[[nodiscard]] std::unordered_map<std::string, std::shared_ptr<GameObject>> &getObjects();
 	[[nodiscard]] std::unordered_map<std::string, Effect> &getEffects();
 	[[nodiscard]] std::unordered_map<std::string, Weapon> &getWeapons();
 	[[nodiscard]] std::unordered_map<std::string, Warhead> &getWarheads();

@@ -90,8 +90,6 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 	assert_exp(json["size"].contains("x") && json["size"]["x"].is_number_unsigned());
 	assert_exp(json["size"].contains("y") && json["size"]["y"].is_number_unsigned());
 	assert_exp(json.contains("map_colors") && json["map_colors"].is_string());
-	assert_exp(json.contains("animations") && json["animations"].is_array());
-	assert_exp(json.contains("generators") && json["generators"].is_array());
 	assert_exp(json.contains("resources") && json["resources"].is_array());
 	assert_exp(!json.contains("skirts_conc") || json["skirts"].is_object());
 	assert_exp(!json.contains("speeds") || json["speeds"].is_object());
@@ -166,13 +164,12 @@ void MapMetadata::load(Mod &mod, const std::filesystem::path &path)
 	}
 }
 
-void LoadedMap::load(const std::string &relPath)
+void LoadedMap::load(Mod &mod, const std::filesystem::path &path)
 {
-	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(relPath);
-	std::ifstream streamMap{path.second / "map.json"};
+	std::ifstream streamMap{path / "map.json"};
 	nlohmann::json json;
 
-	assert_msg(streamMap, (path.second / "map.json").string());
+	assert_msg(streamMap, (path / "map.json").string());
 	streamMap >> json;
 
 	assert_exp(json.contains("size") && json["size"].is_object());
@@ -182,6 +179,7 @@ void LoadedMap::load(const std::string &relPath)
 	assert_exp(json["translate"].contains("x") && json["translate"]["x"].is_number_unsigned());
 	assert_exp(json["translate"].contains("y") && json["translate"]["y"].is_number_unsigned());
 	assert_exp(json.contains("starts") && json["starts"].is_array());
+	assert_exp(json.contains("objects") && json["objects"].is_array());
 	assert_exp(json.contains("tileset") && json["tileset"].is_string());
 
 	this->grid.gridSize.x = json["size"]["x"];
@@ -205,16 +203,16 @@ void LoadedMap::load(const std::string &relPath)
 	std::string tileset = json["tileset"].get<std::string>();
 
 	TRY {
-		this->metadata.load(*path.first, path.second / tileset / "metadata.json");
-	} CATCH_AND_RETHROW("While loading map metadata " + (path.second / tileset / "metadata.json").string() + "\n")
+		this->metadata.load(mod, path / tileset / "metadata.json");
+	} CATCH_AND_RETHROW("While loading map metadata " + (path / tileset / "metadata.json").string() + "\n")
 	this->grid.tileSize = this->metadata.tileSize;
 	assert_exp(this->renderCache.resize({
 		this->grid.tileSize.x * this->grid.gridSize.x,
 		this->grid.tileSize.y * this->grid.gridSize.y
 	}));
-	assert_exp(this->tileSet.loadFromFile(path.second / tileset / "tilesheet.png"));
+	assert_exp(this->tileSet.loadFromFile(path / tileset / "tilesheet.png"));
 
-	std::filesystem::path attributesPath = path.second / tileset / "tileattrs.dat";
+	std::filesystem::path attributesPath = path / tileset / "tileattrs.dat";
 	size_t attributesSize = std::filesystem::file_size(attributesPath);
 	auto tileSetSize = this->tileSet.getSize();
 
@@ -222,7 +220,7 @@ void LoadedMap::load(const std::string &relPath)
 	assert_exp(tileSetSize.y % this->grid.tileSize.y == 0);
 	assert_exp(attributesSize / 4 == (tileSetSize.x / this->grid.tileSize.x) * (tileSetSize.y / this->grid.tileSize.y));
 
-	std::ifstream streamTiles{path.second / "tiles.dat", std::fstream::binary};
+	std::ifstream streamTiles{path / "tiles.dat", std::fstream::binary};
 
 	assert_exp(streamTiles);
 	assert_exp(streamTiles.read(reinterpret_cast<char *>(this->originalIndices.data()), this->originalIndices.size() * sizeof(*this->originalIndices.data())));
@@ -241,6 +239,17 @@ void LoadedMap::load(const std::string &relPath)
 	}
 	this->buildCache();
 
+	for (auto &jobj : json["objects"]) {
+		ObjectParam param;
+
+		assert_exp(jobj.contains("type") && jobj["type"].is_string());
+		assert_exp(jobj.contains("x") && jobj["x"].is_number());
+		assert_exp(jobj.contains("y") && jobj["y"].is_number());
+
+		param.type = RESOURCE(mod.getName(), jobj["type"]);
+		param.pos = { jobj["x"], jobj["y"] };
+		this->objects.push_back(param);
+	}
 
 	this->grid.pathFindingGrid.gridSize = this->grid.gridSize;
 	this->grid.pathFindingGrid.grid.resize(this->grid.pathFindingGrid.gridSize.x * this->grid.pathFindingGrid.gridSize.y);
@@ -275,6 +284,14 @@ void LoadedMap::load(const std::string &relPath)
 	for (auto &s : this->pathFindingGrid.usedSpaces)
 		s.resize(static_cast<size_t>(this->pathFindingGrid.gridSize.x) * this->pathFindingGrid.gridSize.y, 0);
 	this->pathFindingGrid.textureOutOfSync = true;
+}
+
+void LoadedMap::spawnObjects(size_t faction)
+{
+	this->neutral = faction;
+	for (auto &obj : this->objects)
+		this->manager->spawnObject(NEUTRAL_OWNER, obj.pos, "", obj.type);
+	this->objects.clear();
 }
 
 void LoadedMap::buildCache()
@@ -381,11 +398,12 @@ float LoadedMap::getSpeedMul(const std::vector<std::string> &tags, unsigned terr
 	return 1.f;
 }
 
-sf::Image LoadedMap::renderDetailedPreview(const std::string &path)
+sf::Image LoadedMap::renderDetailedPreview(const std::string &relPath)
 {
 	LoadedMap map;
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(relPath);
 
-	map.load(path);
+	map.load(*path.first, path.second);
 	map.buildCache();
 	return map.renderCache.getTexture().copyToImage();
 }
@@ -515,7 +533,9 @@ void MapInfo::load(const std::string &relPath)
 	assert_exp(json1.contains("size") && json1["size"].is_object());
 	assert_exp(json1["size"].contains("x") && json1["size"]["x"].is_number_unsigned());
 	assert_exp(json1["size"].contains("y") && json1["size"]["y"].is_number_unsigned());
+	assert_exp(json1.contains("faction") && json1["faction"].is_string());
 
+	this->faction = RESOURCE(path.first->getName(), json1["faction"]);
 	this->tileSize.x = json1["size"]["x"];
 	this->tileSize.y = json1["size"]["y"];
 }

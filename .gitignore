@@ -382,7 +382,6 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/clion,cmake,c++,windows,linux,python
 
 
-*.log
 mods
 .idea
 build*
@@ -390,3 +389,4 @@ build*
 *.dl
 local
 *.AppImage
+*.zip

@@ -106,6 +106,12 @@ void handleEvents()
 	while (auto event = game->screen->pollEvent()) {
 		if (event->is<sf::Event::Closed>())
 			game->screen->close();
+	#ifdef _DEBUG
+		else if (auto key = event->getIf<sf::Event::KeyPressed>()) {
+			if (key->code == sf::Keyboard::Key::End)
+				game->modManager.reloadAll("mods");
+		}
+	#endif
 		game->scene.consumeEvent(*event);
 
 		PROFILE_SCOPE("gui");
@@ -171,7 +177,7 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	libraryInit();
 
-	std::unique_ptr<Game> _;
+	std::unique_ptr<Game> game;
 
 	TRY {
 		std::filesystem::path config;
@@ -195,7 +201,14 @@ int main(int argc, char **argv)
 		std::filesystem::create_directories(config);
 		std::filesystem::create_directories(data);
 		std::filesystem::create_directories(state);
-		_ = std::make_unique<Game>(config, data, state, config / "settings.json", state / "latest.log", "assets/NotoSans-Regular.ttf");
+		game = std::make_unique<Game>(
+			config,
+			data,
+			state,
+			config / "settings.json",
+			state / "latest.log",
+			"assets/NotoSans-Regular.ttf"
+		);
 		registerScenes();
 		checkCompilationEnv();
 		game->modManager.loadAll("mods");

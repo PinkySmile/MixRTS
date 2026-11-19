@@ -7,9 +7,9 @@
 #include <variant>
 #include <type_traits>
 #include "GameObject.hpp"
-#include "GameManager.hpp"
-#include "Player.hpp"
-#include "Weapon.hpp"
+#include "../GameManager.hpp"
+#include "../Player.hpp"
+#include "../Weapon.hpp"
 #include "Resources/Game.hpp"
 
 namespace

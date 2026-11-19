@@ -8,6 +8,13 @@
 
 #include "Resources/Assert.hpp"
 
+void ModManager::reloadAll(const std::filesystem::path &path)
+{
+	this->_mods.clear();
+	this->_factions.clear();
+	this->loadAll(path);
+}
+
 void ModManager::loadAll(const std::filesystem::path &path)
 {
 	for (const auto &entry : std::filesystem::directory_iterator(path))
@@ -26,7 +33,8 @@ void ModManager::loadMod(const std::filesystem::path &path)
 
 	Mod &mod = this->_mods.at(json["name"]);
 
-	mod.loadFactions("factions.json", this->_factions);
+	for (const std::string &faction : mod.getFactions())
+		mod.loadFactions(faction, this->_factions);
 }
 
 Mod &ModManager::get(const std::string &name)

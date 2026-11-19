@@ -30,6 +30,7 @@ Every object definition contains the following core properties:
 
 ```jsonc
 {
+	"type": string?,                                  // Class to use for this object. Can be a common class, or a custom class defined in a module. (By default: "base")
 	"hp": uint,                                       // The base health points of the object.
 	"cost": map<uint>,                                // Resource costs required to build this object.
 	"size": Vector2u,                                 // The footprint size of the object in pixels or world units.
@@ -84,7 +85,6 @@ Every object definition contains the following core properties:
 	"select": RectObject?,                            // Custom selection box dimensions and offset.
 	"decel": DecelObject?,                            // Deceleration physics configuration.
 	"behavior": BehaviorObject?,                      // Default autonomous behavior order assigned to this object.
-	"missile": boolean?,                              // When true, the object is a missile. It climbs until it is above the map, reappears above the position of an attack-position order, falls onto it, then dies and fires its barrels. Missiles are not solid, not selectable, ignore terrain and never attack on their own.
 	"shoot_rounds": uint?,                            // Missile only. Number of volleys fired on arrival (default: 1). Each volley fires every barrel that is ready, in a single frame.
 	"inaccuracy": float?,                             // Missile only. Each projectile is aimed at the target offset by a random integer in [-inaccuracy, inaccuracy] on both axes (default: 0).
 	"deploy": DeployObject?,                          // Structure or unit conversion rules upon deployment.

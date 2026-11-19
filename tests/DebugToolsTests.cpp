@@ -11,7 +11,7 @@
 #include "GameFixture.hpp"
 #include "Debug/Profiler.hpp"
 #include "Data/GameManager.hpp"
-#include "Data/GameObject.hpp"
+#include "../src/Engine/Data/Objects/GameObject.hpp"
 #include "Data/Player.hpp"
 
 namespace {

@@ -18,6 +18,8 @@
 #include "forward.hpp"
 
 #define MAX_TEAM_COUNT 32
+#define NEUTRAL_TEAM (MAX_TEAM_COUNT - 1)
+#define NEUTRAL_OWNER UINT32_MAX
 
 struct MYDLL_API MapState {
 	// OPTIMIZE: Align line size to PAGE_SIZE, or a power of 2
@@ -99,6 +101,14 @@ struct MYDLL_API MapMetadata {
 };
 
 struct MYDLL_API LoadedMap {
+	struct ObjectParam {
+		std::string type;
+		Vector2i pos;
+	};
+
+	std::vector<ObjectParam> objects;
+	GameManager *manager;
+	size_t neutral;
 	MapState grid;
 	MapMetadata metadata;
 	PathFindingGrid pathFindingGrid;
@@ -116,7 +126,8 @@ struct MYDLL_API LoadedMap {
 	sf::Sprite sprite{this->tileSet};
 	sf::RenderTexture renderCache;
 
-	void load(const std::string &path);
+	void load(Mod &mod, const std::filesystem::path &path);
+	void spawnObjects(size_t faction);
 	//! Checksum of the map's gameplay files (json, tiles, tileset attributes and metadata). Images are excluded.
 	[[nodiscard]] static uint32_t computeChecksum(const std::string &path);
 	void buildCache();
@@ -134,6 +145,7 @@ struct MYDLL_API MapInfo {
 	std::string author;
 	Vector2u gridSize;
 	Vector2u tileSize;
+	std::string faction;
 	std::vector<Vector2u> startAreas;
 
 	void load(const std::string &path);

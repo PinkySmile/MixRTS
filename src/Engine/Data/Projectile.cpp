@@ -10,7 +10,7 @@
 #include "Projectile.hpp"
 #include "StateContext.hpp"
 #include "GameManager.hpp"
-#include "GameObject.hpp"
+#include "Objects/GameObject.hpp"
 #include "Player.hpp"
 #include "Resources/Game.hpp"
 

@@ -4,7 +4,7 @@
 
 #include "nlohmann/json.hpp"
 #include <sol/sol.hpp>
-#include "GameObject.hpp"
+#include "Objects/GameObject.hpp"
 #include "Animation.hpp"
 #include "Mod.hpp"
 #include "ConditionalAnim.hpp"

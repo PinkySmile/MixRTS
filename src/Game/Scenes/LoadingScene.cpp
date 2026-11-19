@@ -35,11 +35,19 @@ LoadingScene::LoadingScene(
 			this->setStatus("Cleaning up...");
 			this->_nextScene = val;
 		} catch (std::exception &e) {
+			std::stringstream stack;
+
+			if (auto *ce = dynamic_cast<const cpptrace::exception *>(&e))
+				ce->trace().print(stack);
+			else
+				cpptrace::from_current_exception().print(stack);
+
 			this->_mutex.lock();
 			this->_status = e.what();
 			this->_errored = true;
 			this->_mutex.unlock();
 			game->logger.error(e.what());
+			game->logger.error(stack.str());
 		}
 		releaseGlContextOnThisThread();
 	}};

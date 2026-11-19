@@ -6,7 +6,7 @@
 #include "GameFixture.hpp"
 #include "TestHelpers.hpp"
 #include "Mock/MockedUI.hpp"
-#include "Data/GameObject.hpp"
+#include "../src/Engine/Data/Objects/GameObject.hpp"
 #include "Data/GridMask.hpp"
 #include "Data/Map.hpp"
 #include "Data/Player.hpp"

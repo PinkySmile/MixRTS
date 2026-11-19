@@ -20,7 +20,7 @@
 #include "TestHelpers.hpp"
 #include "Data/Faction.hpp"
 #include "Data/GameManager.hpp"
-#include "Data/GameObject.hpp"
+#include "../src/Engine/Data/Objects/GameObject.hpp"
 #include "Data/Player.hpp"
 
 //! Stealthed objects belong to the second player (team 1) unless the test

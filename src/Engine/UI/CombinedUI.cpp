@@ -116,8 +116,11 @@ void CombinedUI::render()
 
 void CombinedUI::renderAbove()
 {
-	if (this->_uis[this->_currentUi])
+	if (this->_uis[this->_currentUi]) {
+		game->screen->setMouseCursorVisible(false);
 		this->_uis[this->_currentUi]->renderAbove();
+	} else
+		game->screen->setMouseCursorVisible(true);
 }
 
 void CombinedUI::setEnabled(bool enabled)

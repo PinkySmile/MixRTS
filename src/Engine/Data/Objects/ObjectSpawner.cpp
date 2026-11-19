@@ -3,9 +3,9 @@
 //
 
 #include "ObjectSpawner.hpp"
-#include "Player.hpp"
-#include "GameManager.hpp"
-#include "StateContext.hpp"
+#include "../Player.hpp"
+#include "../GameManager.hpp"
+#include "../StateContext.hpp"
 
 #define _number _gpTimerU[0]
 #define _delay _gpTimerU[1]
@@ -39,6 +39,11 @@ ObjectSpawner::ObjectSpawner(ObjectSpawnerRestoreTag)
 	this->_solid = false;
 	this->_countsForGame = false;
 	this->_countsForShortGame = false;
+}
+
+GameObject *ObjectSpawner::copy() const
+{
+	return new ObjectSpawner(*this);
 }
 
 void ObjectSpawner::update()

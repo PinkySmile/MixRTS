@@ -14,7 +14,7 @@
 #include "Effect.hpp"
 #include "Weapon.hpp"
 #include "Warhead.hpp"
-#include "GameObject.hpp"
+#include "Objects/GameObject.hpp"
 #include "UI/LuaUI.hpp"
 #include "Resources/Game.hpp"
 #include "Utils.hpp"
@@ -110,8 +110,32 @@ FactionQueue::StarportParams::StarportParams(const Mod &base, const nlohmann::js
 		} CATCH_AND_RETHROW("In [\"units\"][" + std::to_string(i) + "]");
 }
 
+SLFactionObjectFactory::SLFactionObjectFactory(const std::filesystem::path &path)
+{
+	this->_library = dlopen(path.string().c_str(), RTLD_LAZY);
+	assert_msg(this->_library, path.string() + ": " + dlerror());
+
+	auto version = reinterpret_cast<unsigned *>(dlsym(this->_library, "_ABI_VERSION"));
+	assert_exp(version);
+	assert_eq(*version, ABI_VERSION);
+
+	this->_registerFactory = reinterpret_cast<void (*)(ObjectFactory &factory)>(dlsym(this->_library, "registerFactory"));
+	assert_exp(this->_registerFactory);
+}
+
+SLFactionObjectFactory::~SLFactionObjectFactory()
+{
+	dlclose(this->_library);
+}
+
+void SLFactionObjectFactory::registerFactory(ObjectFactory &factory)
+{
+	this->_registerFactory(factory);
+}
+
 Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json &data) :
 	_base(base),
+	_factory(*this),
 	_name(name)
 {
 	assert_exp(data.contains("can_sell") && data["can_sell"].is_boolean());
@@ -122,8 +146,8 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	assert_exp(data.contains("radar_powered") && data["radar_powered"].is_boolean());
 	assert_exp(!data.contains("repairing_animation") || data["repairing_animation"].is_object());
 	assert_exp(data.contains("queues") && data["queues"].is_object());
-	assert_exp(data.contains("ui_path") && data["ui_path"].is_string());
-	assert_exp(data.contains("ui_params"));
+	assert_exp(!data.contains("ui_path") || data["ui_path"].is_string());
+	assert_exp(!data.contains("object_factory") || data["object_factory"].is_string());
 
 	assert_exp(data.contains("sounds") && data["sounds"].is_array());
 	for (size_t i = 0; i < data["sounds"].size(); i++)
@@ -196,13 +220,25 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	this->_warheads = data["warheads"];
 	this->_sounds = data["sounds"];
 	this->_startingMoney = data["starting_money"];
-	this->_uiData = data["ui_params"];
-	this->_uiPath = data["ui_path"];
 	this->_regressTech = data["regress_tech"];
 	this->_hasRadar = data["has_radar"];
 	this->_radarPowered = data["radar_powered"];
-	assert_exp(this->_uiPath.ends_with(".lua") || this->_uiPath.ends_with(".ui"));
 
+	if (data.contains("object_factory")) {
+		std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(base.getName(), data["object_factory"]));
+
+		if (path.second.extension() == "lua")
+			assert_not_reached();
+		else
+			this->_factionFactory = std::make_shared<SLFactionObjectFactory>(path.second);
+		this->_factionFactory->registerFactory(this->_factory);
+	}
+	if (data.contains("ui_path")) {
+		this->_uiPath = data["ui_path"];
+		assert_exp(this->_uiPath.ends_with(".lua") || this->_uiPath.ends_with(".ui"));
+	}
+	if (data.contains("ui_params"))
+		this->_uiData = data["ui_params"];
 	if (data.contains("repairing_animation"))
 		this->_repairAnim = data["repairing_animation"];
 	if (data.contains("primary_queue"))
@@ -259,7 +295,7 @@ void Faction::load(const std::vector<std::string> &allFactions)
 		for (auto &w : this->_weapons)
 			this->_base.loadWeapons(w, this->_loadedAnimations, this->_loadedEffects, this->_loadedSounds, this->_loadedWarheads, this->_loadedWeapons, &this->_checksumFiles);
 		for (auto &u : this->_objects)
-			this->_base.loadObjects(u, *this, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects, this->_loadedWeapons, this->_loadedObjects, &this->_checksumFiles);
+			this->_base.loadObjects(u, *this, this->_factory, this->_loadedAnimations, this->_loadedSounds, this->_loadedEffects, this->_loadedWeapons, this->_loadedObjects, &this->_checksumFiles);
 		for (auto &u : this->_upgrades)
 			this->_base.loadUpgrades(u, *this, this->_loadedUpgrades, &this->_checksumFiles);
 		for (auto &[n, q] : this->_queues)
@@ -271,7 +307,7 @@ void Faction::load(const std::vector<std::string> &allFactions)
 	} CATCH_AND_RETHROW("While loading faction \"" + this->_name + "\"\n")
 }
 
-const std::unordered_map<std::string, GameObject> &Faction::getObjects() const
+const std::unordered_map<std::string, std::shared_ptr<GameObject>> &Faction::getObjects() const
 {
 	return this->_loadedObjects;
 }
@@ -306,7 +342,7 @@ const std::unordered_map<std::string, std::vector<Animation>> & Faction::getAnim
 	return this->_loadedAnimations;
 }
 
-std::unordered_map<std::string, GameObject> &Faction::getObjects()
+std::unordered_map<std::string, std::shared_ptr<GameObject>> &Faction::getObjects()
 {
 	return this->_loadedObjects;
 }
@@ -353,6 +389,8 @@ const std::vector<StartObject> &Faction::getStartingObjects() const
 
 UI *Faction::createUI(UIState *state, GameManager *manager, Player *owner, MapState *map) const
 {
+	if (this->_uiPath.empty())
+		return nullptr;
 	if (this->_uiPath.ends_with(".lua"))
 		return new LuaUI(*this, state, manager, owner, map, game->lua, (this->_base.getBase() / this->_uiPath).string());
 	if (this->_sl == nullptr) {
@@ -362,7 +400,8 @@ UI *Faction::createUI(UIState *state, GameManager *manager, Player *owner, MapSt
 		assert_msg(this->_sl, p.string() + ": " + dlerror());
 
 		auto version = reinterpret_cast<unsigned *>(dlsym(this->_sl, "_ABI_VERSION"));
-		assert_exp(version && *version == ABI_VERSION);
+		assert_exp(version);
+		assert_eq(*version, ABI_VERSION);
 	}
 
 	auto fct = reinterpret_cast<UICreationCB>(dlsym(this->_sl, "createUiFor"));
@@ -514,7 +553,7 @@ void Faction::pushUserType(sol::state &state)
 	type["primary_queue"] = sol::property(&Faction::getPrimaryQueue);
 	type["sounds"] = sol::property(static_cast<const std::unordered_map<std::string, MultiSound> &(Faction::*)() const>(&Faction::getSounds));
 	type["upgrades"] = sol::property(static_cast<const std::unordered_map<std::string, Upgrade> &(Faction::*)() const>(&Faction::getUpgrades));
-	type["objects"] = sol::property(static_cast<const std::unordered_map<std::string, GameObject> &(Faction::*)() const>(&Faction::getObjects));
+	type["objects"] = sol::property(static_cast<const std::unordered_map<std::string, std::shared_ptr<GameObject>> &(Faction::*)() const>(&Faction::getObjects));
 	type["effects"] = sol::property(static_cast<const std::unordered_map<std::string, Effect> &(Faction::*)() const>(&Faction::getEffects));
 	type["weapons"] = sol::property(static_cast<const std::unordered_map<std::string, Weapon> &(Faction::*)() const>(&Faction::getWeapons));
 	type["warheads"] = sol::property(static_cast<const std::unordered_map<std::string, Warhead> &(Faction::*)() const>(&Faction::getWarheads));

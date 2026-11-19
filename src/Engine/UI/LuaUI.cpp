@@ -2,7 +2,7 @@
 // Created by PinkySmile on 04/10/2026.
 //
 
-#include "Data/GameObject.hpp"
+#include "../Data/Objects/GameObject.hpp"
 #include "LuaUI.hpp"
 #include "TGUILua.hpp"
 

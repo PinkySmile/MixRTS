@@ -16,7 +16,7 @@
 #include "GameFixture.hpp"
 #include "TestHelpers.hpp"
 #include "Data/GameManager.hpp"
-#include "Data/GameObject.hpp"
+#include "../src/Engine/Data/Objects/GameObject.hpp"
 #include "Data/Map.hpp"
 #include "Data/Player.hpp"
 

@@ -13,18 +13,18 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <sol/forward.hpp>
-#include "Vector.hpp"
+#include "../Vector.hpp"
 #include "forward.hpp"
 #include "Data/Requirements/ReqAndCombinator.hpp"
 #include "Screen.hpp"
 #include "UI/UI.hpp"
 #include "Utils.hpp"
-#include "MultiSound.hpp"
-#include "FindPath.hpp"
-#include "ConditionalAnim.hpp"
-#include "Animation.hpp"
-#include "Warhead.hpp"
-#include "Extra.hpp"
+#include "../MultiSound.hpp"
+#include "../FindPath.hpp"
+#include "../ConditionalAnim.hpp"
+#include "../Animation.hpp"
+#include "../Warhead.hpp"
+#include "../Extra.hpp"
 
 enum MoveReason {
 	MOVEREASON_MOVE_COMMAND,
@@ -578,7 +578,6 @@ typedef std::vector<std::pair<std::string, std::string>> DebugInfoList;
 class MYDLL_API GameObject : public GameObjectData {
 public:
 	GameObject() = default;
-	GameObject(const GameObject &b);
 	GameObject(
 		const Faction &base,
 		const std::string &id,
@@ -590,6 +589,7 @@ public:
 	);
 	virtual ~GameObject();
 
+	virtual GameObject *copy() const;
 	virtual void update();
 	virtual void render(int layer);
 	void setColor(const HSLColor &color);
@@ -764,6 +764,8 @@ public:
 	static void pushUserType(sol::state &state);
 
 protected:
+	GameObject(const GameObject &b);
+
 	// Fields here (and not in GameObjectData) require a special copy procedure
 	std::optional<DumpInfo> _dump;
 	std::vector<std::vector<ConditionalAnim>> _anims;

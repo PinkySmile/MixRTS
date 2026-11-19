@@ -4,15 +4,15 @@
 
 #include <cmath>
 #include <sol/sol.hpp>
-#include "Faction.hpp"
-#include "Effect.hpp"
+#include "../Faction.hpp"
+#include "../Effect.hpp"
 #include "GameObject.hpp"
-#include "GameManager.hpp"
-#include "Animation.hpp"
-#include "Player.hpp"
-#include "ConditionalAnim.hpp"
-#include "Weapon.hpp"
-#include "Upgrade.hpp"
+#include "../GameManager.hpp"
+#include "../Animation.hpp"
+#include "../Player.hpp"
+#include "../ConditionalAnim.hpp"
+#include "../Weapon.hpp"
+#include "../Upgrade.hpp"
 #include "Resources/Assert.hpp"
 #include "Resources/Game.hpp"
 #include "Debug/Profiler.hpp"
@@ -514,7 +514,6 @@ GameObject::GameObject(
 	assert_exp(!json.contains("build") || json["build"].is_string());
 	assert_exp(!json.contains("speed") || json["speed"].is_number());
 	assert_exp(!json.contains("behavior") || json["behavior"].is_object());
-	assert_exp(!json.contains("missile") || json["missile"].is_boolean());
 	assert_exp(!json.contains("shoot_rounds") || json["shoot_rounds"].is_number_unsigned());
 	assert_exp(!json.contains("inaccuracy") || json["inaccuracy"].is_number());
 	assert_exp(!json.contains("limit") || json["limit"].is_number_unsigned());
@@ -1199,16 +1198,6 @@ GameObject::GameObject(
 			return a->priority < b->priority;
 		});
 	assert_msg(!this->_moveWhileTurn || (!this->_boundToGrid && this->_ignoreTerrain), "move_while_turn only works if the unit isn't bound to grid, and ignores terrain");
-	if (json.contains("missile") && json["missile"].get<bool>()) {
-		this->_behavior = BEHAVIOR_MISSILE;
-		this->_solid = false;
-		this->_selectable = false;
-		this->_autoAttack = false;
-		this->_triggersAutoAttack = false;
-		this->_ignoreTerrain = true;
-		assert_msg(json.contains("death"), "A missile object needs a \"death\" block");
-		assert_msg(!this->_barrels.empty(), "A missile object needs at least one barrel");
-	}
 	if (this->_altitude)
 		this->_tags.emplace_back("any_air");
 	else
@@ -1217,6 +1206,11 @@ GameObject::GameObject(
 }
 
 GameObject::~GameObject() = default;
+
+GameObject *GameObject::copy() const
+{
+	return new GameObject(*this);
+}
 
 
 struct ObstructionContext {

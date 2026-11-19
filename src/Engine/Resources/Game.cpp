@@ -22,7 +22,7 @@
 #include "Data/ConditionalAnim.hpp"
 #include "Data/Extra.hpp"
 #include "Data/Faction.hpp"
-#include "Data/GameObject.hpp"
+#include "../Data/Objects/GameObject.hpp"
 #include "Data/Player.hpp"
 #include "Data/GameManager.hpp"
 #include "Data/Projectile.hpp"

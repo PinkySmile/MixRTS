@@ -15,7 +15,7 @@
 #include "forward.hpp"
 #include "Vector.hpp"
 #include "Utils.hpp"
-#include "GameObject.hpp"
+#include "Objects/GameObject.hpp"
 #include "Map.hpp"
 #include "Debug/DebugOptions.hpp"
 #include "UI/CombinedUI.hpp"
@@ -216,6 +216,7 @@ private:
 	std::list<Projectile> _liveProjectiles;
 	std::list<std::unique_ptr<GameObject>> _liveObjects;
 	unsigned _lastObjectId = 0;
+	unsigned _playerCount;
 	std::unordered_map<unsigned, GameObject *> _objectMap;
 	std::map<int64_t, std::list<GameObject *>> _renderObjects;
 	std::vector<unsigned> _preloadedSprites;

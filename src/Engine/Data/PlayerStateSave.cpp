@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include "Player.hpp"
 #include "StateContext.hpp"
-#include "GameObject.hpp"
+#include "Objects/GameObject.hpp"
 #include "Resources/Assert.hpp"
 
 namespace {

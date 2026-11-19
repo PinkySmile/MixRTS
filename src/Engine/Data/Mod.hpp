@@ -17,6 +17,7 @@ class MYDLL_API Mod {
 private:
 	std::string _name;
 	std::filesystem::path _base;
+	std::vector<std::string> _factions;
 
 public:
 	Mod(std::filesystem::path base, const nlohmann::json &metadata);
@@ -49,15 +50,17 @@ public:
 	void loadObjects(
 		const std::string &path,
 		const Faction &base,
+		const ObjectFactory &factory,
 		const std::unordered_map<std::string, std::vector<Animation>> &anims,
 		const std::unordered_map<std::string, MultiSound> &sounds,
 		const std::unordered_map<std::string, Effect> &effects,
 		const std::unordered_map<std::string, Weapon> &weapons,
-		std::unordered_map<std::string, GameObject> &objects,
+		std::unordered_map<std::string, std::shared_ptr<GameObject>> &objects,
 		std::set<std::string> *checksumFiles = nullptr
 	) const;
-	const std::filesystem::path &getBase() const;
-	const std::string &getName() const;
+	[[nodiscard]] const std::vector<std::string> &getFactions() const;
+	[[nodiscard]] const std::filesystem::path &getBase() const;
+	[[nodiscard]] const std::string &getName() const;
 
 	static void pushUserType(sol::state &state);
 };

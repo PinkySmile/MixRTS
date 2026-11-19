@@ -45,7 +45,7 @@ typedef void *SharedLibrary;
 #define SL_EXPORT extern "C"
 #endif
 
-#define ABI_VERSION 1
+#define ABI_VERSION 1U
 #define SL_DECLARE_VERSION SL_EXPORT unsigned _ABI_VERSION; unsigned _ABI_VERSION = ABI_VERSION
 
 

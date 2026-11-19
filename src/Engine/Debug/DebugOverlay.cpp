@@ -8,7 +8,7 @@
 #include <functional>
 #include "DebugOverlay.hpp"
 #include "Data/GameManager.hpp"
-#include "Data/GameObject.hpp"
+#include "../Data/Objects/GameObject.hpp"
 #include "Data/Projectile.hpp"
 #include "Data/Player.hpp"
 #include "Data/Warhead.hpp"

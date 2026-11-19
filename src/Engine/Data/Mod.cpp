@@ -19,13 +19,14 @@
 #include "Weapon.hpp"
 #include "Mod.hpp"
 #include "Utils.hpp"
-#include "GameObject.hpp"
+#include "Objects/GameObject.hpp"
 #include "Resources/Game.hpp"
 
 Mod::Mod(std::filesystem::path base, const nlohmann::json &metadata) :
 	_name(metadata["name"]),
 	_base(std::move(base))
 {
+	this->_factions = metadata["factions"];
 }
 
 static void rememberFile(std::set<std::string> *files, const Mod &mod, const std::filesystem::path &fullPath)
@@ -199,11 +200,12 @@ void Mod::loadAnimations(const std::string &relPath, std::unordered_map<std::str
 void Mod::loadObjects(
 	const std::string &relPath,
 	const Faction &base,
+	const ObjectFactory &factory,
 	const std::unordered_map<std::string, std::vector<Animation>> &anims,
 	const std::unordered_map<std::string, MultiSound> &sounds,
 	const std::unordered_map<std::string, Effect> &effects,
 	const std::unordered_map<std::string, Weapon> &weapons,
-	std::unordered_map<std::string, GameObject> &objects,
+	std::unordered_map<std::string, std::shared_ptr<GameObject>> &objects,
 	std::set<std::string> *checksumFiles
 ) const
 {
@@ -229,10 +231,15 @@ void Mod::loadObjects(
 				std::string fullId = RESOURCE(path.first->_name, id);
 
 				assert_exp(!objects.contains(fullId));
-				objects.emplace(fullId, GameObject{base, fullId, anims, sounds, effects, weapons, mergeObjects(jbuilding, gen)});
+				objects.emplace(fullId, std::shared_ptr<GameObject>{factory.create(base, fullId, anims, sounds, effects, weapons, mergeObjects(jbuilding, gen))});
 			} CATCH_AND_RETHROW("In key \"" + id + "\"\n")
 		}
 	} CATCH_AND_RETHROW("While loading objects file \"" + path.second.string() + "\"\n")
+}
+
+const std::vector<std::string> &Mod::getFactions() const
+{
+	return this->_factions;
 }
 
 void Mod::loadUpgrades(const std::string &relPath, const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades, std::set<std::string> *checksumFiles) const

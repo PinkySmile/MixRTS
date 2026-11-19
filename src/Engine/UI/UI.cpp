@@ -13,7 +13,7 @@
 #include "Data/Effect.hpp"
 #include "Data/Weapon.hpp"
 #include "Data/Warhead.hpp"
-#include "Data/GameObject.hpp"
+#include "../Data/Objects/GameObject.hpp"
 #include "Data/Player.hpp"
 #include "Resources/Game.hpp"
 #include "Resources/Assert.hpp"
@@ -1010,7 +1010,7 @@ void UI::selectBuildingForPlacement(const std::string &id)
 	auto it = objects.find(id);
 
 	if (it != objects.end())
-		this->_placementBuilding = &it->second;
+		this->_placementBuilding = &*it->second;
 }
 
 void UI::_handleTryPlace()

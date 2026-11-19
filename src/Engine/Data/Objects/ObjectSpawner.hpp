@@ -19,6 +19,7 @@ public:
 	ObjectSpawner(const std::string &objName, unsigned count, unsigned delay, std::vector<Order> initOrders);
 	explicit ObjectSpawner(ObjectSpawnerRestoreTag);
 	~ObjectSpawner() override = default;
+	GameObject *copy() const override;
 	void update() override;
 	void render(int layer) override;
 	[[nodiscard]] uint8_t getStateKind() const override { return 1; }

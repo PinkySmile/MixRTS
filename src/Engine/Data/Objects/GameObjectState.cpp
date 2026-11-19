@@ -4,8 +4,8 @@
 
 #include <variant>
 #include "GameObject.hpp"
-#include "StateContext.hpp"
-#include "Player.hpp"
+#include "../StateContext.hpp"
+#include "../Player.hpp"
 #include "Resources/Assert.hpp"
 
 namespace {

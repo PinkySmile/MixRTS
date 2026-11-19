@@ -17,7 +17,7 @@
 #include "TestHelpers.hpp"
 #include "Data/Faction.hpp"
 #include "Data/GameManager.hpp"
-#include "Data/GameObject.hpp"
+#include "../src/Engine/Data/Objects/GameObject.hpp"
 #include "Data/Player.hpp"
 
 //! Every attacker is owned by GameFixture's own player (team 0), and every

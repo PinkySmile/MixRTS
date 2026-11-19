@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include "GameManager.hpp"
 #include "StateContext.hpp"
-#include "ObjectSpawner.hpp"
+#include "Objects/ObjectSpawner.hpp"
 #include "Projectile.hpp"
 #include "Effect.hpp"
 #include "Player.hpp"
@@ -168,7 +168,7 @@ void GameManager::saveState(GameStateSnapshot &out) const
 		writer.u8(object->getStateKind());
 		writer.u32(object->owner ? static_cast<uint32_t>(object->owner->state.index) : NULL_REF);
 		if (object->getStateKind() == 0) {
-			const GameObject *templ = &object->getFaction().getObjects().at(object->getId());
+			const GameObject *templ = &*object->getFaction().getObjects().at(object->getId());
 
 			writer.u32(this->_registry.objectId(templ));
 		}
@@ -343,7 +343,7 @@ void GameManager::loadState(StateReader &in)
 			Player &owner = this->_players[header.owner];
 
 			assert_exp(templ);
-			object = std::make_unique<GameObject>(*templ);
+			object = std::unique_ptr<GameObject>(templ->copy());
 			object->manager = this;
 			object->owner = &owner;
 			object->map = &this->_mapStates[owner.state.factionIndex];

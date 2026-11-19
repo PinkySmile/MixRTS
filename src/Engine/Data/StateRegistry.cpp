@@ -7,7 +7,7 @@
 #include <vector>
 #include "StateRegistry.hpp"
 #include "Faction.hpp"
-#include "GameObject.hpp"
+#include "Objects/GameObject.hpp"
 #include "Weapon.hpp"
 #include "Effect.hpp"
 #include "MultiSound.hpp"

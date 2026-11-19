@@ -11,7 +11,7 @@
 #include "Effect.hpp"
 #include "Weapon.hpp"
 #include "Warhead.hpp"
-#include "GameObject.hpp"
+#include "Objects/GameObject.hpp"
 #include "GameManager.hpp"
 #include "../Resources/Game.hpp"
 #include "../UI/UI.hpp"
@@ -82,7 +82,8 @@ CustomQueueDll::CustomQueueDll(Player *player, PlayerQueue *queue, const std::fi
 	assert_msg(this->_library, path.string() + ": " + dlerror());
 
 	auto version = static_cast<unsigned *>(dlsym(this->_library, "_ABI_VERSION"));
-	assert_exp(version && *version == ABI_VERSION);
+	assert_exp(version);
+	assert_eq(*version, ABI_VERSION);
 
 	this->_update = reinterpret_cast<bool (*)(CustomQueue &, PlayerQueue &)>(dlsym(this->_library, "update"));
 	this->_updateEntry = reinterpret_cast<bool (*)(CustomQueue &, PlayerQueueEntry *)>(dlsym(this->_library, "updateEntry"));
@@ -264,12 +265,12 @@ Player::Player(GameManager &parent, const std::vector<Faction> &factions, size_t
 		if (i == index)
 			continue;
 		for (auto &[key, val] : f.getObjects())
-			this->_loadedObjects[key] = &val;
+			this->_loadedObjects[key] = &*val;
 		for (auto &[key, val] : f.getUpgrades())
 			this->_loadedUpgrades[key] = &val;
 	}
 	for (auto &[key, val] : this->_primaryFaction.getObjects())
-		this->_loadedObjects[key] = &val;
+		this->_loadedObjects[key] = &*val;
 	for (auto &[key, val] : this->_primaryFaction.getUpgrades())
 		this->_loadedUpgrades[key] = &val;
 
@@ -587,7 +588,7 @@ void Player::checkWon()
 {
 	auto &players = this->parent.getPlayers();
 
-	this->_won = players.size() > 1 && std::ranges::all_of(players, [this](const Player &p) {
+	this->_won = players.size() > 2 && std::all_of(players.begin(), players.end() - 1, [this](const Player &p) {
 		return this->state.team == p.state.team || p.lost();
 	});
 	this->_ui->setResult(this->_won, this->_lost);

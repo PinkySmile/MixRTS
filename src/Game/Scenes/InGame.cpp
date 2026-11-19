@@ -30,10 +30,13 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 	_saveReplays(saveReplays)
 {
 	std::vector<std::string> loadedFactions;
+	MapInfo map;
+	size_t mapFaction = 0;
 
+	map.load(params.map);
 	this->_panel = tgui::Panel::create();
 	this->_panel->getRenderer()->setBackgroundColor(tgui::Color::Transparent);
-	game->gameRandom = RandomWrapper(params.seed);
+	game->gameRandom.seed(params.seed);
 
 	cb("Init factions");
 	for (auto &player : params.players) {
@@ -44,6 +47,16 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 			this->_loadedFactions.push_back(game->modManager.getFaction(player.faction));
 		}
 	}
+	if (!map.faction.empty()) {
+		auto it = std::ranges::find(loadedFactions, map.faction);
+
+		if (it == loadedFactions.end()) {
+			loadedFactions.push_back(map.faction);
+			this->_loadedFactions.push_back(game->modManager.getFaction(map.faction));
+		}
+		mapFaction = std::distance(loadedFactions.begin(), it);
+	}
+
 	for (auto &f : this->_loadedFactions) {
 		cb("Init faction " + f.getName());
 		f.load(loadedFactions);
@@ -57,28 +70,18 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 	}
 
 	cb("Init manager");
-	game->game = std::make_unique<GameManager>(this->_loadedFactions, params.players.size(), GameManager::GameSettings{
-		.shortGame = params.settings.shortGame
-	}, factory);
+	game->game = std::make_unique<GameManager>(
+		this->_loadedFactions,
+		params.players.size() + 1,
+		GameManager::GameSettings{ .shortGame = params.settings.shortGame },
+		factory
+	);
 
 	size_t i = 0;
-	std::unordered_map<std::string, Faction> factions;
 	std::vector<Player> &players = game->game->getPlayers();
 
 	cb("Loading map " + params.map);
 	game->game->loadMap(params.map);
-
-	cb("Preload sprites");
-	switch (game->settings.loading) {
-	case LOADING_ALL:
-		game->game->preloadAllSprites();
-		break;
-	case LOADING_BASE_SPRITES:
-		game->game->preloadSprites();
-		break;
-	default:
-		break;
-	}
 
 	for (auto &player : params.players) {
 		auto it = std::ranges::find(loadedFactions, player.faction);
@@ -94,6 +97,21 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 			if (ui)
 				this->_panel->add(ui->getPanel());
 		i++;
+	}
+
+	cb("Adding neutral player");
+	game->game->addPlayer(mapFaction, Color::White, {0, 0}, NEUTRAL_TEAM, true);
+
+	cb("Preload sprites");
+	switch (game->settings.loading) {
+		case LOADING_ALL:
+			game->game->preloadAllSprites();
+			break;
+		case LOADING_BASE_SPRITES:
+			game->game->preloadSprites();
+			break;
+		default:
+			break;
 	}
 	this->_captureCrashState();
 }
@@ -162,8 +180,8 @@ void InGame::saveReplay(const std::filesystem::path &dir)
 		std::vector<std::vector<RecordedAction>> actions;
 		auto &players = game->game->getPlayers();
 
-		assert_exp(players.size() == this->_startParams.players.size());
-		for (size_t i = 0; i < players.size(); i++) {
+		assert_exp(players.size() - 1 == this->_startParams.players.size());
+		for (size_t i = 0; i < players.size() - 1; i++) {
 			crcs.push_back(this->_factionCrcs.at(this->_startParams.players[i].faction));
 			actions.push_back(players[i].getCombinedUI().getRecordedActions());
 		}
@@ -171,7 +189,7 @@ void InGame::saveReplay(const std::filesystem::path &dir)
 		// getTick() is the step in progress when an exception left update(). Playback enters
 		// every tick up to this one, so the faulting step runs again. A captured signal
 		// stores that same tick on the anchor.
-		uint32_t tick = static_cast<uint32_t>(game->game->getTick());
+		auto tick = static_cast<uint32_t>(game->game->getTick());
 
 		if (crashReplayAnchor.crashed)
 			tick = crashReplayAnchor.crashTick;
@@ -214,10 +232,10 @@ void InGame::_publishCrashAnchor()
 
 	auto &players = game->game->getPlayers();
 	std::vector<uint32_t> crcs;
-	std::vector<std::vector<RecordedAction>> actions(players.size());
+	std::vector<std::vector<RecordedAction>> actions(players.size() - 1);
 
-	assert_exp(players.size() == this->_startParams.players.size());
-	for (size_t i = 0; i < players.size(); i++)
+	assert_exp(players.size() - 1 == this->_startParams.players.size());
+	for (size_t i = 0; i < players.size() - 1; i++)
 		crcs.push_back(this->_factionCrcs.at(this->_startParams.players[i].faction));
 
 	auto data = ReplayData::fromGame(this->_startParams, this->_mapCrc, crcs, 0, std::move(actions));
@@ -228,8 +246,8 @@ void InGame::_publishCrashAnchor()
 	std::string bytes = header.str();
 
 	this->_crashHeader.assign(bytes.begin(), bytes.end());
-	this->_crashStreams.assign(players.size(), {});
-	for (size_t i = 0; i < players.size(); i++)
+	this->_crashStreams.assign(players.size() - 1, {});
+	for (size_t i = 0; i < players.size() - 1; i++)
 		players[i].getCombinedUI().getCrashJournal().bind(&this->_crashStreams[i]);
 
 	crashReplayAnchor.header = this->_crashHeader.data();
@@ -261,7 +279,7 @@ SaveStateFile InGame::_makeStateFile() const
 	SaveStateFile file;
 	auto &players = game->game->getPlayers();
 
-	assert_exp(players.size() == this->_startParams.players.size());
+	assert_exp(players.size() - 1 == this->_startParams.players.size());
 	file.start = this->_startParams;
 	file.mapCrc = this->_mapCrc;
 	file.camera = game->game->getCameraTranslate();
@@ -382,7 +400,6 @@ void InGame::update()
 		this->_captureCrashState();
 		this->_crashStateDirty = false;
 	}
-	game->screen->setMouseCursorVisible(false);
 	game->screen->setMouseCursorGrabbed(!game->paused);
 }
 

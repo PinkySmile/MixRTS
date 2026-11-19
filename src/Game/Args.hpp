@@ -16,7 +16,7 @@ struct Args {
 	bool preload = false;
 	bool noLazyLoad = false;
 	float speed = 1;
-	std::string locale = "fr";
+	std::string locale = "en";
 	std::string replay;
 	std::string map;
 	std::vector<PlayerArg> players;

@@ -74,8 +74,10 @@ GameManager::GameManager(const std::vector<Faction> &factions, size_t nbPlayers,
 	_text{game->font},
 	_settings(settings),
 	_uiFactory(std::move(uiFactory)),
-	_factions(factions)
+	_factions(factions),
+	_playerCount(nbPlayers)
 {
+	this->_map.manager = this;
 	this->_text.setCharacterSize(12 * guiScale);
 	this->_text.setOutlineThickness(1);
 	this->_text.setOutlineColor(sf::Color::Black);
@@ -113,7 +115,7 @@ void GameManager::_aliasRegistrySources()
 		const Faction *source = nullptr;
 
 		for (const auto &entry : faction.getObjects()) {
-			source = entry.second._base;
+			source = entry.second->_base;
 			break;
 		}
 		if (!source || source == &faction)
@@ -133,18 +135,20 @@ void GameManager::_validateArmors() const
 
 	for (auto &f : this->_factions)
 		for (auto &object : f.getObjects() | std::ranges::views::values)
-			armors.insert(object.getArmor());
+			armors.insert(object->getArmor());
 	for (auto &f : this->_factions)
 		for (auto &[whId, wh] : f.getWarheads())
 			for (auto &armor : armors)
 				assert_msg(wh.getArmorMultipliers().contains(armor), "Warhead \"" + whId + "\" is missing a multiplier for armor \"" + armor + "\"");
 }
 
-void GameManager::loadMap(const std::string &path)
+void GameManager::loadMap(const std::string &relPath)
 {
 	TRY {
-		this->_map.load(path);
-	} CATCH_AND_RETHROW("While loading map \"" + path + "\"\n")
+		std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(relPath);
+
+		this->_map.load(*path.first, path.second);
+	} CATCH_AND_RETHROW("While loading map \"" + relPath + "\"\n")
 
 	// TODO: Properly convert
 	for (auto &state : this->_mapStates)
@@ -167,6 +171,7 @@ void GameManager::loadMap(const std::string &path)
 
 void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, Vector2i startingArea, unsigned team, bool spawnStartingObjects)
 {
+	assert_exp(this->_playerCount != this->_players.size());
 	size_t index = this->_players.size();
 	auto &faction = this->_factions[factionIndex];
 	Vector2u mapSize = {
@@ -186,7 +191,9 @@ void GameManager::addPlayer(size_t factionIndex, const HSLColor &color, Vector2i
 	this->_players[index].state.systemMoney = faction.getStartingMoney();
 	if (!spawnStartingObjects)
 		return;
-	for (auto &b : faction.getStartingObjects()) {
+	if (team == NEUTRAL_TEAM)
+		this->_map.spawnObjects(factionIndex);
+	else for (auto &b : faction.getStartingObjects()) {
 		Vector2i start = startingArea;
 
 		start.x = std::max(0, std::min<int>(start.x + b.offset.x, mapSize.x - 1));
@@ -947,9 +954,9 @@ void GameManager::_recomputeLocked()
 	for (auto &player : this->_players)
 		for (auto &f : this->_factions) {
 			for (auto &[name, o] : f.getObjects())
-				this->_checkObjectLocked(name, o, player);
+				this->_checkObjectLocked<GameObject>(name, *o, player);
 			for (auto &[name, u] : f.getUpgrades())
-				this->_checkObjectLocked(name, u, player);
+				this->_checkObjectLocked<Upgrade>(name, u, player);
 		}
 }
 
@@ -1173,6 +1180,9 @@ void GameManager::deinitUnitTiles(const std::vector<std::vector<BuildingMask>> &
 
 GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::string &buildQueue, const std::string &id)
 {
+	if (owner == NEUTRAL_OWNER)
+		owner = this->_players.size() - 1;
+
 	auto &in = this->_players[owner].getObjects();
 	assert_msg(in.contains(id), id);
 	auto &base = *in.at(id);
@@ -1217,7 +1227,7 @@ GameObject *GameManager::spawnObject(size_t owner, Vector2i absPos, const std::s
 				this->_map.grid.setGridBits(fullPos, GRIDMASK_HAS_CONCRETE);
 				for (auto &m : this->_mapStates)
 					m.setGridBits(fullPosAbs, GRIDMASK_HAS_CONCRETE);
-				this->_liveObjects.push_back(std::make_unique<GameObject>(concBase));
+				this->_liveObjects.push_back(std::unique_ptr<GameObject>(concBase.copy()));
 				this->_initObject(map, player, *this->_liveObjects.back());
 				this->_onObjectSpawned(fullPosTl, *this->_liveObjects.back());
 			}
@@ -1233,9 +1243,9 @@ noGrid:
 	base.playBuiltSound(absPos);
 	if (!base.isFake()) {
 		if (proxy)
-			out.push_back(std::make_unique<GameObject>(*in.at(*proxy)));
+			out.push_back(std::unique_ptr<GameObject>(in.at(*proxy)->copy()));
 		else
-			out.push_back(std::make_unique<GameObject>(base));
+			out.push_back(std::unique_ptr<GameObject>(base.copy()));
 		obj = &*out.back();
 
 		this->_initObject(map, player, *obj);
