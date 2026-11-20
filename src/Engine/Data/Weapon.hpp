@@ -69,6 +69,7 @@ private:
 	const Effect *_hitEffect = nullptr;
 	unsigned _damage = 0;
 	unsigned _range = 0;
+	unsigned _increaseResource = 0;
 	double _inaccuracyDist = 0;
 	double _inaccuracyBase = 0;
 	const Warhead *_warhead = nullptr;
@@ -99,6 +100,7 @@ public:
 	[[nodiscard]] const Warhead *getWarhead() const;
 	[[nodiscard]] const std::vector<std::string> &canHitTags() const;
 	[[nodiscard]] double getInaccuracy(double dist) const;
+	[[nodiscard]] unsigned getIncreaseResource() const;
 	[[nodiscard]] const std::optional<WeaponTakeControl> &getTakeControl() const;
 	[[nodiscard]] const std::optional<WeaponProjectile> &getProjectileData() const;
 	[[nodiscard]] bool sendsForward() const;

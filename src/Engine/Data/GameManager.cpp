@@ -1578,36 +1578,35 @@ std::optional<Vector2i> GameManager::getFirstHarvestableTile(const GameObject &h
 	auto &grid = this->_map.grid;
 	auto &state = *harvester.map;
 
-#define CHECK_RES(x_, y_) do {                                                                                          \
-	if ((x_) < 0 || (y_) < 0 || (x_) >= (int)grid.gridSize.x || (y_) >= (int)grid.gridSize.y)                       \
-		break;                                                                                                  \
-	auto r = GRID_RESOURCE_TYPE(grid.grid[(x_) + (y_) * grid.gridSize.x]);                                          \
-	if (r == 0) break;                                                                                              \
-	if (!this->isAreaFree(grid.topLeftCoordToAbs({x_, y_}), grid.tileSize)) break;                                  \
-	auto &re = this->_map.metadata.resources.at(r);                                                                 \
-	if (re.onlyAdjCollectible.empty()) break;                                                                       \
-	if (std::find(re.onlyAdjCollectible.begin(), re.onlyAdjCollectible.end(), tile) == re.onlyAdjCollectible.end()) \
-		goto keepGoing;                                                                                         \
+#define CHECK_RES(x_, y_) do {                                                                    \
+	if ((x_) < 0 || (y_) < 0 || (x_) >= (int)grid.gridSize.x || (y_) >= (int)grid.gridSize.y) \
+		break;                                                                            \
+	auto r = GRID_RESOURCE_TYPE(grid.grid[(x_) + (y_) * grid.gridSize.x]);                    \
+	if (r == 0) break;                                                                        \
+	auto &re2 = this->_map.metadata.resources.at(r);                                          \
+	if (re2.mustBeSurrounded) goto keepGoing;                                                 \
 } while (false)
 
 	grid.clampedPosition(state.tileCoordToAbs(pos), topLeft, bottomRight);
 	for (int y = topLeft.y; y <= bottomRight.y; y++)
 		for (int x = topLeft.x; x <= bottomRight.x; x++) {
 			auto res = GRID_RESOURCE_TYPE(grid.grid[x + y * grid.gridSize.x]);
-			auto tile = this->_map.displayedIndices[x + y * grid.gridSize.x];
+			auto &re = this->_map.metadata.resources.at(res);
 
 			if (res == 0)
 				continue;
 			if (!harvester.canStandOn(state.absToTileCoord(grid.topLeftCoordToAbs({x, y}))))
 				continue;
-			CHECK_RES(x - 1, y - 1);
-			CHECK_RES(x,     y - 1);
-			CHECK_RES(x + 1, y - 1);
-			CHECK_RES(x - 1, y);
-			CHECK_RES(x + 1, y);
-			CHECK_RES(x - 1, y + 1);
-			CHECK_RES(x,     y + 1);
-			CHECK_RES(x + 1, y + 1);
+			if (re.deplete == 0) {
+				CHECK_RES(x - 1, y - 1);
+				CHECK_RES(x,     y - 1);
+				CHECK_RES(x + 1, y - 1);
+				CHECK_RES(x - 1, y);
+				CHECK_RES(x + 1, y);
+				CHECK_RES(x - 1, y + 1);
+				CHECK_RES(x,     y + 1);
+				CHECK_RES(x + 1, y + 1);
+			}
 			return Vector2i{x, y};
 		keepGoing:
 			continue;
@@ -1626,21 +1625,23 @@ std::optional<Vector2i> GameManager::getClosestHarvestableTile(const GameObject 
 			return {};
 
 		auto res = GRID_RESOURCE_TYPE(grid.grid[x + y * grid.gridSize.x]);
-		auto tile = this->_map.displayedIndices[x + y * grid.gridSize.x];
 		auto mapTile = state.absToTileCoord(grid.topLeftCoordToAbs({x, y}));
+		auto &re = this->_map.metadata.resources.at(res);
 
 		if (res == 0)
 			return {};
 		if (!harvester.canStandOn(mapTile))
 			return {};
-		CHECK_RES(x - 1, y - 1);
-		CHECK_RES(x,     y - 1);
-		CHECK_RES(x + 1, y - 1);
-		CHECK_RES(x - 1, y);
-		CHECK_RES(x + 1, y);
-		CHECK_RES(x - 1, y + 1);
-		CHECK_RES(x,     y + 1);
-		CHECK_RES(x + 1, y + 1);
+		if (re.deplete == 0) {
+			CHECK_RES(x - 1, y - 1);
+			CHECK_RES(x,     y - 1);
+			CHECK_RES(x + 1, y - 1);
+			CHECK_RES(x - 1, y);
+			CHECK_RES(x + 1, y);
+			CHECK_RES(x - 1, y + 1);
+			CHECK_RES(x,     y + 1);
+			CHECK_RES(x + 1, y + 1);
+		}
 		return mapTile;
 	keepGoing:
 		return {};
@@ -1738,7 +1739,7 @@ void GameManager::consumeResource(Vector2i pos)
 	auto &tile = this->_map.grid.grid[pos.x + pos.y * this->_map.grid.gridSize.x];
 	assert_exp(GRID_RESOURCE_TYPE(tile));
 	if (GRID_RESOURCE_COUNT(tile) != 0) {
-		tile -= 1 << 29;
+		tile -= 1 << GRIDMASK_RESOURCE_COUNT_OFFSET;
 		return;
 	}
 	assert_exp(this->_map.metadata.resources.contains(GRID_RESOURCE_TYPE(tile)));
@@ -1749,7 +1750,7 @@ void GameManager::consumeResource(Vector2i pos)
 	if (r.deplete != 0) {
 		tile |= r.deplete << 24;
 		assert_exp(this->_map.metadata.resources.contains(r.deplete));
-		tile |= (this->_map.metadata.resources.at(r.deplete).lots - 1) << 29;
+		tile |= (this->_map.metadata.resources.at(r.deplete).lots - 1) << GRIDMASK_RESOURCE_COUNT_OFFSET;
 	}
 	this->_map.refreshTile(pos.x, pos.y);
 }
@@ -1833,6 +1834,63 @@ void GameManager::_recordWarheadTarget(const Weapon *weapon, const GameObject &o
 void GameManager::weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f position, size_t owner)
 {
 	PROFILE_SCOPE("weaponUsedAt");
+
+	unsigned nbRes = weapon->getIncreaseResource();
+
+	if (nbRes) {
+		Vector2i gpos = this->_map.grid.absToTileCoord(position);
+		size_t index = gpos.x + gpos.y * this->_map.grid.gridSize.x;
+		uint32_t &attr = this->_map.grid.grid[index];
+		bool modified = false;
+
+		while (nbRes--) {
+			auto res = GRID_RESOURCE_TYPE(attr);
+			bool promote = res == 0;
+
+			if (!promote) {
+				auto &current = this->_map.metadata.resources.at(res);
+
+				if (current.lots == GRID_RESOURCE_COUNT(attr) - 1)
+					promote = true;
+				else
+					attr += 1 << GRIDMASK_RESOURCE_COUNT_OFFSET;
+			}
+			if (promote) {
+				auto it = std::ranges::find_if(this->_map.metadata.resources, [res](const std::pair<unsigned, MapResource> &r) -> bool {
+					return r.second.deplete == res;
+				});
+
+				if (it == this->_map.metadata.resources.end())
+					break;
+
+				if (it->second.mustBeSurrounded) {
+				#define CHECK_OUT(x_, y_) do { \
+					if ((x_) < 0 || (y_) < 0 || (x_) >= (int)this->_map.grid.gridSize.x || (y_) >= (int)this->_map.grid.gridSize.y) \
+						break;                                                                                                  \
+					if (GRID_RESOURCE_TYPE(this->_map.grid.grid[(x_) + (y_) * this->_map.grid.gridSize.x]) == 0)                    \
+						goto notOk;                                                                                             \
+				} while (false)
+					CHECK_OUT(gpos.x - 1, gpos.y - 1);
+					CHECK_OUT(gpos.x,     gpos.y - 1);
+					CHECK_OUT(gpos.x + 1, gpos.y - 1);
+					CHECK_OUT(gpos.x - 1, gpos.y);
+					CHECK_OUT(gpos.x + 1, gpos.y);
+					CHECK_OUT(gpos.x - 1, gpos.y + 1);
+					CHECK_OUT(gpos.x,     gpos.y + 1);
+					CHECK_OUT(gpos.x + 1, gpos.y + 1);
+				#undef CHECK_OUT
+				}
+				attr &= ~GRIDMASK_RESOURCE;
+				attr |= it->second.id << 24;
+				modified = true;
+				continue;
+			notOk:
+				break;
+			}
+		}
+		if (modified)
+			this->_map.refreshTile(gpos.x, gpos.y);
+	}
 
 	const Warhead *warhead = weapon->getWarhead();
 	unsigned radius = warhead->getRadius();

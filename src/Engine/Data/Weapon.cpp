@@ -41,6 +41,7 @@ Weapon::Weapon(
 	assert_exp(!data.contains("sound") || data["sound"].is_null() || data["sound"].is_string());
 	assert_exp(!data.contains("ground") || data["ground"].is_boolean());
 	assert_exp(!data.contains("air") || data["air"].is_boolean());
+	assert_exp(!data.contains("increase_resource") || data["increase_resource"].is_number_unsigned());
 
 	std::string type = data["type"];
 
@@ -71,6 +72,8 @@ Weapon::Weapon(
 		this->_air = data["air"];
 	if (data.contains("ground"))
 		this->_ground = data["ground"];
+	if (data.contains("increase_resource"))
+		this->_increaseResource = data["increase_resource"];
 	if (data.contains("take_control"))
 		this->_takeControl.emplace(data["take_control"]);
 	if (data.contains("send_forward"))
@@ -151,6 +154,11 @@ const std::vector<std::string> &Weapon::canHitTags() const
 double Weapon::getInaccuracy(double dist) const
 {
 	return this->_inaccuracyBase + this->_inaccuracyDist * dist;
+}
+
+unsigned Weapon::getIncreaseResource() const
+{
+	return this->_increaseResource;
 }
 
 const std::optional<WeaponTakeControl> & Weapon::getTakeControl() const

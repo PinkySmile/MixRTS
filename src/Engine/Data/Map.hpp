@@ -80,7 +80,7 @@ struct MYDLL_API MapResource {
 	unsigned id;
 	unsigned deplete;
 	std::unordered_map<std::string, unsigned> value;
-	std::vector<unsigned> onlyAdjCollectible;
+	bool mustBeSurrounded = false;
 
 	MapResource(const std::filesystem::path &folder, const nlohmann::json &json);
 
@@ -129,6 +129,7 @@ struct MYDLL_API LoadedMap {
 	void load(Mod &mod, const std::filesystem::path &path);
 	void spawnObjects(size_t faction);
 	void buildCache();
+	uint32_t getResourceTile(const MapResource &r, unsigned x, unsigned y, uint32_t old, bool reload) const;
 	void refreshTile(unsigned x, unsigned y, bool commit = true, bool reload = true);
 	float getSpeedMul(const std::vector<std::string> &tags, unsigned terrain) const;
 

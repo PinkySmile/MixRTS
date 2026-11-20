@@ -774,7 +774,8 @@ void UI::_updateCursorNormal()
 			auto ownObj = this->ownerState->index == obj->owner->state.index;
 			auto otherAllied = this->ownerState->team == other->owner->state.team;
 
-			if (ownObj && !otherAllied) {
+			// TODO: Some things don't show an attack cursor either
+			if (ownObj && !otherAllied && other) {
 				const ObjectWeapon *w = obj->getBestWeaponFor(other, UINT32_MAX, false);
 
 				if (w) {
@@ -797,16 +798,17 @@ void UI::_updateCursorNormal()
 			return o->owner->state.index == this->ownerState->index && o->getResourceStorage() != 0;
 		});
 
-		if (canDeposit && canHarvest)
+		if (canDeposit && canHarvest) {
 			this->_cursor = CURSOR_DUMP;
-		else if (
-			this->_objectBuffer.back()->isSelectable() &&
+			return;
+		}
+		if (
+			(this->manager->isDebugPanelOpen() || this->_objectBuffer.back()->isSelectable()) &&
 			std::ranges::find(this->state->selectedObjects, this->_objectBuffer.back()) == this->state->selectedObjects.end()
-		)
+		) {
 			this->_cursor = CURSOR_SELECT;
-		else
-			this->_cursor = CURSOR_NORMAL;
-		return;
+			return;
+		}
 	}
 
 	if (std::ranges::all_of(this->state->selectedObjects, [this](const GameObject *o){
@@ -839,7 +841,7 @@ void UI::_updateCursorNormal()
 		if (obj->ignoresTerrain())
 			this->_cursor = CURSOR_MOVE;
 		else if (
-			!this->manager->isAreaFree(tl, obj->map->tileSize) ||
+			!this->manager->isAreaFree(tl, obj->map->tileSize, {}, false, true) ||
 			!obj->map->hasAnyGridBits(relPos, passFlags)
 		)
 			this->_cursor = CURSOR_NO_MOVE;
@@ -1170,7 +1172,12 @@ void UI::_tileClickedNormal()
 		for (auto &a : attack | std::ranges::views::values)
 			this->_eventQueue.emplace_back(a);
 
-		if (!this->_objectBuffer.empty() && (!hasHarvester || !canDeposit) && usedUnits.empty() && this->_objectBuffer.back()->isSelectable()) {
+		if (
+			!this->_objectBuffer.empty() &&
+			(!hasHarvester || !canDeposit) &&
+			usedUnits.empty() &&
+			(this->manager->isDebugPanelOpen() || this->_objectBuffer.back()->isSelectable())
+		) {
 			this->state->selectedObjects.clear();
 			this->state->selectedObjects.emplace(this->_objectBuffer.back());
 			// TODO: Wrong check. Should have a different index per controlling player.
@@ -1220,7 +1227,7 @@ void UI::_tileClickedNormal()
 			if (!devent.indices.empty())
 				this->_eventQueue.emplace_back(devent);
 		}
-	} else if (!this->_objectBuffer.empty() && this->_objectBuffer.back()->isSelectable()) {
+	} else if (!this->_objectBuffer.empty() && (this->manager->isDebugPanelOpen() || this->_objectBuffer.back()->isSelectable())) {
 		auto b = this->_objectBuffer.back();
 		auto it = this->state->selectedObjects.find(b);
 

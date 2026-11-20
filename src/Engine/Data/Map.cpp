@@ -19,7 +19,7 @@ MapResource::MapResource(const std::filesystem::path &folder, const nlohmann::js
 	assert_exp(json.contains("storage") && json["storage"].is_number());
 	assert_exp(json.contains("id") && json["id"].is_number());
 	assert_exp(json.contains("deplete") && json["deplete"].is_number());
-	assert_exp(!json.contains("only_adjacent_collectible") || json["only_adjacent_collectible"].is_array());
+	assert_exp(!json.contains("must_be_surrounded") || json["must_be_surrounded"].is_boolean());
 	assert_exp(json.contains("value") && json["value"].is_object());
 	for (auto &[key, v] : json["value"].items())
 		assert_msg(v.is_number(), "json[\"value\"][\"" + key + "\"]");
@@ -50,11 +50,8 @@ MapResource::MapResource(const std::filesystem::path &folder, const nlohmann::js
 	this->deplete = json["deplete"];
 	this->value = json["value"];
 
-	if (json.contains("only_adjacent_collectible")) {
-		for (size_t i = 0; i < json["only_adjacent_collectible"].size(); i++)
-			assert_msg(json["only_adjacent_collectible"][i].is_number_unsigned(), std::to_string(i));
-		this->onlyAdjCollectible = json["only_adjacent_collectible"].get<std::vector<unsigned>>();
-	}
+	if (json.contains("must_be_surrounded"))
+		this->mustBeSurrounded = json["must_be_surrounded"];
 }
 
 void MapMetadata::loadColors(const std::filesystem::path &path)
@@ -304,6 +301,32 @@ void LoadedMap::buildCache()
 }
 
 #define HAS_RESOURCE(x_, y_) ((x_) >= this->grid.gridSize.x || (y_) >= this->grid.gridSize.y ? true : GRID_RESOURCE_TYPE(this->grid.grid[(x_) + (y_) * this->grid.gridSize.x]) != 0)
+uint32_t LoadedMap::getResourceTile(const MapResource &r, unsigned x, unsigned y, uint32_t old, bool reload) const
+{
+	uint32_t index;
+
+	switch (r.strategy) {
+	case MapResource::STRAT_RANDOM:
+		if (!reload || std::ranges::find(r.tiles, old) == r.tiles.end())
+			return r.tiles[game->random() % r.tiles.size()];
+		return old;
+	case MapResource::STRAT_CONNECTED:
+		index = 0;
+		index |= HAS_RESOURCE(x - 1, y + 1) << 0;
+		index |= HAS_RESOURCE(x,     y + 1) << 1;
+		index |= HAS_RESOURCE(x + 1, y + 1) << 2;
+		index |= HAS_RESOURCE(x - 1, y)     << 3;
+		index |= HAS_RESOURCE(x + 1, y)     << 4;
+		index |= HAS_RESOURCE(x - 1, y - 1) << 5;
+		index |= HAS_RESOURCE(x,     y - 1) << 6;
+		index |= HAS_RESOURCE(x + 1, y - 1) << 7;
+		return r.tiles[index];
+	default:
+		return old;
+	}
+}
+#undef HAS_RESOURCE
+
 void LoadedMap::refreshTile(unsigned int x, unsigned int y, bool commit, bool reload)
 {
 	auto textureSize = this->tileSet.getSize();
@@ -318,6 +341,14 @@ void LoadedMap::refreshTile(unsigned int x, unsigned int y, bool commit, bool re
 		static_cast<float>(x * this->grid.tileSize.x),
 		static_cast<float>(y * this->grid.tileSize.y)
 	});
+
+	if (res != 0) {
+		assert_exp(this->metadata.resources.contains(res));
+
+		auto &r = this->metadata.resources.at(res);
+
+		index = getResourceTile(r, x, y, old, reload);
+	}
 	this->sprite.setTextureRect({
 		sf::Vector2i(
 			index % textureSize.x * this->grid.tileSize.x,
@@ -326,49 +357,6 @@ void LoadedMap::refreshTile(unsigned int x, unsigned int y, bool commit, bool re
 		sf::Vector2i(this->grid.tileSize)
 	});
 	this->renderCache.draw(this->sprite);
-
-	if (res != 0) {
-		assert_exp(this->metadata.resources.contains(res));
-
-		auto &r = this->metadata.resources.at(res);
-
-		switch (r.strategy) {
-		case MapResource::STRAT_RANDOM:
-			if (reload && std::ranges::find(r.tiles, old) != r.tiles.end())
-				index = old;
-			else
-				index = r.tiles[game->random() % r.tiles.size()];
-			this->sprite.setTextureRect({
-				sf::Vector2i(
-					index % textureSize.x * this->grid.tileSize.x,
-					index / textureSize.x * this->grid.tileSize.y
-				),
-				sf::Vector2i(this->grid.tileSize)
-			});
-			this->renderCache.draw(this->sprite);
-			break;
-		case MapResource::STRAT_CONNECTED:
-			index = 0;
-			index |= HAS_RESOURCE(x - 1, y + 1) << 0;
-			index |= HAS_RESOURCE(x,     y + 1) << 1;
-			index |= HAS_RESOURCE(x + 1, y + 1) << 2;
-			index |= HAS_RESOURCE(x - 1, y)     << 3;
-			index |= HAS_RESOURCE(x + 1, y)     << 4;
-			index |= HAS_RESOURCE(x - 1, y - 1) << 5;
-			index |= HAS_RESOURCE(x,     y - 1) << 6;
-			index |= HAS_RESOURCE(x + 1, y - 1) << 7;
-			index = r.tiles[index];
-			this->sprite.setTextureRect({
-				sf::Vector2i(
-					index % textureSize.x * this->grid.tileSize.x,
-					index / textureSize.x * this->grid.tileSize.y
-				),
-				sf::Vector2i(this->grid.tileSize)
-			});
-			this->renderCache.draw(this->sprite);
-			break;
-		}
-	}
 	this->minimap.setPixel({x, y}, this->metadata.mapColors[index]);
 	if (index != old && reload) {
 		this->refreshTile(x - 1, y - 1, false, true);
@@ -424,7 +412,7 @@ void MapResource::pushUserType(sol::state &state)
 	type["id"] = &MapResource::id;
 	type["deplete"] = &MapResource::deplete;
 	type["value"] = &MapResource::value;
-	type["only_adj_collectible"] = &MapResource::onlyAdjCollectible;
+	type["must_be_surrounded"] = &MapResource::mustBeSurrounded;
 }
 
 void MapState::Quad::pushUserType(sol::state &state)
