@@ -448,11 +448,7 @@ void TitleScreen::_openLoadDialog()
 void TitleScreen::_loadState(const std::filesystem::path &path)
 {
 	auto file = std::make_shared<SaveStateFile>(SaveStateFile::load(path));
-	uint32_t crc = LoadedMap::computeChecksum(file->start.map);
-
-	if (crc != file->mapCrc)
-		throw std::runtime_error("This state's map checksum does not match the installed map");
-
+	// TODO: Check CRCs before starting loading
 	auto args = new InGameArguments();
 
 	args->startParams = file->start;
@@ -463,11 +459,7 @@ void TitleScreen::_loadState(const std::filesystem::path &path)
 void TitleScreen::_loadReplay(const std::filesystem::path &path)
 {
 	ReplayData replay = ReplayData::load(path);
-	uint32_t crc = LoadedMap::computeChecksum(replay.map);
-
-	if (crc != replay.mapCrc)
-		throw std::runtime_error("This replay's map checksum does not match the installed map");
-
+	// TODO: Check CRCs before starting loading
 	auto args = new ReplayArguments();
 
 	args->replay = std::move(replay);

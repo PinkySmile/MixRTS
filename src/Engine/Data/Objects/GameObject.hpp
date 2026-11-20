@@ -613,7 +613,7 @@ public:
 	void setPosition(const Vector2f &pos);
 	void setAltitude(int altitude);
 	void heal(unsigned amount);
-	void damage(unsigned amount, DamageType type = DMGTYPE_GENERIC);
+	virtual void damage(unsigned amount, DamageType type = DMGTYPE_GENERIC);
 	void setHealth(unsigned health);
 	void harvest(const Vector2i &pos, bool automatic, bool straight = false);
 	void harvest();

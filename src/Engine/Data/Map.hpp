@@ -128,12 +128,13 @@ struct MYDLL_API LoadedMap {
 
 	void load(Mod &mod, const std::filesystem::path &path);
 	void spawnObjects(size_t faction);
-	//! Checksum of the map's gameplay files (json, tiles, tileset attributes and metadata). Images are excluded.
-	[[nodiscard]] static uint32_t computeChecksum(const std::string &path);
 	void buildCache();
 	void refreshTile(unsigned x, unsigned y, bool commit = true, bool reload = true);
 	float getSpeedMul(const std::vector<std::string> &tags, unsigned terrain) const;
 
+	//! Checksum of the map's gameplay files (json, tiles, tileset attributes and metadata). Images are excluded.
+	//! Takes the faction crc as param and base for this crc.
+	[[nodiscard]] static uint32_t computeChecksum(const std::string &path, uint32_t crc);
 	static sf::Image renderDetailedPreview(const std::string &path);
 };
 

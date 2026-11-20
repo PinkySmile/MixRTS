@@ -107,6 +107,18 @@ namespace {
 				registry.alias(kind, &it->second, &entry.second);
 		}
 	}
+
+	// TODO: Handle all smart ptr instead of just that one
+	template<>
+	void aliasTemplates(StateRegistry &registry, StateRegistry::Kind kind, const std::unordered_map<std::string, std::shared_ptr<GameObject>> &canonical, const std::unordered_map<std::string, std::shared_ptr<GameObject>> &source)
+	{
+		for (const auto &entry : source) {
+			auto it = canonical.find(entry.first);
+
+			if (it != canonical.end())
+				registry.alias(kind, &*it->second, &entry.second);
+		}
+	}
 }
 
 void GameManager::_aliasRegistrySources()

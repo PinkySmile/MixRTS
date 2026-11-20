@@ -151,11 +151,7 @@ void handleStart(Args &args)
 
 	if (!args.replay.empty()) {
 		ReplayData replay = ReplayData::load(args.replay);
-		uint32_t crc = LoadedMap::computeChecksum(replay.map);
-
-		if (crc != replay.mapCrc)
-			throw std::runtime_error("This replay's map checksum does not match the installed map");
-
+		// TODO: Check CRCs before starting loading
 		auto sArgs = new ReplayArguments();
 
 		sArgs->replay = std::move(replay);

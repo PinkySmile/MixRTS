@@ -540,7 +540,7 @@ void MapInfo::load(const std::string &relPath)
 	this->tileSize.y = json1["size"]["y"];
 }
 
-uint32_t LoadedMap::computeChecksum(const std::string &relPath)
+uint32_t LoadedMap::computeChecksum(const std::string &relPath, uint32_t crc)
 {
 	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(relPath);
 	std::ifstream streamMap{path.second / "map.json"};
@@ -551,7 +551,6 @@ uint32_t LoadedMap::computeChecksum(const std::string &relPath)
 	assert_exp(json.contains("tileset") && json["tileset"].is_string());
 
 	std::filesystem::path tileset = path.second / json["tileset"].get<std::string>();
-	uint32_t crc = 0;
 
 	crc = crc32File(path.second / "map.json", crc, true);
 	crc = crc32File(path.second / "tiles.dat", crc, false);

@@ -25,6 +25,20 @@ void StateRegistry::_add(Kind kind, const void *ptr)
 	this->_ids.emplace(ptr, Entry{kind, id});
 }
 
+// TODO: Handle all smart ptr instead of just that one
+template<>
+void StateRegistry::_addSorted(Kind kind, const std::unordered_map<std::string, std::shared_ptr<GameObject>> &map)
+{
+	std::vector<std::string> keys;
+
+	keys.reserve(map.size());
+	for (const auto &entry : map)
+		keys.push_back(entry.first);
+	std::ranges::sort(keys);
+	for (const auto &key : keys)
+		this->_add(kind, &*map.at(key));
+}
+
 template<typename T>
 void StateRegistry::_addSorted(Kind kind, const std::unordered_map<std::string, T> &map)
 {

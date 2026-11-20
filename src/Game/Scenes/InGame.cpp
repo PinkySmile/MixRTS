@@ -32,6 +32,7 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 	std::vector<std::string> loadedFactions;
 	MapInfo map;
 	size_t mapFaction = 0;
+	uint32_t crc = 0;
 
 	map.load(params.map);
 	this->_panel = tgui::Panel::create();
@@ -51,10 +52,12 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 		auto it = std::ranges::find(loadedFactions, map.faction);
 
 		if (it == loadedFactions.end()) {
+			mapFaction = loadedFactions.size();
 			loadedFactions.push_back(map.faction);
 			this->_loadedFactions.push_back(game->modManager.getFaction(map.faction));
-		}
-		mapFaction = std::distance(loadedFactions.begin(), it);
+		} else
+			mapFaction = std::distance(loadedFactions.begin(), it);
+		crc = this->_loadedFactions[mapFaction].getChecksum();
 	}
 
 	for (auto &f : this->_loadedFactions) {
@@ -63,7 +66,7 @@ InGame::InGame(GameStartParams params, std::function<void (const std::string &)>
 	}
 
 	cb("Computing checksum for " + params.map);
-	this->_mapCrc = LoadedMap::computeChecksum(params.map);
+	this->_mapCrc = LoadedMap::computeChecksum(params.map, crc);
 	for (auto &f : this->_loadedFactions) {
 		cb("Computing checksum for " + f.getName());
 		this->_factionCrcs[f.getName()] = f.getChecksum();

@@ -303,7 +303,7 @@ void GameManager::loadState(StateReader &in)
 		header.owner = in.u32();
 		header.templateId = header.kind == 0 ? in.u32() : 0;
 		assert_msg(header.owner < this->_players.size(), "Saved object has no player");
-		assert_msg(std::none_of(headers.begin(), headers.end(), [&](const Header &other) { return other.index == header.index; }), "Duplicate object index");
+		assert_msg(std::ranges::none_of(headers, [&](const Header &other) { return other.index == header.index; }), "Duplicate object index");
 		headers.push_back(header);
 	}
 
