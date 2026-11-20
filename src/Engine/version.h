@@ -1,0 +1,23 @@
+//
+// Created by PinkySmile on 20/11/2026.
+//
+
+#ifndef MIXRTS_VERSION_H
+#define MIXRTS_VERSION_H
+
+
+#define VERSION_MAJOR 0
+#define VERSION_MINOR 0
+#define VERSION_BUILD 1
+#define VERSION_PATCH 0
+
+#define VERSION_DIGITS VERSION_MAJOR,VERSION_MINOR,VERSION_BUILD,VERSION_PATCH
+#define REAL_VERSION_STR "alpha 1"
+#ifdef _DEBUG
+#define VERSION_STR REAL_VERSION_STR" DEBUG"
+#else
+#define VERSION_STR REAL_VERSION_STR
+#endif
+
+
+#endif

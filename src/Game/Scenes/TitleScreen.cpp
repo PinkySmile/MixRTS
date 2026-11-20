@@ -215,6 +215,7 @@ void TitleScreen::_initTitle()
 	});
 	debug->onClick([this] {
 		game->lobbySettings.players.clear();
+		this->_playerPanels.clear();
 		game->lobbySettingsValid = true;
 		this->_initLobby();
 	});

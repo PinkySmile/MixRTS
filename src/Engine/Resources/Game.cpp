@@ -10,6 +10,7 @@
 #include <TGUI/Texture.hpp>
 #include "Game.hpp"
 #include "Assert.hpp"
+#include "version.h"
 #include "Data/Logger.hpp"
 #include "UI/UI.hpp"
 #include "UI/LuaUI.hpp"
@@ -232,7 +233,7 @@ Game::Game(
 	gameRandom(random()),
 	logger(loggerPath),
 	font(fontPath),
-	screen(new ScreenImpl("MixRTS")),
+	screen(new ScreenImpl("MixRTS - " REAL_VERSION_STR)),
 	gui(this->screen->getRenderTarget())
 {
 	this->init();
