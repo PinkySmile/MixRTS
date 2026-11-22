@@ -25,6 +25,7 @@ Animation::Animation(const Mod &base, const nlohmann::json &json)
 	assert_exp(json["bounds"].contains("h") && json["bounds"]["w"].is_number());
 	assert_exp(!json.contains("blending") || json["blending"].is_string());
 	assert_exp(!json.contains("coloring") || json["coloring"].is_object());
+	assert_exp(!json.contains("mirror") || json["mirror"].is_object());
 
 	std::string relPath = RESOURCE(base.getName(), json["sprite"]);
 
@@ -59,6 +60,12 @@ Animation::Animation(const Mod &base, const nlohmann::json &json)
 		else
 			assert_not_reached_msg("Invalid coloring");
 	}
+	if (json.contains("mirror")) {
+		assert_exp(json["mirror"].contains("x") && json["mirror"]["x"].is_boolean());
+		assert_exp(json["mirror"].contains("y") && json["mirror"]["y"].is_boolean());
+		this->_mirror.x = json["mirror"]["x"];
+		this->_mirror.y = json["mirror"]["y"];
+	}
 	if (this->_pal == PAL_NONE) {
 		this->_sprite.load(*this->_file);
 		this->_requiresPaletteReload = false;
@@ -78,13 +85,26 @@ Sprite &Animation::getSprite()
 		this->_reloadPalette();
 
 	IntRect rect = this->_bounds;
+	Vector2f pos = this->_offset;
+	Vector2f scale;
 
 	if (this->_file && rect.size.x == 0)
 		rect.size.x = this->_sprite.getTextureSize().x;
 	if (this->_file && rect.size.y == 0)
 		rect.size.y = this->_sprite.getTextureSize().y;
 	this->_sprite.setTextureRect(rect);
-	this->_sprite.setPosition(this->_offset);
+	if (this->_mirror.x) {
+		scale.x = -1;
+		pos.x += rect.size.x;
+	} else
+		scale.x = 1;
+	if (this->_mirror.y) {
+		scale.y = -1;
+		pos.y += rect.size.y;
+	} else
+		scale.y = 1;
+	this->_sprite.setScale(scale);
+	this->_sprite.setPosition(pos);
 	return this->_sprite;
 }
 

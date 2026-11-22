@@ -4,8 +4,15 @@
 
 #include <TGUI/Widgets/Button.hpp>
 #include "TitleScreen.hpp"
+
+#include "../UI/ColorPlaneWidget.hpp"
+#include "../UI/ColorSliderWidget.hpp"
 #include "Data/Vector.hpp"
 #include "Data/Map.hpp"
+#include "Data/Upgrade.hpp"
+#include "Data/Animation.hpp"
+#include "Data/Effect.hpp"
+#include "Data/Weapon.hpp"
 #include "Data/Replay.hpp"
 #include "Data/SaveState.hpp"
 #include "Resources/Assert.hpp"
@@ -288,7 +295,8 @@ void TitleScreen::_addPlayerPanels(tgui::Panel::Ptr players, tgui::Button::Ptr s
 		p.spawn = p.panel->get<tgui::ComboBox>("Spawn");
 
 		for (auto &key : game->modManager.getFactionList())
-			p.faction->addItem(key, key);
+			if (game->modManager.getFaction(key).isSelectable())
+				p.faction->addItem(key, key);
 		for (size_t i = 0; i < MAX_TEAM_COUNT; i++)
 			p.team->addItem(characters[i]);
 		p.spawn->addItem("-");
@@ -302,11 +310,12 @@ void TitleScreen::_addPlayerPanels(tgui::Panel::Ptr players, tgui::Button::Ptr s
 			this->_addPlayerPanels(players, start);
 			this->_updatePlayerList(start);
 		});
-		p.color->onClick([index] {
-
+		p.color->onClick([this, index] {
+			this->_openColorWindow(index);
 		});
-		p.faction->onItemSelect([index](const tgui::String &, const tgui::String &id) {
+		p.faction->onItemSelect([index, this](const tgui::String &, const tgui::String &id) {
 			game->lobbySettings.players[index].faction = id.toStdString();
+			this->_anim = 0;
 		});
 		p.team->onItemSelect([index](int i) {
 			game->lobbySettings.players[index].team = i;
@@ -344,11 +353,14 @@ void TitleScreen::_addPlayerPanels(tgui::Panel::Ptr players, tgui::Button::Ptr s
 
 void TitleScreen::_updatePlayerList(tgui::Button::Ptr start)
 {
-	start->setEnabled(!game->lobbySettings.players.empty());
+	if (start)
+		start->setEnabled(!game->lobbySettings.players.empty());
 	for (size_t i = 0; i < this->_playerPanels.size(); i++) {
 		auto &p = this->_playerPanels[i];
 		auto &pl = game->lobbySettings.players[i];
-		Color color = pl.color.toRGB();
+		HSLColor c = pl.color;
+		c.l /= 2;
+		Color color = c.toRGB();
 
 		p.color->getRenderer()->setBackgroundColor(color);
 		p.color->getRenderer()->setBackgroundColorDisabled(color);
@@ -473,8 +485,13 @@ void TitleScreen::_initLobby()
 	players->add(panel, "AddPlayer");
 	this->_addPlayerPanels(players, start);
 	addPlayer->onClick([this, players, start] {
+		auto list = game->modManager.getFactionList();
+		auto it = std::ranges::find_if(list, [] (const std::string &id){
+			return game->modManager.getFaction(id).isSelectable();
+		});
+
 		game->lobbySettings.players.push_back(PlayerArg{
-			game->modManager.getFactionList()[0],
+			*it,
 			{},
 			{},
 			HSLColor(
@@ -521,6 +538,112 @@ void TitleScreen::_openReplayDialog()
 		} catch (std::exception &e) {
 			dispMsg(game->gui, "Replay loading failed", "This replay is invalid, corrupted or was created for a different version of the game: " + std::string(e.what()));
 		}
+	});
+}
+
+void TitleScreen::_updateImage()
+{
+	auto &anim = this->_animShowing->first.getPreview()[this->_anim];
+	Vector2f offset = anim.getOffset() - this->_animShowing->first.getPreviewSize() / 2;
+	tgui::Texture t;
+	sf::Image img = anim.getSprite().getTexture().copyToImage();
+
+	t.loadFromPixelData(img.getSize(), img.getPixelsPtr());
+	this->_animShowing->second->setPosition({
+		tgui::Layout("&.w / 2 + " + std::to_string(offset.x)),
+		tgui::Layout("&.h / 2 + " + std::to_string(offset.y))
+	});
+	this->_animShowing->second->getRenderer()->setTexture(t);
+	this->_animShowing->second->setSize({
+		t.getImageSize().x,
+		t.getImageSize().y
+	});
+}
+
+void TitleScreen::_openColorWindow(size_t i)
+{
+	auto win = openWindowWithFocus(*this->_panel, 650, 390);
+	auto plane = ColorPlaneWidget::create();
+	auto slider = ColorSliderWidget::create(true);
+	auto picture = tgui::Picture::create();
+	auto panel = tgui::Panel::create();
+	auto c = [this] {
+		this->_anim = 0;
+		this->_animTimer = 0;
+		this->_plane.reset();
+		this->_slider.reset();
+		this->_animShowing.reset();
+	};
+
+	win->setTitle("Edit color");
+	panel->getRenderer()->setBackgroundColor(tgui::Color{0x80, 0x80, 0x80});
+	this->_animShowing.emplace(
+		game->modManager.getFaction(game->lobbySettings.players[i].faction),
+		picture
+	);
+	for (auto &anim : this->_animShowing->first.getPreview())
+		anim.setColor(game->lobbySettings.players[i].color);
+	win->add(plane);
+	win->add(slider);
+	win->add(panel);
+	win->onClose(c);
+	win->onEscapeKeyPress(c);
+	this->_panel->get<tgui::Panel>("BackPanel")->onClick(c);
+	panel->add(picture);
+	this->_updateImage();
+	this->_slider = slider;
+	this->_plane = plane;
+
+	plane->setPosition({10, 10});
+	plane->setSize({ 350, 350});
+	plane->setColor(game->lobbySettings.players[i].color);
+	slider->setPosition({370, 10});
+	slider->setSize({ 20, 350});
+	slider->setColor(game->lobbySettings.players[i].color);
+	panel->setPosition({410, 10});
+	panel->setSize({"&.w - x - 10", 350});
+
+	plane->onChanged([this, i, s = std::weak_ptr(slider)](const HSLColor &hcolor){
+		for (auto &anim : this->_animShowing->first.getPreview())
+			anim.setColor(hcolor);
+		s.lock()->setColor(hcolor);
+		this->_updateImage();
+
+		auto &p = this->_playerPanels[i];
+		HSLColor c = hcolor;
+		c.l /= 2;
+		Color color = c.toRGB();
+
+		p.color->getRenderer()->setBackgroundColor(color);
+		p.color->getRenderer()->setBackgroundColorDisabled(color);
+		p.color->getRenderer()->setBackgroundColorDown(color);
+		p.color->getRenderer()->setBackgroundColorDownDisabled(color);
+		p.color->getRenderer()->setBackgroundColorDownFocused(color);
+		p.color->getRenderer()->setBackgroundColorDownHover(color);
+		p.color->getRenderer()->setBackgroundColorFocused(color);
+		p.color->getRenderer()->setBackgroundColorHover(color);
+		game->lobbySettings.players[i].color = hcolor;
+	});
+	slider->onChanged([this, i, s = std::weak_ptr(plane)](const HSLColor &hcolor){
+		for (auto &anim : this->_animShowing->first.getPreview())
+			anim.setColor(hcolor);
+		s.lock()->setColor(hcolor);
+		this->_updateImage();
+
+		auto &p = this->_playerPanels[i];
+		HSLColor c = hcolor;
+		c.l /= 2;
+		Color color = c.toRGB();
+
+		p.color->getRenderer()->setBackgroundColor(color);
+		p.color->getRenderer()->setBackgroundColorDisabled(color);
+		p.color->getRenderer()->setBackgroundColorDown(color);
+		p.color->getRenderer()->setBackgroundColorDownDisabled(color);
+		p.color->getRenderer()->setBackgroundColorDownFocused(color);
+		p.color->getRenderer()->setBackgroundColorDownHover(color);
+		p.color->getRenderer()->setBackgroundColorFocused(color);
+		p.color->getRenderer()->setBackgroundColorHover(color);
+		game->lobbySettings.players[i].color = hcolor;
 	});
 }
 
@@ -589,12 +712,28 @@ void TitleScreen::update()
 {
 	game->screen->setMouseCursorVisible(true);
 	game->screen->setMouseCursorGrabbed(false);
+	if (this->_animShowing) {
+		this->_animTimer++;
+		if (this->_animTimer >= 10) {
+			this->_animTimer = 0;
+			this->_anim++;
+			if (this->_anim >= this->_animShowing->first.getPreview().size())
+				this->_anim = 0;
+			this->_updateImage();
+		}
+	}
 }
 
 void TitleScreen::consumeEvent(const sf::Event &event)
 {
 	if (event.is<sf::Event::Resized>())
 		this->_placeMapsInPanel();
+	if (auto mouse = event.getIf<sf::Event::MouseMoved>()) {
+		if (this->_slider)
+			this->_slider->mouseMovedAbs(Vector2f(mouse->position) - Vector2f(this->_slider->getAbsolutePosition()));
+		if (this->_plane)
+			this->_plane->mouseMovedAbs(Vector2f(mouse->position) - Vector2f(this->_plane->getAbsolutePosition()));
+	}
 }
 
 tgui::Panel::Ptr TitleScreen::getPanel() const

@@ -117,7 +117,7 @@ Color HSLColor::toRGB() const
 		return l - a * std::max(-1., std::min(1., std::min(k - 3, 9 - k)));
 	};
 
-	return Color(f(0) * 255, f(8) * 255, f(4) * 255, 255);
+	return Color(f(0) * 255, f(8) * 255, f(4) * 255, this->a);
 }
 
 unsigned angleToDirection(double angle, size_t count)

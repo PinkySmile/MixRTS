@@ -117,7 +117,10 @@ private:
 	std::string _name;
 	std::string _definition;
 	std::set<std::string> _checksumFiles;
+	std::vector<Animation> _preview;
+	Vector2u _previewSize;
 	mutable SharedLibrary _sl = nullptr;
+	bool _selectable = true;
 	bool _regressTech;
 	bool _canSell;
 	bool _canRepair;
@@ -154,12 +157,15 @@ public:
 	[[nodiscard]] bool regressesTech() const;
 	[[nodiscard]] bool hasRadar() const;
 	[[nodiscard]] bool isRadarPowered() const;
+	[[nodiscard]] bool isSelectable() const;
 	[[nodiscard]] const std::string &getName() const;
 	//! Checksum of the faction definition and the gameplay files it loaded. Valid after load().
 	[[nodiscard]] uint32_t getChecksum() const;
 	[[nodiscard]] const std::optional<nlohmann::json> &getRepairAnim() const;
 	[[nodiscard]] const nlohmann::json &getUIData() const;
 	[[nodiscard]] const std::unordered_map<std::string, FactionQueue> &getQueues() const;
+	[[nodiscard]] std::vector<Animation> &getPreview();
+	[[nodiscard]] Vector2u getPreviewSize() const;
 
 	[[nodiscard]] std::unordered_map<std::string, MultiSound> &getSounds();
 	[[nodiscard]] std::unordered_map<std::string, Upgrade> &getUpgrades();

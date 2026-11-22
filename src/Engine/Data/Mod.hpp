@@ -23,6 +23,7 @@ private:
 
 public:
 	Mod(std::filesystem::path base, const nlohmann::json &metadata);
+	void loadAnimation(const std::filesystem::path &path, const std::string &key, std::vector<Animation> &anims) const;
 	void loadFactions(const std::string &path, std::unordered_map<std::string, Faction> &factions) const;
 	void loadCursors(const std::string &path, std::unordered_map<std::string, CursorAnimation> &cursors) const;
 	void loadSounds(const std::string &path, std::unordered_map<std::string, MultiSound> &sounds, std::set<std::string> *checksumFiles = nullptr) const;

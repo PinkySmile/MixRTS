@@ -138,6 +138,7 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	_factory(*this),
 	_name(name)
 {
+	assert_exp(!data.contains("selectable") || data["selectable"].is_boolean());
 	assert_exp(data.contains("can_sell") && data["can_sell"].is_boolean());
 	assert_exp(data.contains("can_repair") && data["can_repair"].is_boolean());
 	assert_exp(data.contains("regress_tech") && data["regress_tech"].is_boolean());
@@ -148,6 +149,12 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	assert_exp(data.contains("queues") && data["queues"].is_object());
 	assert_exp(!data.contains("ui_path") || data["ui_path"].is_string());
 	assert_exp(!data.contains("object_factory") || data["object_factory"].is_string());
+	assert_exp(data.contains("preview") && data["preview"].is_object());
+	assert_exp(data["preview"].contains("file") && data["preview"]["file"].is_string());
+	assert_exp(data["preview"].contains("key") && data["preview"]["key"].is_string());
+	assert_exp(data["preview"].contains("size") && data["preview"]["size"].is_object());
+	assert_exp(data["preview"]["size"].contains("x") && data["preview"]["size"]["x"].is_number_unsigned());
+	assert_exp(data["preview"]["size"].contains("y") && data["preview"]["size"]["y"].is_number_unsigned());
 
 	assert_exp(data.contains("sounds") && data["sounds"].is_array());
 	for (size_t i = 0; i < data["sounds"].size(); i++)
@@ -224,6 +231,8 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 	this->_hasRadar = data["has_radar"];
 	this->_radarPowered = data["radar_powered"];
 
+	if (data.contains("selectable"))
+		this->_selectable = data["selectable"];
 	if (data.contains("object_factory")) {
 		std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(RESOURCE(base.getName(), data["object_factory"]));
 
@@ -271,6 +280,9 @@ Faction::Faction(const Mod &base, const std::string &name, const nlohmann::json 
 			this->_queues.emplace(RESOURCE(base.getName(), n), FactionQueue{base, q});
 		} CATCH_AND_RETHROW("In faction queue \"" + n + "\"\n")
 	this->_definition = data.dump();
+	this->_previewSize.x = data["preview"]["size"]["x"];
+	this->_previewSize.y = data["preview"]["size"]["y"];
+	this->_base.loadAnimation(this->_base.getBase() / data["preview"]["file"], data["preview"]["key"], this->_preview);
 }
 
 Faction::~Faction()
@@ -445,6 +457,11 @@ bool Faction::isRadarPowered() const
 	return this->_radarPowered;
 }
 
+bool Faction::isSelectable() const
+{
+	return this->_selectable;
+}
+
 static bool isTextChecksumFile(const std::filesystem::path &path)
 {
 	std::string ext = path.extension().string();
@@ -484,6 +501,16 @@ const nlohmann::json &Faction::getUIData() const
 const std::unordered_map<std::string, FactionQueue> & Faction::getQueues() const
 {
 	return this->_queues;
+}
+
+std::vector<Animation> &Faction::getPreview()
+{
+	return this->_preview;
+}
+
+Vector2u Faction::getPreviewSize() const
+{
+	return this->_previewSize;
 }
 
 const std::optional<std::string> &Faction::getPrimaryQueue() const

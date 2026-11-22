@@ -7,6 +7,9 @@
 
 
 #include <TGUI/Widgets/Panel.hpp>
+
+#include "../UI/ColorPlaneWidget.hpp"
+#include "../UI/ColorSliderWidget.hpp"
 #include "Resources/IScene.hpp"
 #include "Resources/SceneArgument.hpp"
 
@@ -21,17 +24,24 @@ private:
 		tgui::ComboBox::Ptr faction;
 	};
 
+	unsigned _anim = 0;
+	unsigned _animTimer = 0;
+	std::optional<std::pair<Faction, tgui::Picture::Ptr>> _animShowing;
 	MapInfo _map;
 	tgui::Panel::Ptr _panel;
 	tgui::Panel::Ptr _addButton;
 	std::vector<PlayerUI> _playerPanels;
 	tgui::Panel::Ptr _mapContainer;
 	std::vector<tgui::Panel::Ptr> _mapPanels;
+	ColorSliderWidget::Ptr _slider;
+	ColorPlaneWidget::Ptr _plane;
 
 	void _initTitle();
 	void _initLobby();
 	void _initMapSelect();
 	void _openReplayDialog();
+	void _openColorWindow(size_t i);
+	void _updateImage();
 	void _loadReplay(const std::filesystem::path &path);
 	void _openLoadDialog();
 	void _loadState(const std::filesystem::path &path);

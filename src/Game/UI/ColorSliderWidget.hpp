@@ -1,0 +1,57 @@
+//
+// Created by PinkySmile on 26/10/2025.
+//
+
+#ifndef MIXRTSCOLORSLIDERWIDGET_HPP
+#define MIXRTSCOLORSLIDERWIDGET_HPP
+
+
+#include <array>
+#include <SFML/Graphics/Sprite.hpp>
+#include <SFML/Graphics/Texture.hpp>
+#include <TGUI/Widgets/ClickableWidget.hpp>
+
+#include "Utils.hpp"
+
+class ColorSliderWidget : public tgui::ClickableWidget {
+public:
+	using Ptr = std::shared_ptr<ColorSliderWidget>; //!< Shared widget pointer
+	using ConstPtr = std::shared_ptr<const ColorSliderWidget>; //!< Shared constant widget pointer
+
+	static constexpr const char StaticWidgetType[] = "ColorSliderWidget"; //!< Type name of the widget
+
+	ColorSliderWidget(bool dir);
+	void draw(tgui::BackendRenderTarget &target, tgui::RenderStates states) const override;
+	void setColor(HSLColor color);
+	HSLColor getColor() const;
+
+	void mouseMovedAbs(tgui::Vector2f pos);
+	void leftMouseButtonNoLongerDown() override;
+	bool leftMousePressed(tgui::Vector2f pos) override;
+
+	TGUI_NODISCARD static ColorSliderWidget::Ptr create(
+		bool dir,
+		const tgui::Layout2d &size = {"100%", "100%"}
+	);
+
+	tgui::SignalTyped<HSLColor> onChanged = {"Changed"};
+	tgui::Signal onChangeStarted = {"ChangedStarted"};
+	tgui::Signal onChangeEnded = {"ChangedEnded"};
+
+private:
+	HSLColor _color = {0, 0, 0};
+	bool _dir;
+	bool _dragging = false;
+	mutable bool _dirty = false;
+	mutable tgui::Vector2f _lastSize{0, 0};
+	mutable sf::Texture _space;
+	mutable sf::Sprite _sprite{this->_space};
+	mutable sf::Texture _selector;
+	mutable sf::Sprite _selectorSprite{this->_selector};
+
+	void _recreateTexture() const;
+	void _setPointerPosition() const;
+};
+
+
+#endif //MIXRTSCOLORSLIDERWIDGET_HPP

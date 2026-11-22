@@ -8,6 +8,8 @@
 #include <sstream>
 #include <stdexcept>
 #include "Replay.hpp"
+
+#include "Debug/Profiler.hpp"
 #include "Resources/SceneArgument.hpp"
 #include "Resources/Assert.hpp"
 
@@ -494,6 +496,7 @@ ReplayData ReplayData::fromGame(
 	std::vector<std::vector<RecordedAction>> actions
 )
 {
+	PROFILE_SCOPE("Save replay");
 	assert_exp(factionCrcs.size() == params.players.size());
 	assert_exp(actions.size() == params.players.size());
 

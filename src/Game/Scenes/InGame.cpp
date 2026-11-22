@@ -15,6 +15,7 @@
 #include "UI/BaseUI.hpp"
 #include "UI/CombinedUI.hpp"
 #include "Data/SaveState.hpp"
+#include "Debug/Profiler.hpp"
 
 InGameArguments::~InGameArguments() = default;
 
@@ -252,6 +253,7 @@ void InGame::renderAbove() const
 
 void InGame::_publishCrashAnchor()
 {
+	PROFILE_SCOPE("Publish crash anchor");
 	if (!this->_saveReplays || this->_crashAnchorPublished || !game || !game->game)
 		return;
 
@@ -301,6 +303,7 @@ void InGame::_retractCrashAnchor()
 
 SaveStateFile InGame::_makeStateFile() const
 {
+	PROFILE_SCOPE("save_state");
 	SaveStateFile file;
 	auto &players = game->game->getPlayers();
 

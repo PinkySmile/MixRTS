@@ -54,6 +54,7 @@ private:
 	std::vector<unsigned> _palIndices;
 	std::string _palMask;
 	bool _requiresPaletteReload = false;
+	Vector2b _mirror = {false, false};
 
 
 	std::optional<std::array<Color, 256>> _cache;

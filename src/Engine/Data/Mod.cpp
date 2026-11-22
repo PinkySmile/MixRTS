@@ -37,6 +37,40 @@ Mod::Mod(std::filesystem::path base, const nlohmann::json &metadata) :
 	this->_factions = metadata["factions"];
 }
 
+void Mod::loadAnimation(const std::filesystem::path &path, const std::string &key, std::vector<Animation> &anims) const
+{
+	TRY {
+		std::ifstream stream{path};
+		nlohmann::json json;
+		nlohmann::json gen;
+
+		assert_msg(stream, "Failed to open " + path.string());
+		stream >> json;
+		if (json.contains("_general"))
+			gen = json["_general"];
+		else
+			gen = nlohmann::json::object();
+		assert_msg(json.contains(key), key);
+		TRY {
+			auto &janimArr = json[key];
+			assert_exp(janimArr.is_array());
+			anims.reserve(janimArr.size());
+			for (auto &janim: janimArr) {
+				auto animJson = mergeObjects(janim, gen);
+				size_t count = 1;
+
+				if (animJson.contains("repeat")) {
+					assert_exp(animJson["repeat"].is_number_unsigned());
+					count = animJson["repeat"];
+					assert_exp(count != 0);
+				}
+				while (count--)
+					anims.emplace_back(*this, animJson);
+			}
+		} CATCH_AND_RETHROW("In key \"" + key + "\"\n")
+	} CATCH_AND_RETHROW("While loading animations file \"" + path.string() + "\"\n")
+}
+
 static void rememberFile(std::set<std::string> *files, const Mod &mod, const std::filesystem::path &fullPath)
 {
 	if (!files)

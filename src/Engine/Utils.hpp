@@ -139,7 +139,7 @@ typename WindowType::Ptr openWindowWithFocus(T &gui, tgui::Layout width, tgui::L
 
 	panel->getRenderer()->setBackgroundColor({0, 0, 0, 175});
 	panel->setUserData(false);
-	gui.add(panel);
+	gui.add(panel, "BackPanel");
 
 	if (!window) {
 		window = WindowType::create(args...);
