@@ -32,6 +32,7 @@ struct ExtraSpawn;
 struct MapState;
 struct MapMetadata;
 struct LoadedMap;
+struct MapInfo;
 struct PlayerState;
 struct UIState;
 struct PlayerQueue;

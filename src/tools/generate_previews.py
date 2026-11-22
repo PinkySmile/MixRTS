@@ -105,4 +105,4 @@ if __name__ == '__main__':
 	for y in range(minimap.size[1]):
 		for x in range(minimap.size[0]):
 			refreshTile(minimap, lmap, x, y)
-	minimap.save(os.path.join(sys.argv[1], lmap["preview"]))
+	minimap.save(os.path.join(sys.argv[1], "preview.png"))

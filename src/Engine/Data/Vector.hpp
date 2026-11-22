@@ -8,9 +8,7 @@
 
 #include <ostream>
 #include <cmath>
-#ifndef NO_TGUI
 #include <TGUI/Vector2.hpp>
-#endif
 #include <SFML/System/Vector2.hpp>
 
 template<typename T>
@@ -29,7 +27,12 @@ public:
 	Vector2(Vector2<T2> v) noexcept
 		: x(v.x), y(v.y) {}
 
-	Vector2(sf::Vector2<T> v) noexcept
+	template <typename T2>
+	Vector2(sf::Vector2<T2> v) noexcept
+		: x(v.x), y(v.y) {}
+
+	template <typename T2>
+	Vector2(tgui::Vector2<T2> v) noexcept
 		: x(v.x), y(v.y) {}
 
 	template <typename T2>
@@ -38,16 +41,11 @@ public:
 		return sf::Vector2<T2>(this->x, this->y);
 	}
 
-#ifndef NO_TGUI
-	Vector2(tgui::Vector2<T> v) noexcept
-		: x(v.x), y(v.y) {}
-
 	template <typename T2>
 	[[nodiscard]] operator tgui::Vector2<T2>() const noexcept
 	{
 		return tgui::Vector2<T2>(this->x, this->y);
 	}
-#endif
 
 	template<typename T2>
 	[[nodiscard]] Vector2<T2> to() const noexcept

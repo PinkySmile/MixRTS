@@ -218,7 +218,7 @@ void InGame::saveReplay(const std::filesystem::path &dir)
 
 void InGame::render() const
 {
-	reloadViews(*game->screen, game->gui, game->screen->getSize(), {0, -20 * guiScale});
+	reloadViews(*game->screen, game->gui, game->screen->getSize(), {0, -20 * guiScale}, guiScale);
 	game->game->updateRender();
 	game->game->render();
 }

@@ -151,6 +151,7 @@ struct MYDLL_API MapInfo {
 	std::vector<Vector2u> startAreas;
 
 	void load(const std::string &path);
+	void load(const Mod &mod, const std::filesystem::path &path);
 };
 
 

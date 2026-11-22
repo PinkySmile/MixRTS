@@ -5,6 +5,7 @@
 #include <TGUI/Widgets/Label.hpp>
 #include "Crash.hpp"
 #include "Resources/Game.hpp"
+#include "UI/BaseUI.hpp"
 
 #ifdef __linux__
 #include <unistd.h>
@@ -34,27 +35,6 @@ void cleanStackTrace(cpptrace::stacktrace &st)
 		else
 			simplifySym(sym);
 	}
-}
-
-static void reloadViews(sf::RenderWindow &win, tgui::Gui &gui, Vector2u size)
-{
-	sf::View view{sf::FloatRect{
-		{0, 0},
-		{
-			static_cast<float>(size.x),
-			static_cast<float>(size.y)
-		}
-	}};
-	tgui::FloatRect viewGui{
-		{0, 0},
-		{
-			static_cast<float>(size.x),
-			static_cast<float>(size.y)
-		}
-	};
-
-	win.setView(view);
-	gui.setAbsoluteView(viewGui);
 }
 
 std::string stacktraceToRichString(cpptrace::stacktrace st)
@@ -181,7 +161,7 @@ int crashHandlerMain()
 			if (event->is<sf::Event::Closed>())
 				window.close();
 			else if (auto resized = event->getIf<sf::Event::Resized>())
-				reloadViews(window, gui, resized->size);
+				reloadViews(window, gui, resized->size, {0, 0}, 1);
 			gui.handleEvent(*event);
 		}
 		window.clear(sf::Color{0xC0, 0xC0, 0xC0});

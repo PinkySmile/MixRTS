@@ -26,6 +26,14 @@ Mod::Mod(std::filesystem::path base, const nlohmann::json &metadata) :
 	_name(metadata["name"]),
 	_base(std::move(base))
 {
+	std::string folder = metadata["maps_folder"];
+
+	for (auto &entry : std::filesystem::directory_iterator(this->_base / folder))
+		if (std::filesystem::exists(entry.path() / "map.json")) {
+			this->_maps.emplace_back();
+			this->_maps.back().load(*this, entry.path());
+			this->_maps.back().path = this->_name + ":" + std::filesystem::relative(entry.path(), this->_base).string();
+		}
 	this->_factions = metadata["factions"];
 }
 
@@ -240,6 +248,11 @@ void Mod::loadObjects(
 const std::vector<std::string> &Mod::getFactions() const
 {
 	return this->_factions;
+}
+
+const std::vector<MapInfo> &Mod::getMaps() const
+{
+	return this->_maps;
 }
 
 void Mod::loadUpgrades(const std::string &relPath, const Faction &base, std::unordered_map<std::string, Upgrade> &upgrades, std::set<std::string> *checksumFiles) const

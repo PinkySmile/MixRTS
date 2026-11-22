@@ -52,8 +52,8 @@ void Screen::setTitle(const std::string &title)
 
 void Screen::displayElement(IntRect rect, Color color)
 {
-	this->_rect.setPosition(Vector2(rect.position).to<float>());
-	this->_rect.setSize(Vector2(rect.size).to<float>());
+	this->_rect.setPosition(Vector2i(rect.position));
+	this->_rect.setSize(Vector2u(rect.size));
 	this->_rect.setFillColor(color);
 	this->draw(this->_rect);
 }
@@ -118,7 +118,7 @@ void Screen::displayShrunkRect(const PreparedShrunkRect &sprite, sf::IntRect rec
 	int h1 = std::floor(rect.size.y / 2);
 	int h2 = rect.size.y - h1;
 
-	temp.setPosition(Vector2(rect.position).to<float>());
+	temp.setPosition(Vector2i(rect.position));
 	temp.setTexture(sprite.topLeft.getTexture());
 	temp.setTextureRect({{0, 0}, {w1, h1}});
 	this->draw(temp);

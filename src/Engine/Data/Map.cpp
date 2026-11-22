@@ -479,20 +479,17 @@ void MapState::pushUserType(sol::state &state)
 	// same reasoning as GameObject::getTileData().
 }
 
-void MapInfo::load(const std::string &relPath)
+void MapInfo::load(const Mod &mod, const std::filesystem::path &path)
 {
-	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(relPath);
-	std::ifstream streamMap{path.second / "map.json"};
+	std::ifstream streamMap{path / "map.json"};
 	nlohmann::json json;
 
-	this->path = relPath;
-	assert_msg(streamMap, (path.second / "map.json").string());
+	assert_msg(streamMap, (path / "map.json").string());
 	streamMap >> json;
 
 	assert_exp(json.contains("name") && json["name"].is_string());
 	assert_exp(json.contains("origin") && json["origin"].is_string());
 	assert_exp(json.contains("author") && json["author"].is_string());
-	assert_exp(json.contains("preview") && json["preview"].is_string());
 	assert_exp(json.contains("size") && json["size"].is_object());
 	assert_exp(json["size"].contains("x") && json["size"]["x"].is_number_unsigned());
 	assert_exp(json["size"].contains("y") && json["size"]["y"].is_number_unsigned());
@@ -509,10 +506,10 @@ void MapInfo::load(const std::string &relPath)
 		assert_msg(v.contains("y") && v["y"].is_number_unsigned(), "json[\"starts\"][" + std::to_string(i) + "]");
 		this->startAreas.emplace_back(v["x"].get<unsigned>(), v["y"].get<unsigned>());
 	}
-	assert_exp(this->preview.loadFromFile(path.second / json["preview"]));
+	assert_exp(this->preview.loadFromFile(path / "preview.png"));
 
 	std::string tileset = json["tileset"].get<std::string>();
-	std::filesystem::path p1 = path.second / tileset / "metadata.json";
+	std::filesystem::path p1 = path / tileset / "metadata.json";
 	std::ifstream streamMeta{p1};
 	nlohmann::json json1;
 
@@ -523,9 +520,17 @@ void MapInfo::load(const std::string &relPath)
 	assert_exp(json1["size"].contains("y") && json1["size"]["y"].is_number_unsigned());
 	assert_exp(json1.contains("faction") && json1["faction"].is_string());
 
-	this->faction = RESOURCE(path.first->getName(), json1["faction"]);
+	this->faction = RESOURCE(mod.getName(), json1["faction"]);
 	this->tileSize.x = json1["size"]["x"];
 	this->tileSize.y = json1["size"]["y"];
+}
+
+void MapInfo::load(const std::string &relPath)
+{
+	std::pair<Mod *, std::filesystem::path> path = game->modManager.getPath(relPath);
+
+	this->load(*path.first, path.second);
+	this->path = relPath;
 }
 
 uint32_t LoadedMap::computeChecksum(const std::string &relPath, uint32_t crc)

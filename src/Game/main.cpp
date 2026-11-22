@@ -112,10 +112,14 @@ void handleEvents()
 				game->modManager.reloadAll("mods");
 		}
 	#endif
-		game->scene.consumeEvent(*event);
-
-		PROFILE_SCOPE("gui");
-		game->gui.handleEvent(*event);
+		{
+			PROFILE_SCOPE("gui");
+			game->gui.handleEvent(*event);
+		}
+		{
+			PROFILE_SCOPE("scene");
+			game->scene.consumeEvent(*event);
+		}
 	}
 }
 
@@ -226,7 +230,7 @@ int main(int argc, char **argv)
 		music.setLooping(true);
 		if (args.loadingOnly)
 			game->screen->close();
-		reloadViews(*game->screen, game->gui, game->screen->getSize(), {0, 0});
+		reloadViews(*game->screen, game->gui, game->screen->getSize(), {0, 0}, 1);
 		while (game->screen->isOpen()) {
 			Profiler::get().beginFrame();
 			TRY {

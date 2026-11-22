@@ -12,6 +12,8 @@
 #include "Resources/Game.hpp"
 #include "UI/BaseUI.hpp"
 
+#define MAP_CHOOSE_SIZE 300
+
 void genSpawns(const std::vector<PlayerArg> &arg, GameStartParams &params)
 {
 	std::vector<size_t> array;
@@ -217,6 +219,9 @@ void TitleScreen::_initTitle()
 		game->lobbySettings.players.clear();
 		this->_playerPanels.clear();
 		game->lobbySettingsValid = true;
+		if (game->lobbySettings.map.empty())
+			game->lobbySettings.map = "d2k:maps/0PLAY0";
+		this->_map.load(game->lobbySettings.map);
 		this->_initLobby();
 	});
 	quit->onClick([] {
@@ -230,13 +235,24 @@ void TitleScreen::_updateMapLobby(
 	tgui::Label::Ptr name,
 	tgui::Label::Ptr origin,
 	tgui::Label::Ptr author,
-	tgui::Label::Ptr objects
+	tgui::Label::Ptr objects,
+	Vector2u maxSize
 )
 {
 	tgui::Texture tt;
+	tt.loadFromPixelData(this->_map.preview.getSize(), this->_map.preview.getPixelsPtr(), {}, {}, false);
 
-	tt.loadFromPixelData(this->_map.preview.getSize(), this->_map.preview.getPixelsPtr());
+	Vector2u imgSize = tt.getImageSize();
 	map->getRenderer()->setTexture(tt);
+	assert_eq(maxSize.x, maxSize.y);
+	if (imgSize.x > imgSize.y) {
+		imgSize.y *= maxSize.x / imgSize.x;
+		imgSize.x = maxSize.x;
+	} else {
+		imgSize.x *= maxSize.y / imgSize.y;
+		imgSize.y = maxSize.y;
+	}
+	map->setSize(static_cast<tgui::Vector2f>(imgSize));
 	size->setText(
 		std::to_string(this->_map.gridSize.x) + "x" + std::to_string(this->_map.gridSize.y) +
 		" (" + std::to_string(this->_map.tileSize.x * this->_map.gridSize.x) +
@@ -354,11 +370,84 @@ void TitleScreen::_updatePlayerList(tgui::Button::Ptr start)
 	}
 }
 
+void TitleScreen::_placeMapsInPanel()
+{
+	if (!this->_mapContainer)
+		return;
+
+	Vector2f size = this->_mapContainer->getInnerSize();
+	if (size.x == 0)
+		return;
+
+	unsigned nbPerLine = (size.x - 15) / (MAP_CHOOSE_SIZE + 10);
+	float width = std::floor((size.x - 15) / nbPerLine - 10);
+
+	for (size_t i = 0; i < this->_mapPanels.size(); i++) {
+		const auto &panel = this->_mapPanels[i];
+
+		panel->setSize({ width, (MAP_CHOOSE_SIZE + 50) });
+		panel->setPosition({
+			10 + i % nbPerLine * (width + 10),
+			10 + i / nbPerLine * (MAP_CHOOSE_SIZE + 50)
+		});
+	}
+}
+
+void TitleScreen::_initMapSelect()
+{
+	this->_mapPanels.clear();
+	this->_panel->removeAllWidgets();
+	auto panel = tgui::ScrollablePanel::create();
+	auto &maps = game->modManager.getMaps();
+
+	this->_mapContainer = panel;
+	this->_panel->add(this->_mapContainer);
+	for (const auto &map : maps) {
+		auto mapPanel = tgui::ScrollablePanel::create();
+		auto name = tgui::Button::create(map.name);
+		auto size = tgui::Label::create(
+			std::to_string(map.gridSize.x) + "x" + std::to_string(map.gridSize.y) +
+			" (" + std::to_string(map.tileSize.x * map.gridSize.x) +
+			"x" + std::to_string(map.tileSize.y * map.gridSize.y) + ")"
+		);
+		tgui::Texture tt;
+		tt.loadFromPixelData(map.preview.getSize(), map.preview.getPixelsPtr(), {}, {}, false);
+		auto preview = tgui::Picture::create(tt);
+		Vector2f imgSize = tt.getImageSize();
+
+		if (imgSize.x > imgSize.y) {
+			imgSize.y *= MAP_CHOOSE_SIZE / imgSize.x;
+			imgSize.x = MAP_CHOOSE_SIZE;
+		} else {
+			imgSize.x *= MAP_CHOOSE_SIZE / imgSize.y;
+			imgSize.y = MAP_CHOOSE_SIZE;
+		}
+		preview->setPosition({ "(&.w - w) / 2", "(&.w - h) / 2" });
+		preview->setSize(imgSize.operator tgui::Vector2f());
+		name->setPosition({ "(&.w - w) / 2", "&.h - h - 25" });
+		name->setSize({ "100% - 20", 20});
+		name->onClick([this, &map] {
+			game->lobbySettings.map = map.path;
+			this->_map.load(game->lobbySettings.map);
+			this->_initLobby();
+		});
+		size->setPosition({ "(&.w - w) / 2", "&.h - h - 5" });
+		mapPanel->getRenderer()->setBorders({1, 1, 1, 1});
+		mapPanel->add(preview);
+		mapPanel->add(name);
+		mapPanel->add(size);
+		panel->add(mapPanel);
+		this->_mapPanels.push_back(mapPanel);
+	}
+	this->_placeMapsInPanel();
+}
+
 void TitleScreen::_initLobby()
 {
-	if (game->lobbySettings.map.empty())
-		game->lobbySettings.map = "d2k:maps/0PLAY0";
 	this->_panel->loadWidgetsFromFile("assets/gui/lobby.gui");
+	this->_mapPanels.clear();
+	this->_playerPanels.clear();
+	this->_mapContainer.reset();
 
 	auto leave = this->_panel->get<tgui::Button>("Leave");
 	auto start = this->_panel->get<tgui::Button>("Start");
@@ -367,12 +456,13 @@ void TitleScreen::_initLobby()
 	auto chat = this->_panel->get<tgui::ChatBox>("ChatBox");
 	auto players = this->_panel->get<tgui::Panel>("Players");
 	auto settings = this->_panel->get<tgui::Panel>("Settings");
-	auto map = this->_panel->get<tgui::Picture>("Map");
+	auto mapPanel = this->_panel->get<tgui::Panel>("Map");
 	auto size = this->_panel->get<tgui::Label>("MapSize");
 	auto name = this->_panel->get<tgui::Label>("MapName");
 	auto origin = this->_panel->get<tgui::Label>("MapOrigin");
 	auto author = this->_panel->get<tgui::Label>("MapAuthor");
 	auto objects = this->_panel->get<tgui::Label>("MapObjects");
+	auto map = mapPanel->get<tgui::Picture>("MapPic");
 	auto panel = tgui::Panel::create({"100%", 30});
 	auto addPlayer = tgui::Button::create("+");
 
@@ -412,10 +502,12 @@ void TitleScreen::_initLobby()
 		game->lobbySettingsValid = false;
 		this->_initTitle();
 	});
+	change->onClick([this] {
+		this->_initMapSelect();
+	});
 
-	this->_map.load(game->lobbySettings.map);
 	this->_updatePlayerList(start);
-	this->_updateMapLobby(map, size, name, origin, author, objects);
+	this->_updateMapLobby(map, size, name, origin, author, objects, mapPanel->getSize());
 }
 
 void TitleScreen::_openReplayDialog()
@@ -471,9 +563,12 @@ TitleScreen::TitleScreen(std::optional<std::string> message)
 {
 	this->_panel = tgui::Panel::create({"100%", "100%"});
 	this->_panel->getRenderer()->setBackgroundColor(tgui::Color::Black);
-	if (game->lobbySettingsValid)
+	if (game->lobbySettingsValid) {
+		if (game->lobbySettings.map.empty())
+			game->lobbySettings.map = "d2k:maps/0PLAY0";
+		this->_map.load(game->lobbySettings.map);
 		this->_initLobby();
-	else
+	} else
 		this->_initTitle();
 	if (message)
 		dispMsg(*this->_panel, "Error", *message);
@@ -483,7 +578,7 @@ TitleScreen::~TitleScreen() = default;
 
 void TitleScreen::render() const
 {
-	reloadViews(*game->screen, game->gui, game->screen->getSize(), {0, 0});
+	reloadViews(*game->screen, game->gui, game->screen->getSize(), {0, 0}, 1);
 }
 
 void TitleScreen::renderAbove() const
@@ -498,6 +593,8 @@ void TitleScreen::update()
 
 void TitleScreen::consumeEvent(const sf::Event &event)
 {
+	if (event.is<sf::Event::Resized>())
+		this->_placeMapsInPanel();
 }
 
 tgui::Panel::Ptr TitleScreen::getPanel() const

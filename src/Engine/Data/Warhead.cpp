@@ -29,12 +29,12 @@ Warhead::Warhead(const nlohmann::json &data)
 		this->_dmgType = DMGTYPE_VOID;
 	else if (dmgType == "sonic")
 		this->_dmgType = DMGTYPE_SONIC;
-	//else if (dmgType == "fire")
-	//	this->_dmgType = DMGTYPE_FIRE;
-	//else if (dmgType == "electric")
-	//	this->_dmgType = DMGTYPE_ELECTRIC;
-	//else if (dmgType == "melee")
-	//	this->_dmgType = DMGTYPE_MELEE;
+	else if (dmgType == "fire")
+		this->_dmgType = DMGTYPE_FIRE;
+	else if (dmgType == "electric")
+		this->_dmgType = DMGTYPE_ELECTRIC;
+	else if (dmgType == "melee")
+		this->_dmgType = DMGTYPE_MELEE;
 	else
 		assert_not_reached_msg("Invalid dmg_type: " + dmgType);
 }

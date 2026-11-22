@@ -5,12 +5,13 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include "ModManager.hpp"
-
+#include "Data/Map.hpp"
 #include "Resources/Assert.hpp"
 
 void ModManager::reloadAll(const std::filesystem::path &path)
 {
 	this->_mods.clear();
+	this->_maps.clear();
 	this->_factions.clear();
 	this->loadAll(path);
 }
@@ -35,6 +36,7 @@ void ModManager::loadMod(const std::filesystem::path &path)
 
 	for (const std::string &faction : mod.getFactions())
 		mod.loadFactions(faction, this->_factions);
+	this->_maps.insert(this->_maps.end(), mod.getMaps().begin(), mod.getMaps().end());
 }
 
 Mod &ModManager::get(const std::string &name)
@@ -72,4 +74,9 @@ std::vector<std::string> ModManager::getFactionList() const
 		f.push_back(key);
 	std::ranges::sort(f);
 	return f;
+}
+
+const std::vector<MapInfo> &ModManager::getMaps()
+{
+	return this->_maps;
 }

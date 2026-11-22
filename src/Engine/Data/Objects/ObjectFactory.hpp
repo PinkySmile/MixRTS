@@ -35,7 +35,7 @@ GameObject *ObjectFactory_createBase(
 	return new T(base, id, animList, sounds, effects, weapons, json, args...);
 }
 
-class ObjectFactory {
+class MYDLL_API ObjectFactory {
 private:
 	Faction &_faction;
 	std::unordered_map<std::string, ObjectCreationCb> _creators;

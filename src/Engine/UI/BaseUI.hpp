@@ -9,7 +9,7 @@
 #include "Resources/Game.hpp"
 #include "Screen.hpp"
 
-void MYDLL_API reloadViews(Screen &win, tgui::Gui &gui, Vector2u size, Vector2f offset);
+void MYDLL_API reloadViews(sf::RenderWindow &win, tgui::Gui &gui, Vector2u size, Vector2f offset, float uiScale);
 void MYDLL_API dispFPS(float frameTime);
 
 

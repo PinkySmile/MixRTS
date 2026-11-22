@@ -1082,14 +1082,17 @@ GameObject::GameObject(
 			this->_harvestAnims.emplace_back(base, this, animList, json["harvest_anim"], i);
 	}
 	if (json.contains("death")) {
-		static_assert(DMGTYPE_COUNT - DMGTYPE_START == 4);
+		static_assert(DMGTYPE_COUNT - DMGTYPE_START == 7);
 		static_assert(DMGTYPE_BULLET  == DMGTYPE_START);
 		static_assert(DMGTYPE_MISSILE == DMGTYPE_START + 1);
 		static_assert(DMGTYPE_BLAST   == DMGTYPE_START + 2);
 		static_assert(DMGTYPE_SONIC   == DMGTYPE_START + 3);
+		static_assert(DMGTYPE_ELECTRIC== DMGTYPE_START + 4);
+		static_assert(DMGTYPE_FIRE    == DMGTYPE_START + 5);
+		static_assert(DMGTYPE_MELEE   == DMGTYPE_START + 6);
 		assert_exp(!json["death"].contains("generic") || json["death"]["generic"].is_object());
 
-		const char *anims[] = { "bullet", "missile", "blast", "sonic" };
+		const char *anims[] = { "bullet", "missile", "blast", "sonic", "electric", "fire", "melee" };
 
 		for (const char *s : anims)
 			assert_msg(json["death"].contains("generic") || (json["death"].contains(s) && json["death"][s].is_object()), s);

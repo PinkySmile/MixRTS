@@ -25,9 +25,12 @@ private:
 	tgui::Panel::Ptr _panel;
 	tgui::Panel::Ptr _addButton;
 	std::vector<PlayerUI> _playerPanels;
+	tgui::Panel::Ptr _mapContainer;
+	std::vector<tgui::Panel::Ptr> _mapPanels;
 
 	void _initTitle();
 	void _initLobby();
+	void _initMapSelect();
 	void _openReplayDialog();
 	void _loadReplay(const std::filesystem::path &path);
 	void _openLoadDialog();
@@ -38,10 +41,12 @@ private:
 		tgui::Label::Ptr name,
 		tgui::Label::Ptr origin,
 		tgui::Label::Ptr author,
-		tgui::Label::Ptr objects
+		tgui::Label::Ptr objects,
+		Vector2u maxSize
 	);
 	void _addPlayerPanels(tgui::Panel::Ptr players, tgui::Button::Ptr start);
 	void _updatePlayerList(tgui::Button::Ptr start);
+	void _placeMapsInPanel();
 
 public:
 	explicit TitleScreen(std::optional<std::string> message = {});

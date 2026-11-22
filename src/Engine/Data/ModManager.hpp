@@ -10,6 +10,7 @@
 
 class MYDLL_API ModManager {
 private:
+	std::vector<MapInfo> _maps;
 	std::map<std::string, Mod> _mods;
 	std::unordered_map<std::string, Faction> _factions;
 
@@ -21,6 +22,7 @@ public:
 	const Faction &getFaction(const std::string &name);
 	std::pair<Mod *, std::filesystem::path> getPath(const std::string &name);
 	std::vector<std::string> getFactionList() const;
+	const std::vector<MapInfo> &getMaps();
 };
 
 

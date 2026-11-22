@@ -146,7 +146,7 @@ void handleCrash(Stacktrace st, const std::exception &e)
 		gui = new tgui::Gui{*window};
 	}
 
-	reloadViews(*window, *gui, window->getSize(), {0, 0});
+	reloadViews(*window, *gui, window->getSize(), {0, 0}, 1);
 	window->setMouseCursorGrabbed(false);
 	window->setMouseCursorVisible(true);
 
@@ -163,7 +163,7 @@ void handleCrash(Stacktrace st, const std::exception &e)
 			if (event->is<sf::Event::Closed>())
 				window->close();
 			else if (auto resized = event->getIf<sf::Event::Resized>())
-				reloadViews(*window, *gui, resized->size, {0, 0});
+				reloadViews(*window, *gui, resized->size, {0, 0}, 1);
 			gui->handleEvent(*event);
 		}
 		window->clear(sf::Color{0xC0, 0xC0, 0xC0});

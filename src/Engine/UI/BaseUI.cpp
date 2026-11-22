@@ -6,7 +6,7 @@
 #include "Debug/Profiler.hpp"
 
 
-void MYDLL_API reloadViews(Screen &win, tgui::Gui &gui, Vector2u size, Vector2f offset)
+void MYDLL_API reloadViews(sf::RenderWindow &win, tgui::Gui &gui, Vector2u size, Vector2f offset, float uiScale)
 {
 	PROFILE_SCOPE("reload views");
 	sf::View view{sf::FloatRect{
@@ -19,8 +19,8 @@ void MYDLL_API reloadViews(Screen &win, tgui::Gui &gui, Vector2u size, Vector2f 
 	tgui::FloatRect viewGui{
 		{0, 0},
 		{
-			size.x / guiScale,
-			size.y / guiScale
+			size.x / uiScale,
+			size.y / uiScale
 		}
 	};
 

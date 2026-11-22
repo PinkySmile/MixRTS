@@ -1591,12 +1591,14 @@ std::optional<Vector2i> GameManager::getFirstHarvestableTile(const GameObject &h
 	for (int y = topLeft.y; y <= bottomRight.y; y++)
 		for (int x = topLeft.x; x <= bottomRight.x; x++) {
 			auto res = GRID_RESOURCE_TYPE(grid.grid[x + y * grid.gridSize.x]);
-			auto &re = this->_map.metadata.resources.at(res);
 
 			if (res == 0)
 				continue;
 			if (!harvester.canStandOn(state.absToTileCoord(grid.topLeftCoordToAbs({x, y}))))
 				continue;
+
+			auto &re = this->_map.metadata.resources.at(res);
+
 			if (re.deplete == 0) {
 				CHECK_RES(x - 1, y - 1);
 				CHECK_RES(x,     y - 1);
@@ -1626,12 +1628,14 @@ std::optional<Vector2i> GameManager::getClosestHarvestableTile(const GameObject 
 
 		auto res = GRID_RESOURCE_TYPE(grid.grid[x + y * grid.gridSize.x]);
 		auto mapTile = state.absToTileCoord(grid.topLeftCoordToAbs({x, y}));
-		auto &re = this->_map.metadata.resources.at(res);
 
 		if (res == 0)
 			return {};
 		if (!harvester.canStandOn(mapTile))
 			return {};
+
+		auto &re = this->_map.metadata.resources.at(res);
+
 		if (re.deplete == 0) {
 			CHECK_RES(x - 1, y - 1);
 			CHECK_RES(x,     y - 1);
@@ -1842,8 +1846,9 @@ void GameManager::weaponUsedAt(unsigned damage, const Weapon *weapon, Vector2f p
 		size_t index = gpos.x + gpos.y * this->_map.grid.gridSize.x;
 		uint32_t &attr = this->_map.grid.grid[index];
 		bool modified = false;
+		bool canPlace = (attr & GRIDMASK_WORM_CAN_PASS) && (attr & GRIDMASK_IS_FREE);
 
-		while (nbRes--) {
+		while (canPlace && nbRes--) {
 			auto res = GRID_RESOURCE_TYPE(attr);
 			bool promote = res == 0;
 

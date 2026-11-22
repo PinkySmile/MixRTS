@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <sol/forward.hpp>
+#include "forward.hpp"
 #include "CursorAnimation.hpp"
 #include "Faction.hpp"
 
@@ -17,6 +18,7 @@ class MYDLL_API Mod {
 private:
 	std::string _name;
 	std::filesystem::path _base;
+	std::vector<MapInfo> _maps;
 	std::vector<std::string> _factions;
 
 public:
@@ -59,6 +61,7 @@ public:
 		std::set<std::string> *checksumFiles = nullptr
 	) const;
 	[[nodiscard]] const std::vector<std::string> &getFactions() const;
+	[[nodiscard]] const std::vector<MapInfo> &getMaps() const;
 	[[nodiscard]] const std::filesystem::path &getBase() const;
 	[[nodiscard]] const std::string &getName() const;
 
