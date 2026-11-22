@@ -102,7 +102,7 @@ void SoundManager::_initSoundPos(SoundPair &pair)
 	}
 
 	Vector2f pos = pair.pos;
-	float volume;
+	float volume = 1;
 
 	pos.x -= this->_pos.x;
 	pos.y -= this->_pos.y;

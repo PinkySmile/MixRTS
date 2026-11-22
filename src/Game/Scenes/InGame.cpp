@@ -221,6 +221,28 @@ void InGame::render() const
 	reloadViews(*game->screen, game->gui, game->screen->getSize(), {0, -20 * guiScale}, guiScale);
 	game->game->updateRender();
 	game->game->render();
+	if (this->_tickTimes.empty())
+		return;
+
+	char details[96];
+	auto old = game->screen->getView();
+	Vector2u size = game->screen->getSize();
+	sf::View view{sf::FloatRect{
+		{0, 0},
+		size.to<float>()
+	}};
+	float avg = 0;
+	float w = 0;
+
+	for (auto tick : this->_tickTimes) {
+		avg += tick;
+		w = std::max(w, tick);
+	}
+	avg /= this->_tickTimes.size();
+	snprintf(details, sizeof(details), "%.zuTPS (l%.2fms a%.2fms w%.2fms)", this->_tickTimestamp.size(), 1000 * this->_tickTimes.back(), 1000 * avg, 1000 * w);
+	game->screen->setView(view);
+	game->screen->displayElement(sf::String(details), {0, size.y - 35.f}, size.x, Screen::ALIGN_LEFT);
+	game->screen->setView(old);
 }
 
 void InGame::renderAbove() const
@@ -382,9 +404,16 @@ void InGame::update()
 	bool captured = false;
 
 	while (this->_timer >= 1) {
+		this->_tickTimestamp.push_back(this->_clock2.getElapsedTime().asSeconds());
 		uint64_t tick = game->game->getTick();
+		sf::Clock clock;
 
 		game->game->update();
+		this->_tickTimes.push_back(clock.getElapsedTime().asSeconds());
+		while (this->_tickTimes.size() > 50)
+			this->_tickTimes.pop_front();
+		while (this->_tickTimestamp.back() - this->_tickTimestamp.front() > 1)
+			this->_tickTimestamp.pop_front();
 		if (game->game->getTick() != tick) {
 			this->_captureCrashState();
 			this->_crashStateDirty = false;

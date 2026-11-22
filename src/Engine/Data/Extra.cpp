@@ -10,6 +10,8 @@
 #include "Utils.hpp"
 #include "Resources/Assert.hpp"
 
+static_assert(sizeof(uint32_t) == sizeof(float));
+
 Position::Position(const nlohmann::json &json)
 {
 	assert_exp(json.contains("x") && (json["x"].is_string() || json["x"].is_number()));
@@ -25,7 +27,7 @@ float Position::_getPos(const nlohmann::json &json) const
 	assert_exp(json.is_string());
 
 	std::string pos = json;
-	unsigned value = 0x7FFF0000;
+	uint32_t value = 0x7FFF0000;
 
 	if (pos == "close_border")
 		value |= POS_CLOSE_BORDER;
@@ -53,7 +55,11 @@ float Position::_getPos(const nlohmann::json &json) const
 		value |= POS_MAX_BORDER_FAR;
 	else
 		assert_not_reached_msg(pos);
-	return *reinterpret_cast<float *>(&value);
+
+	float result;
+
+	memcpy(&result, &value, sizeof(result));
+	return result;
 }
 
 float Position::_getPos(float base, float target, float border, float extraOffset) const
@@ -61,7 +67,10 @@ float Position::_getPos(float base, float target, float border, float extraOffse
 	if (!std::isnan(base))
 		return target + base;
 
-	unsigned type = *reinterpret_cast<unsigned *>(&base) & 0xFFFF;
+	uint32_t type;
+
+	memcpy(&type, &base, sizeof(type));
+	type &= 0xFFFF;
 
 	switch (type) {
 	case POS_CLOSE_BORDER:
@@ -92,22 +101,24 @@ float Position::_getPos(float base, float target, float border, float extraOffse
 Vector2f Position::getPosition(const Vector2f &target, const MapState &map, Vector2f extraOffset) const
 {
 	Vector2f result = this->pos;
-	auto rxMode = *reinterpret_cast<unsigned *>(&result.x) & 0xFFFF;
 	bool valid = std::isnan(result.x);
+	uint32_t rxMode;
 
+	memcpy(&rxMode, &result.x, sizeof(rxMode));
+	rxMode &= 0xFFFF;
 	result.x = this->_getPos(result.x, target.x, map.gridSize.x * map.tileSize.x, extraOffset.x);
 	result.y = this->_getPos(result.y, target.y, map.gridSize.y * map.tileSize.y, extraOffset.y);
 	if (!valid)
 		;
 	else if (rxMode >= POS_CLOSE_BORDER_FAR) {
-		Vector2f result2 = this->pos;
+		Vector2f result2;
 
 		result2.x = this->_getPos(this->pos.y, target.x, map.gridSize.x * map.tileSize.x, extraOffset.x);
 		result2.y = this->_getPos(this->pos.x, target.y, map.gridSize.y * map.tileSize.y, extraOffset.y);
 		if (target.distance2(result) < target.distance2(result2))
 			return result2;
 	} else if (rxMode >= POS_CLOSE_BORDER_CLOSE) {
-		Vector2f result2 = this->pos;
+		Vector2f result2;
 
 		result2.x = this->_getPos(this->pos.y, target.x, map.gridSize.x * map.tileSize.x, extraOffset.x);
 		result2.y = this->_getPos(this->pos.x, target.y, map.gridSize.y * map.tileSize.y, extraOffset.y);

@@ -1905,6 +1905,7 @@ void GameObject::_harvestClosestResource()
 void GameObject::_dumpInClosestResourceDump()
 {
 	if (!this->_lastResourceDump)
+		// TODO: Harvester don't have this property set
 		this->_lastResourceDump = this->manager->getClosestResourceDump(this->_acceptResources, this->owner->state.index, this->_position + this->_size / 2);
 	this->dumpResourcesTo(nullptr, true);
 }
@@ -1912,6 +1913,7 @@ void GameObject::_dumpInClosestResourceDump()
 void GameObject::_goToClosestResourceDump()
 {
 	if (!this->_lastResourceDump)
+		// TODO: Harvester don't have this property set
 		this->_lastResourceDump = this->manager->getClosestResourceDump(this->_acceptResources, this->owner->state.index, this->_position + this->_size / 2);
 	if (!this->_lastResourceDump)
 		return;

@@ -728,7 +728,7 @@ void DebugOverlay::_renderPerfBars(Vector2f pos, Vector2f size)
 	game->screen->draw(bars.array);
 
 	// Reference lines
-	for (double ref : {8.33, 16.67, 33.33}) {
+	for (double ref : {5, 10, 20, 40}) {
 		if (ref > maxMs)
 			continue;
 

@@ -39,7 +39,7 @@ void MYDLL_API dispFPS(float frameTime)
 		size.to<float>()
 	}};
 
-	snprintf(details, sizeof(details), "%.2FFPS (a %.1f / w%.1f ms)", std::round(1 / frameTime), stats.averageMs, stats.worstMs);
+	snprintf(details, sizeof(details), "%.2FFPS (l%.2fms a%.2fms w%.2fms)", std::round(1 / frameTime), stats.lastMs, stats.averageMs, stats.worstMs);
 	game->screen->setView(view);
 	game->screen->displayElement(sf::String(details), {0, size.y - 35.f}, size.x, Screen::ALIGN_RIGHT);
 	game->screen->setView(old);

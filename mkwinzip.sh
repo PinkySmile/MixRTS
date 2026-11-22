@@ -20,6 +20,7 @@ rm -rf "$OUTPUT/mods/"*/*.cmake
 rm -rf "$OUTPUT/mods/"*/Makefile
 rm -rf "$OUTPUT/mods/"*/CMakeFiles
 rm -rf "$OUTPUT/mods/"*/*.dll
+cp -r documentation README.md "$OUTPUT"
 
 (strings "$OUTPUT/"MixRTS.exe; strings "$OUTPUT/"libMixRTS_Core.dll) | grep -i '\.dll$' | sort | uniq | while read line; do
 	if

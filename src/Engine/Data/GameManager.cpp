@@ -1763,7 +1763,15 @@ std::pair<std::string, unsigned> GameManager::convertResource(const std::string 
 {
 	assert_exp(!expected.empty());
 	// TODO:
-	assert_not_reached();
+
+	std::string f;
+
+	for (auto &e : expected) {
+		if (!f.empty())
+			f += " or ";
+		f += e;
+	}
+	assert_not_reached_msg("Resource convert isn't implemented: Convert " + std::to_string(value) + " " + source + " into " + f);
 }
 
 Effect &GameManager::spawnEffect(const Effect &effect, Vector2f pos, const Player *owner)

@@ -19,6 +19,8 @@ class InGame : public IScene {
 protected:
 	tgui::Panel::Ptr _panel;
 	GameStartParams _startParams;
+	std::deque<float> _tickTimes;
+	std::deque<float> _tickTimestamp;
 	std::unordered_map<std::string, uint32_t> _factionCrcs;
 	uint32_t _mapCrc = 0;
 	//! Set from the constructor. The destructor reads this directly so a subclass that throws still opts out.
@@ -41,6 +43,7 @@ protected:
 	void _writeState();
 	std::vector<Faction> _loadedFactions;
 	sf::Clock _clock;
+	sf::Clock _clock2;
 	float _timer = 0;
 
 	InGame(GameStartParams params, std::function<void (const std::string &)> &cb, const GameManager::UIFactory &factory, bool saveReplays, bool spawnStartingObjects = true);
